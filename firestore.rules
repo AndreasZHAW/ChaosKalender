@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// ChaosKalender – Firestore-Sicherheitsregeln
+// Stand: Paket 2 (Login & Registrierung).
+// Nur die "users"-Sammlung ist bereits freigeschaltet. Alle anderen
+// Sammlungen (Kalender, Nachrichten, Dokumente ...) werden gezielt in den
+// nächsten Paketen ergänzt, bis dahin sind sie komplett gesperrt.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function myRole() {
+      return userDoc().data.role;
+    }
+
+    function myStatus() {
+      return userDoc().data.status;
+    }
+
+    function isActive() {
+      return isSignedIn() && userDoc().data.status == 'active';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && isActive() && myRole() == 'admin';
+    }
+
+    // --- users ---------------------------------------------------------
+    match /users/{userId} {
+      // Lesen: nur das eigene Profil, oder Admin liest alle
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Registrierung: ein neuer Account legt AUSSCHLIESSLICH sein eigenes
+      // Dokument an, zwingend mit status "pending" und OHNE eigene
+      // Rollenwahl (die Rolle vergibt ausschließlich der Admin bei der
+      // Freischaltung).
+      allow create: if isSignedIn()
+                    && request.auth.uid == userId
+                    && request.resource.data.status == 'pending'
+                    && !('role' in request.resource.data);
+
+      // Ändern: Admin darf Status/Rolle setzen (Freischaltung). Die Person
+      // selbst darf z. B. die optionale E-Mail-Adresse pflegen, aber nicht
+      // ihren eigenen Status oder ihre Rolle selbst hochstufen.
+      allow update: if isAdmin() || (
+                       isSignedIn() && request.auth.uid == userId &&
+                       request.resource.data.status == resource.data.status &&
+                       request.resource.data.role  == resource.data.role
+                     );
+
+      allow delete: if isAdmin();
+    }
+
+    // --- alles andere: vorerst komplett gesperrt ------------------------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
