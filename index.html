@@ -24,6 +24,7 @@
     --school: #F2F1EC;
   }
   *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
   html,body{margin:0;padding:0;}
   body{background:var(--bg); color:var(--ink); font-family:'Source Sans 3', sans-serif; -webkit-font-smoothing:antialiased;}
   .app{max-width:800px; margin:0 auto; padding:16px 16px 50px;}
@@ -48,6 +49,21 @@
 
   .legend{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; font-size:11.5px; color:var(--ink-soft);}
   .legend-item{display:flex; align-items:center; gap:5px;}
+  .legend-item.viewas{padding:3px 6px; border-radius:6px; transition:background 0.1s;}
+  .legend.admin-mode .legend-item.viewas{cursor:pointer;}
+  .legend.admin-mode .legend-item.viewas:hover{background:var(--line);}
+  .legend-item.viewas.active-view{background:var(--ink); color:#fff; font-weight:600;}
+  .allcols-table{width:100%; border-collapse:collapse; font-size:13px; min-width:760px;}
+  .allcols-table th{text-align:left; padding:10px 12px; border-bottom:2px solid var(--line); font-size:12px; color:var(--ink-soft); white-space:nowrap;}
+  .allcols-table td{padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .allcols-table tr.today-row td{background:#FAF6EC;}
+  .allcols-table .chip{display:inline-block; font-size:11px; padding:2px 7px; border-radius:6px; margin:1px 3px 1px 0;}
+  .allcols-table .chip.a{background:var(--a-bg); color:var(--a);}
+  .allcols-table .chip.b{background:var(--b-bg); color:var(--b);}
+  .allcols-table .chip.club{background:#EFE6D8; color:#6B5B3A;}
+  .allcols-table .chip.band{background:#F3E4EC; color:#8C4A6E;}
+  .allcols-table .chip.hol{background:var(--holiday-bg); color:var(--holiday-text);}
+  .allcols-table .daycell{font-weight:600;}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
@@ -68,6 +84,11 @@
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
+  .day-who-tag{display:inline-block; font-size:9px; font-weight:700; padding:2px 6px; border-radius:8px; margin-top:2px;}
+  .day-who-tag.a{background:var(--a-bg); color:var(--a);}
+  .day-who-tag.b{background:var(--b-bg); color:var(--b);}
+  .day-who-tag.omami{background:var(--omami-bg); color:var(--omami);}
+  .day-event-tag{display:inline-block; margin-left:3px; font-size:9px; color:var(--pending); cursor:default;}
   .week-body{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
   .time-col{display:flex; flex-direction:column;}
   .time-col .slot-h{height:88px; text-align:right; padding-right:4px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-5px;}
@@ -243,7 +264,7 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender</div>
+    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:10px; color:var(--ink-soft); vertical-align:middle;"></span></div>
     <div style="display:flex; align-items:center; gap:8px;">
       <div class="role-switch">
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Elternteil</button>
@@ -264,6 +285,7 @@
       <button data-view="tag" onclick="setView('tag')">Tag</button>
       <button class="active" data-view="woche" onclick="setView('woche')">Woche</button>
       <button data-view="monat" onclick="setView('monat')">Monat</button>
+      <button data-view="alle" id="allColsBtn" onclick="setView('alle')" style="display:none;">Alle Spalten</button>
     </div>
   </div>
 
@@ -275,10 +297,13 @@
   </div>
 
   <div class="legend" id="legendRow">
-    <div class="legend-item"><span class="dot" style="background:#2F5D62"></span>Janine (Mutter)</div>
-    <div class="legend-item"><span class="dot" style="background:#8B5E3C"></span>Andi (Vater)</div>
-    <div class="legend-item"><span class="dot" style="background:#6B5B95"></span>Omami</div>
+    <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#2F5D62"></span>Janine (Mutter)</div>
+    <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#8B5E3C"></span>Andi (Vater)</div>
+    <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#6B5B95"></span>Omami</div>
     <div class="legend-item"><span class="dot" style="background:#B31C1C"></span>Feiertag/Ferien</div>
+  </div>
+  <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:-4px 0 10px;">
+    👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)">zurück zur Admin-Ansicht</span>
   </div>
   <div style="font-size:11.5px; color:var(--ink-soft); margin:-6px 0 12px;">Janosch (9) · Mischa (11)</div>
 
@@ -447,6 +472,16 @@ function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami'}[who] || '';
 let currentDate = new Date(2026,10,15);
 let currentView = 'woche';
 let currentRole = 'eltern';
+var currentPerson = null; // 'a' (Janine), 'b' (Andi) oder null (Admin/ungefiltert) – var statt let, damit das Firebase-Modul-Script (separater Scope) via window.currentPerson darauf zugreifen kann
+var isAdminUser = true; // Default true für die Testdatei; echter Login setzt dies korrekt
+
+function setAdminUIState(isAdmin){
+  isAdminUser = isAdmin;
+  const btn = document.getElementById('allColsBtn');
+  if(btn) btn.style.display = isAdmin ? 'inline-block' : 'none';
+  const legend = document.getElementById('legendRow');
+  if(legend) legend.classList.toggle('admin-mode', isAdmin);
+}
 
 function startOfWeek(d){
   const nd = new Date(d);
@@ -477,6 +512,21 @@ function setRole(r){
 function setView(v){
   currentView = v;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  render();
+}
+function viewAsPerson(who){
+  if(!isAdminUser) return;
+  currentPerson = who;
+  document.querySelectorAll('.legend-item.viewas').forEach(el=>{
+    el.classList.toggle('active-view', el.dataset.person===who);
+  });
+  const hint = document.getElementById('viewAsHint');
+  if(who){
+    hint.style.display = 'block';
+    document.getElementById('viewAsName').textContent = who==='omami' ? 'Omami' : whoLabel(who);
+  } else {
+    hint.style.display = 'none';
+  }
   render();
 }
 function shiftPeriod(dir){
@@ -511,14 +561,26 @@ function toggleTimeFields(){
 /* ====================== RENDER: WOCHE ====================== */
 function renderWeek(){
   const start = startOfWeek(currentDate);
-  const startHour=7, endHour=24;
+  const startHour=7, endHour=23;
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   let head = '<div class="week-head"><div></div>';
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
+    const iso = isoDate(d);
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
-    head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div>${hol?`<span class="holiday-tag">${hol.length>10?hol.slice(0,9)+'…':hol}</span>`:''}</div>`;
+    let tag = '';
+    if(hol){
+      tag = `<span class="holiday-tag">${hol.length>10?hol.slice(0,9)+'…':hol}</span>`;
+    } else {
+      // Wer hat heute die Kinder? Als schlankes Badge, kein Vollblock mehr.
+      const who = whoHasCareToday(d);
+      tag = `<span class="day-who-tag ${who}">${personFilteredLabel(who)}</span>`;
+    }
+    // Schul-Sondertermine als winziges Badge (kein überlappender Block mehr)
+    const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
+    const evTag = specialEv ? `<span class="day-event-tag" title="${specialEv.title}">★</span>` : '';
+    head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div>${tag}${evTag}</div>`;
   }
   head += '</div>';
 
@@ -530,94 +592,113 @@ function renderWeek(){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const iso = isoDate(d);
     const dow = d.getDay(); // 0=So..6=Sa
-    const dowIdx1to7 = (dow===0)?7:dow; // 1=Mo..7=So, für SCHOOL_TIMES (1-5)
+    const dowIdx1to7 = (dow===0)?7:dow;
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
 
     if(hol){
-      body += `<div class="holiday-block">${hol}</div>`;
-      body += `</div>`;
+      body += `<div class="holiday-block">${hol}</div></div>`;
       continue;
     }
 
-    // Schulzeiten pro Kind (nebeneinander als schmale Streifen)
+    // Schulzeiten pro Kind (schmale Streifen nebeneinander)
     ['janosch','mischa'].forEach((kid, idx)=>{
       if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
         const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
-        const top = (s-startHour)*44;
-        const height = (e-s)*44-3;
-        const leftPct = idx===0 ? '0%' : '50%';
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'0%'};font-size:8px;">${kid==='janosch'?'Schule Janosch':'Schule Mischa'}</div>`;
+        const top = (s-startHour)*44, height = (e-s)*44-3;
+        const leftPct = idx===0 ? '1px' : '50%';
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};">${kid==='janosch'?'Schule J.':'Schule M.'}</div>`;
       }
     });
-    // Hort Donnerstag-Mittag
     if(dow===4){
       ['janosch','mischa'].forEach((kid, idx)=>{
         if(isSchoolDayForKid(d, kid)){
           const [s,e] = HORT_THU[kid];
           const top = (s-startHour)*44, height=(e-s)*44-3;
-          const leftPct = idx===0 ? '0%' : '50%';
-          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'0%'};background:#EFE6D8;font-size:8px;">Hort</div>`;
+          const leftPct = idx===0 ? '1px' : '50%';
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:#EFE6D8;">Hort</div>`;
         }
       });
     }
 
-    // Betreuung (Andi/Janine), zeitgenau inkl. Ausnahmen
+    // Betreuungs-Übergaben: NUR an Tagen mit echtem Wechsel (Do/Fr/Sa/So),
+    // und nur so ausführlich, wie es für die eingeloggte Person relevant ist.
     const exc = checkExceptions(d);
     if(exc){
-      body += eventBlock(exc.who, startHour, 24, startHour, d, exc.label);
-    } else if(dow===4){ // Do: Janine bis 17, dann Andi bis 24 (Fr 8 geht optisch über Mitternacht hinaus, hier bis Tagesende)
-      body += eventBlock('a', startHour, 17, startHour, d);
-      body += eventBlock('b', 17, 24, startHour, d, 'ab 17 Uhr');
-    } else if(dow===5){ // Fr: Janine bis 18, dann Andi
-      body += eventBlock('a', startHour, 18, startHour, d);
-      body += eventBlock('b', 18, 24, startHour, d, 'ab 18 Uhr');
-    } else if(dow===6){ // Sa: Andi bis 10 (Rest von Fr), dann Janine
-      body += eventBlock('b', startHour, 10, startHour, d, 'bis 10 Uhr');
-      body += eventBlock('a', 10, 24, startHour, d);
-    } else if(dow===0){ // So: Janine bis 16, dann Andi
-      body += eventBlock('a', startHour, 16, startHour, d);
-      body += eventBlock('b', 16, 24, startHour, d, 'ab 16 Uhr');
-    } else { // Mo-Mi: Janine durchgehend
-      body += eventBlock('a', startHour, 24, startHour, d);
+      if(showFullDetailFor(exc.who)) body += eventBlock(exc.who, startHour, endHour, startHour, d, exc.label);
+    } else if(dow===4){
+      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 17, startHour, d);
+      if(showFullDetailFor('b')) body += eventBlock('b', 17, endHour, startHour, d, 'ab 17 Uhr');
+    } else if(dow===5){
+      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 18, startHour, d);
+      if(showFullDetailFor('b')) body += eventBlock('b', 18, endHour, startHour, d, 'ab 18 Uhr');
+    } else if(dow===6){
+      if(showFullDetailFor('b')) body += eventBlock('b', startHour, 10, startHour, d, 'bis 10 Uhr');
+      if(showFullDetailFor('a')) body += eventBlock('a', 10, endHour, startHour, d);
+    } else if(dow===0){
+      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 16, startHour, d);
+      if(showFullDetailFor('b')) body += eventBlock('b', 16, endHour, startHour, d, 'ab 16 Uhr');
     }
+    // Mo/Di/Mi: kein Vollblock mehr (steht schon als Badge im Kopf), spart Platz & Überlappung
 
-    // Freitags-Clubs (nur Schul-Freitage)
+    // Freitags-Clubs (nur Schul-Freitage) – für beide sichtbar (Übergabe-relevant)
     if(dow===5){
       ['mischa','janosch'].forEach(kid=>{
         if(isSchoolDayForKid(d, kid)){
           const c = FRIDAY_CLUBS[kid];
           const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
-          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#EFE6D8;color:#6B5B3A;left:4px;right:4px;" onclick="openModal('${c.label}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${c.start}:00–${c.end}:00 · ${kid==='mischa'?'Mischa':'Janosch'}')"><strong>${c.label}</strong>${kid==='mischa'?'Mischa':'Janosch'}</div>`;
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#EFE6D8;color:#6B5B3A;left:2px;right:2px;font-size:9.5px;" onclick="openModal('${c.label}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${c.start}:00–${c.end}:00 · ${kid==='mischa'?'Mischa':'Janosch'}')"><strong>${c.label}</strong></div>`;
         }
       });
     }
-    // Janine Bandprobe Donnerstagabend
-    if(dow===4){
-      const top=(20-startHour)*44, height=(24-20)*44-3;
-      body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:4px;right:4px;" onclick="openModal('Bandprobe Janine','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 20:00–24:00')"><strong>Janine</strong>Bandprobe</div>`;
+    // Janine Bandprobe – nur zeigen, wenn nicht als Andi gefiltert
+    if(dow===4 && showFullDetailFor('a')){
+      const top=(20-startHour)*44, height=(Math.min(24,endHour)-20)*44-3;
+      body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;" onclick="openModal('Bandprobe Janine','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 20:00–24:00')"><strong>Bandprobe</strong></div>`;
     }
-    // Andi Volleyball Mittwoch (Zeit vorläufig 19–21, Berufsschule-Ferien = Annahme: gleiche Ferien wie Kinder)
-    if(dow===3 && !hol){
+    // Andi Volleyball – nur zeigen, wenn nicht als Janine gefiltert
+    if(dow===3 && !hol && showFullDetailFor('b')){
       const top=(19-startHour)*44, height=(21-19)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#E4EEF3;color:#2F5D62;left:4px;right:4px;border:1px dashed #2F5D62;" onclick="openModal('Volleyball Andi (Zeit vorläufig)','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 19:00–21:00 · bitte Zeit bestätigen')"><strong>Andi</strong>Volleyball?</div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#E4EEF3;color:#2F5D62;left:2px;right:2px;font-size:9.5px;border:1px dashed #2F5D62;" onclick="openModal('Volleyball Andi (Zeit vorläufig)','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 19:00–21:00 · bitte Zeit bestätigen')"><strong>Volleyball?</strong></div>`;
     }
-    // Mischa Bandprobe (Einzeltermine)
+    // Mischa Bandprobe (Einzeltermine) – für beide sichtbar (Abholzeit relevant)
     if(BAND_DATES_MISCHA.includes(iso)){
       const top=(16.5-startHour)*44, height=(17.5-16.5)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#F3E4EC;color:#8C4A6E;left:4px;right:4px;" onclick="openModal('Bandprobe Mischa','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 16:30–17:30')"><strong>Mischa</strong>Bandprobe</div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#F3E4EC;color:#8C4A6E;left:2px;right:2px;font-size:9.5px;" onclick="openModal('Bandprobe Mischa','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 16:30–17:30')"><strong>Bandprobe M.</strong></div>`;
     }
-    // Schul-Sondertermine (Klassenfoto, Elternabend, etc.)
-    SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
-      body += `<div class="event pending" style="top:2px;height:20px;z-index:3;left:4px;right:4px;font-size:9px;" onclick="openModal('${ev.title}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} ${ev.time?'· '+ev.time:''}')"><strong>${ev.title}</strong></div>`;
-    });
 
     body += `</div>`;
   }
   body += '</div>';
   return head+body;
 }
+
+/* Wer hat an diesem Tag hauptsächlich die Kinder (für Kopf-Badge)? */
+function whoHasCareToday(d){
+  const exc = checkExceptions(d);
+  if(exc) return exc.who;
+  const dow = d.getDay();
+  if(dow===4) return 'b';   // ab 17 Uhr Andi (überwiegt den Nachmittag)
+  if(dow===5) return 'a';   // tagsüber Janine, ab 18 Andi
+  if(dow===6) return 'b';   // bis 10 Andi
+  if(dow===0) return 'a';   // tagsüber Janine, ab 16 Andi
+  return 'a';               // Mo-Mi Janine
+}
+/* Label für Kopf-Badge, je nach eingeloggter Person unterschiedlich knapp */
+function personFilteredLabel(who){
+  if(!currentPerson) return whoLabel(who); // Admin/Test: voller Name
+  if(who===currentPerson) return 'Ich';
+  return 'Kinder bei ' + whoLabel(who);
+}
+/* Soll für Person "who" der volle Zeitblock gezeigt werden? Admin/Test:
+   immer ja. Eingeloggter Elternteil: nur die eigene Seite ausführlich,
+   die andere nur als Kopf-Badge (kein Extra-Block in der Zeitleiste). */
+function showFullDetailFor(who){
+  if(!currentPerson) return true;
+  return who === currentPerson;
+}
+
 function eventBlock(who, start, end, startHour, dateObj, note){
   const top = (start-startHour)*44;
   const height = (end-start)*44-3;
@@ -650,7 +731,7 @@ function renderMonth(){
         html += `<div class="hol-label">${hol}</div>`;
       } else {
         const assign = getCareAssignment(d);
-        html += `<div class="pill ${assign.who}" onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}')">${whoLabel(assign.who)}</div>`;
+        html += `<div class="pill ${assign.who}" onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}')">${personFilteredLabel(assign.who)}</div>`;
         const iso2 = isoDate(d);
         if(BAND_DATES_MISCHA.includes(iso2)) html += `<div class="hol-label" style="color:#8C4A6E;">Bandprobe M.</div>`;
         SCHOOL_EVENTS.filter(ev=>ev.date===iso2).forEach(ev=> html += `<div class="hol-label" style="color:#B4890F;">${ev.title.slice(0,14)}</div>`);
@@ -665,6 +746,7 @@ function renderMonth(){
 /* ====================== RENDER: TAG ====================== */
 function renderDay(){
   const d = currentDate;
+  const iso = isoDate(d);
   const hol = getHolidayName(d) || getSchoolHolidayName(d);
   let html = '<div class="day-list">';
   if(hol){
@@ -673,18 +755,70 @@ function renderDay(){
     return html;
   }
   const dow = d.getDay();
+  const dowIdx1to7 = (dow===0)?7:dow;
   const items = [];
-  if(isSchoolDay(d)) items.push({time:'08:00–13:30', who:'school', title:'Schule', sub:''});
-  if(dow>=1 && dow<=2) items.push({time:'13:30–20:00', who:'a', title:'Janine', sub:'bestätigt · oben'});
-  else if(dow===3){
-    items.push({time:'13:30–16:00', who:'a', title:'Janine', sub:'Übergabe um 16:00'});
-    items.push({time:'16:00–20:00', who:'b', title:'Andi', sub:'bestätigt · unten'});
-  } else if(dow>=4 && dow<=5) items.push({time:'13:30–20:00', who:'b', title:'Andi', sub:'bestätigt · unten'});
-  else items.push({time:'09:00–20:00', who:'omami', title:'Omami', sub:'bestätigt · unten'});
+
+  ['janosch','mischa'].forEach(kid=>{
+    if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
+      const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+      items.push({time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:`Schule ${kid==='janosch'?'Janosch':'Mischa'}`, sub:''});
+    }
+  });
+  if(dow===4){
+    ['janosch','mischa'].forEach(kid=>{
+      if(isSchoolDayForKid(d, kid)){
+        const [s,e] = HORT_THU[kid];
+        items.push({time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:`Hort ${kid==='janosch'?'Janosch':'Mischa'}`, sub:''});
+      }
+    });
+  }
+
+  const exc = checkExceptions(d);
+  if(exc){
+    if(showFullDetailFor(exc.who)) items.push({time:'ganztags', who:exc.who, title:whoLabel(exc.who), sub:exc.label});
+    else items.push({time:'ganztags', who:'info', title:'Kinder bei '+whoLabel(exc.who), sub:''});
+  } else if(dow>=1 && dow<=3){
+    if(showFullDetailFor('a')) items.push({time:'ganztags', who:'a', title:'Janine', sub:'bestätigt'});
+    else items.push({time:'ganztags', who:'info', title:'Kinder bei Janine', sub:''});
+  } else if(dow===4){
+    if(showFullDetailFor('a')) items.push({time:'bis 17:00', who:'a', title:'Janine', sub:''});
+    else items.push({time:'bis 17:00', who:'info', title:'Kinder bei Janine', sub:''});
+    if(showFullDetailFor('b')) items.push({time:'ab 17:00', who:'b', title:'Andi', sub:'Übergabe 17 Uhr'});
+    else items.push({time:'ab 17:00', who:'info', title:'Kinder bei Andi', sub:''});
+  } else if(dow===5){
+    if(showFullDetailFor('a')) items.push({time:'bis 18:00', who:'a', title:'Janine', sub:''});
+    else items.push({time:'bis 18:00', who:'info', title:'Kinder bei Janine', sub:''});
+    if(showFullDetailFor('b')) items.push({time:'ab 18:00', who:'b', title:'Andi', sub:'Übergabe 18 Uhr'});
+    else items.push({time:'ab 18:00', who:'info', title:'Kinder bei Andi', sub:''});
+  } else if(dow===6){
+    if(showFullDetailFor('b')) items.push({time:'bis 10:00', who:'b', title:'Andi', sub:''});
+    else items.push({time:'bis 10:00', who:'info', title:'Kinder bei Andi', sub:''});
+    if(showFullDetailFor('a')) items.push({time:'ab 10:00', who:'a', title:'Janine', sub:'Übergabe 10 Uhr'});
+    else items.push({time:'ab 10:00', who:'info', title:'Kinder bei Janine', sub:''});
+  } else { // So
+    if(showFullDetailFor('a')) items.push({time:'bis 16:00', who:'a', title:'Janine', sub:''});
+    else items.push({time:'bis 16:00', who:'info', title:'Kinder bei Janine', sub:''});
+    if(showFullDetailFor('b')) items.push({time:'ab 16:00', who:'b', title:'Andi', sub:'Übergabe 16 Uhr'});
+    else items.push({time:'ab 16:00', who:'info', title:'Kinder bei Andi', sub:''});
+  }
+
+  if(dow===5){
+    ['mischa','janosch'].forEach(kid=>{
+      if(isSchoolDayForKid(d, kid)){
+        const c = FRIDAY_CLUBS[kid];
+        items.push({time:`${c.start}:00–${c.end}:00`, who:'club', title:c.label, sub:kid==='mischa'?'Mischa':'Janosch'});
+      }
+    });
+  }
+  if(dow===4 && showFullDetailFor('a')) items.push({time:'20:00–24:00', who:'omami', title:'Bandprobe', sub:'Janine'});
+  if(dow===3 && showFullDetailFor('b')) items.push({time:'19:00–21:00', who:'club', title:'Volleyball (Zeit vorläufig)', sub:'Andi'});
+  if(BAND_DATES_MISCHA.includes(iso)) items.push({time:'16:30–17:30', who:'club', title:'Bandprobe Mischa', sub:''});
+  SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=> items.push({time:ev.time||'', who:'pending', title:ev.title, sub:''}));
 
   items.forEach(it=>{
-    const bg = it.who==='school' ? 'var(--school)' : it.who==='a' ? 'var(--a-bg)' : it.who==='b' ? 'var(--b-bg)' : 'var(--omami-bg)';
-    const clickable = it.who!=='school';
+    const bgMap = {school:'var(--school)', a:'var(--a-bg)', b:'var(--b-bg)', omami:'var(--omami-bg)', club:'#EFE6D8', pending:'var(--pending-bg)', info:'#F0EFEA'};
+    const bg = bgMap[it.who] || 'var(--school)';
+    const clickable = (it.who==='a' || it.who==='b');
     html += `<div class="day-item">
       <div class="day-time">${it.time}</div>
       <div class="day-card" style="background:${bg};" ${clickable?`onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${it.time}', '${it.who==='a'?'oben':'unten'}')"`:''}>
@@ -695,6 +829,7 @@ function renderDay(){
   html += '</div>';
   return html;
 }
+function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh}:${mm.toString().padStart(2,'0')}`; }
 
 /* ====================== RENDER: PARTNER-ANSICHT ====================== */
 function renderPartnerStrip(){
@@ -728,15 +863,117 @@ function render(){
   let panelHtml;
   if(currentView==='woche') panelHtml = renderWeek();
   else if(currentView==='monat') panelHtml = renderMonth();
+  else if(currentView==='alle') panelHtml = renderAllColumns();
   else panelHtml = renderDay();
   container.innerHTML = `<div class="cal-panel">${panelHtml}</div>`;
 }
 
+/* ====================== RENDER: ALLE SPALTEN (Admin, Desktop) ======
+   Eine Zeile pro Tag, eine Spalte pro Person/Thema – zeigt ALLES
+   ungefiltert nebeneinander, gedacht für grosse Bildschirme. */
+function renderAllColumns(){
+  const start = startOfWeek(currentDate);
+  const dowLabels = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+  const todayIso = isoDate(new Date());
+
+  let html = `<table class="allcols-table"><thead><tr>
+    <th>Tag</th><th>Schule / Hort</th><th>Janine</th><th>Andi</th><th>Clubs &amp; Bandprobe</th><th>Sondertermine</th>
+  </tr></thead><tbody>`;
+
+  for(let i=0;i<7;i++){
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    const iso = isoDate(d);
+    const dow = d.getDay();
+    const dowIdx1to7 = (dow===0)?7:dow;
+    const hol = getHolidayName(d) || getSchoolHolidayName(d);
+    const isToday = iso===todayIso;
+
+    html += `<tr class="${isToday?'today-row':''}">`;
+    html += `<td class="daycell">${dowLabels[dow===0?6:dow-1]}<br><span style="font-weight:400;color:var(--ink-soft);">${d.getDate()}. ${d.toLocaleDateString('de-CH',{month:'short'})}</span></td>`;
+
+    if(hol){
+      html += `<td colspan="5"><span class="chip hol">${hol}</span></td></tr>`;
+      continue;
+    }
+
+    // Schule/Hort
+    let schoolCell = '';
+    ['janosch','mischa'].forEach(kid=>{
+      if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
+        const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+        schoolCell += `<span class="chip ${kid==='janosch'?'a':'b'}">${kid==='janosch'?'Janosch':'Mischa'} ${fmtH(s)}–${fmtH(e)}</span>`;
+      }
+    });
+    if(dow===4){
+      ['janosch','mischa'].forEach(kid=>{
+        if(isSchoolDayForKid(d, kid)){
+          const [s,e] = HORT_THU[kid];
+          schoolCell += `<span class="chip club">Hort ${kid==='janosch'?'J.':'M.'} ${fmtH(s)}–${fmtH(e)}</span>`;
+        }
+      });
+    }
+    html += `<td>${schoolCell||'–'}</td>`;
+
+    // Janine / Andi Spalten
+    const exc = checkExceptions(d);
+    let janineCell='', andiCell='';
+    if(exc){
+      if(exc.who==='a') janineCell += `<span class="chip a">${exc.label}</span>`;
+      if(exc.who==='b') andiCell += `<span class="chip b">${exc.label}</span>`;
+    } else if(dow>=1 && dow<=3){
+      janineCell += `<span class="chip a">ganztags</span>`;
+    } else if(dow===4){
+      janineCell += `<span class="chip a">bis 17:00</span>`;
+      andiCell += `<span class="chip b">ab 17:00</span>`;
+    } else if(dow===5){
+      janineCell += `<span class="chip a">bis 18:00</span>`;
+      andiCell += `<span class="chip b">ab 18:00</span>`;
+    } else if(dow===6){
+      andiCell += `<span class="chip b">bis 10:00</span>`;
+      janineCell += `<span class="chip a">ab 10:00</span>`;
+    } else {
+      janineCell += `<span class="chip a">bis 16:00</span>`;
+      andiCell += `<span class="chip b">ab 16:00</span>`;
+    }
+    if(dow===4) janineCell += `<span class="chip band">Bandprobe 20–24</span>`;
+    if(dow===3 && !hol) andiCell += `<span class="chip club">Volleyball 19–21?</span>`;
+    html += `<td>${janineCell}</td><td>${andiCell}</td>`;
+
+    // Clubs & Bandprobe
+    let clubCell = '';
+    if(dow===5){
+      ['mischa','janosch'].forEach(kid=>{
+        if(isSchoolDayForKid(d, kid)){
+          const c = FRIDAY_CLUBS[kid];
+          clubCell += `<span class="chip club">${c.label} (${kid==='mischa'?'Mischa':'Janosch'}) ${c.start}–${c.end}</span>`;
+        }
+      });
+    }
+    if(BAND_DATES_MISCHA.includes(iso)) clubCell += `<span class="chip band">Bandprobe Mischa 16:30–17:30</span>`;
+    html += `<td>${clubCell||'–'}</td>`;
+
+    // Sondertermine
+    let evCell = '';
+    SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
+      evCell += `<span class="chip hol">${ev.title}${ev.time?' · '+ev.time:''}</span>`;
+    });
+    html += `<td>${evCell||'–'}</td>`;
+
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+const APP_VERSION = 'v6 · 21.09.2026';
+document.getElementById('versionTag').textContent = APP_VERSION;
+
+setAdminUIState(true);
 render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=6').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -844,6 +1081,8 @@ window.openAdminFromCalendar = function(){
 };
 window.openCalendarAsAdmin = function(){
   showScreen('calendarScreen');
+  if(typeof setAdminUIState === 'function') setAdminUIState(true);
+  if(typeof render === 'function') render();
 };
 
 window.switchAdminTab = function(tab){
@@ -947,6 +1186,20 @@ onAuthStateChanged(auth, async (user) => {
   showScreen('calendarScreen');
   if(typeof setRole === 'function'){
     setRole(data.role === 'partner' ? 'partner' : 'eltern');
+  }
+  // Persönlichen Filter setzen: bei Elternteil-Rolle anhand des
+  // Benutzernamens erkennen, ob Andi oder Janine eingeloggt ist, damit
+  // im Kalender nur die eigene Übergabe ausführlich gezeigt wird.
+  if(typeof window !== 'undefined'){
+    const uname = (data.username||'').toLowerCase();
+    if(data.role === 'elternteil' && uname.includes('andi')) window.currentPerson = 'b';
+    else if(data.role === 'elternteil' && uname.includes('janine')) window.currentPerson = 'a';
+    else window.currentPerson = null; // Admin, Omami, Kind, Partner: ungefiltert bzw. eigene Logik
+    // Wer sich hier direkt in den Kalender einloggt, ist NICHT Admin
+    // (Admin landet zuerst im Adminbereich, siehe oben) -> Vorschau-
+    // Funktionen (Alle Spalten, Namen anklicken) für alle anderen sperren.
+    if(typeof setAdminUIState === 'function') setAdminUIState(false);
+    if(typeof render === 'function') render();
   }
   // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen
   const roleSwitchEl = document.querySelector('.role-switch');

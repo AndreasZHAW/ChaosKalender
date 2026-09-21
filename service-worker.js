@@ -1,4 +1,7 @@
-const CACHE_NAME = 'chaoskalender-v1';
+// ChaosKalender Service Worker
+// WICHTIG: CACHE_NAME bei jedem Deployment hochzählen (v5, v6, ...),
+// sonst bleiben alte Dateien im Cache hängen und Updates kommen nicht an.
+const CACHE_NAME = 'chaoskalender-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -23,10 +26,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Netzwerk-zuerst-Strategie: versucht IMMER zuerst die aktuelle Version
+// aus dem Netz zu laden. Nur wenn kein Internet da ist, wird die
+// zwischengespeicherte Version als Fallback genutzt (Offline-Fähigkeit
+// bleibt erhalten, aber Updates kommen jetzt sofort an statt hängen zu
+// bleiben).
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
