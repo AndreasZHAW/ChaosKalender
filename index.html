@@ -50,7 +50,7 @@
   .legend-item{display:flex; align-items:center; gap:5px;}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
-  .cal-panel{background:var(--panel); border-radius:10px; overflow:hidden; border:1px solid var(--line);}
+  .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
 
   /* Partner-restricted view */
   .partner-strip{display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:var(--panel);}
@@ -64,17 +64,17 @@
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
 
   /* WEEK */
-  .week-head{display:grid; grid-template-columns:34px repeat(7,1fr);}
+  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
-  .week-head .daynum{font-size:13px; color:var(--ink); font-weight:600; margin-top:1px;}
+  .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
-  .week-body{display:grid; grid-template-columns:34px repeat(7,1fr);}
+  .week-body{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
   .time-col{display:flex; flex-direction:column;}
   .time-col .slot-h{height:88px; text-align:right; padding-right:4px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-5px;}
   .day-col{border-left:1px solid var(--line); position:relative;}
   .hour-row{height:44px; border-top:1px solid var(--line);}
-  .event{position:absolute; left:2px; right:2px; border-radius:5px; padding:4px 5px; font-size:10px; line-height:1.25; cursor:pointer;}
-  .event strong{display:block; font-size:10.5px;}
+  .event{position:absolute; left:2px; right:2px; border-radius:5px; padding:4px 5px; font-size:11px; line-height:1.25; cursor:pointer;}
+  .event strong{display:block; font-size:11.5px;}
   .event.a{background:var(--a-bg); color:var(--a);}
   .event.b{background:var(--b-bg); color:var(--b);}
   .event.omami{background:var(--omami-bg); color:var(--omami);}
@@ -330,13 +330,43 @@ const HOLIDAYS_2026 = {
   '2026-12-25':'Weihnachten', '2026-12-26':'Stephanstag'
 };
 
-/* Echte Schulferien-Zeiträume Rüschlikon (Quelle: localcities.ch /
-   Kanton Zürich Ferienplan), als [startISO, endISO, Name] */
+/* Echte Schulferien-Zeiträume Rüschlikon/Kilchberg (Kanton Zürich,
+   §30 Volksschulgesetz, "immerwährender Ferienkalender" DIN-Wochen
+   41+42 = Herbst, 7+8 = Sport, 17+18 = Frühling, 29-33 = Sommer),
+   als [startISO, endISO, Name] */
 const SCHOOL_HOLIDAYS = [
+  ['2026-10-03','2026-10-18','Herbstferien'],
   ['2026-12-21','2027-01-02','Weihnachtsferien'],
+  ['2027-02-13','2027-02-28','Sportferien'],
   ['2027-04-26','2027-05-08','Frühlingsferien'],
   ['2027-07-19','2027-08-21','Sommerferien'],
-  ['2027-10-11','2027-10-23','Herbstferien'],
+];
+
+/* Zusätzliche einzelne schulfreie Tage / Schul-Sondertermine aus dem
+   Elternbrief der 6. Klasse (Mischa). Schilftag nur für Mischas Klasse
+   eingetragen, da im Brief nur für die 6. Klasse erwähnt – bei Janosch
+   bitte bestätigen, ob das auch gilt. */
+const SPECIAL_SCHOOL_DAYS = {
+  '2026-09-11': {label:'Schilftag (schulfrei, nur 6a/Mischa)', kids:['mischa']},
+  '2026-09-14': {label:'Knabenschiessen (schulfrei)', kids:['janosch','mischa']},
+};
+
+/* Einzelne Schul-/Familien-Termine (kein Feiertag, aber wichtig) */
+const SCHOOL_EVENTS = [
+  {date:'2026-09-04', time:'09:40', title:'Klassenfoto', who:'mischa'},
+  {date:'2026-09-10', time:'19:30', title:'Elternabend (Singsaal Dorf)', who:'eltern'},
+  {date:'2026-09-24', time:'', title:'Stufensporttag (Zeit noch offen)', who:'mischa'},
+  {date:'2026-11-12', time:'', title:'Nationaler Zukunftstag (freiwillig)', who:'mischa'},
+  {date:'2026-11-13', time:'abends', title:'Erzählabend (freiwillig, Zeit offen)', who:'mischa'},
+];
+/* Klassenlager Mischa: Mo 7.6.–Fr 11.6.2027, ganze Woche inkl. Nächte */
+const CAMP_MISCHA = ['2027-06-07','2027-06-11'];
+
+/* Mischa Bandprobe – feste Einzeltermine (kein wöchentliches Muster,
+   alle 2 Wochen alternierend), immer 16:30–17:30 */
+const BAND_DATES_MISCHA = [
+  '2026-09-10','2026-09-24','2026-10-29','2026-11-12','2026-11-26',
+  '2027-01-07','2027-01-21','2027-02-04'
 ];
 
 function isoDate(d){ return d.toISOString().slice(0,10); }
@@ -355,18 +385,61 @@ function isSchoolDay(d){
   if(getSchoolHolidayName(d)) return false;
   return true;
 }
+function isSchoolDayForKid(d, kid){
+  if(!isSchoolDay(d)) return false;
+  const special = SPECIAL_SCHOOL_DAYS[isoDate(d)];
+  if(special && special.kids.includes(kid)) return false;
+  return true;
+}
 
-/* ====================== WIEDERHOLUNGSREGEL ======================
-   Statt 10 Jahre einzelner Termine zu speichern, wird die Betreuung
-   für JEDES beliebige Datum live berechnet (Konzept 3.2).
-   Muster: Mo–Mi Janine (oben), Mi nachmittags–Fr Andi (unten),
-   Sa–So Omami. */
+/* ====================== SCHULZEITEN PRO KIND ======================
+   Aus den eingelesenen Stundenplänen (4b Janosch / 6a Mischa).
+   Zeiten in Dezimalstunden. [start, ende] pro Wochentag (1=Mo..5=Fr). */
+const SCHOOL_TIMES = {
+  janosch: { 1:[8.25,15], 2:[7.5,15], 3:[8.25,11.75], 4:[8.25,15], 5:[8.25,11.75] },
+  mischa:  { 1:[8.33,15.5], 2:[8.33,16.33], 3:[8.33,11.83], 4:[7.5,15.5], 5:[8.33,15.5] }
+};
+/* Hort Donnerstag-Mittag (Lücke zwischen Vor- und Nachmittagsunterricht) */
+const HORT_THU = { janosch:[11.75,13.5], mischa:[11.83,14] };
+/* Freitags-Clubs, nur an Schul-Freitagen */
+const FRIDAY_CLUBS = {
+  mischa:  {label:'KidsClub', start:18, end:22},
+  janosch: {label:'BoysClub', start:16, end:18}
+};
+
+/* ====================== BETREUUNG: ZEITGENAUE REGEL + AUSNAHMEN ======
+   Wiederholungsregel (Konzept 3.2): wird live berechnet, nicht
+   gespeichert. Andi: Do 17–Fr 8, Fr 18–Sa 10, So 16–Mo 8. Sonst Janine.
+   Zusätzlich zwei befristete Ausnahmen (Andi-Auszeit / Andi mit Kindern
+   in Bissingen), die die normale Regel für diesen Zeitraum überschreiben. */
+const CARE_EXCEPTIONS = [
+  // Andi auf der Hütte, OHNE Kinder -> Janine übernimmt durchgehend
+  {start:'2026-10-08T00:00', end:'2026-10-12T23:59', who:'a', ort:'oben', label:'Andi auf der Hütte – Janine übernimmt'},
+  // Andi mit den Kindern in Bissingen -> Andi durchgehend, unabhängig vom normalen Muster
+  {start:'2026-10-14T00:00', end:'2026-10-18T23:59', who:'b', ort:'unten', label:'Andi mit Kindern in Bissingen'},
+];
+
+function toDecimalHour(d){ return d.getHours() + d.getMinutes()/60; }
+
+function checkExceptions(dateObj){
+  const iso = isoDate(dateObj);
+  for(const ex of CARE_EXCEPTIONS){
+    const exStart = ex.start.slice(0,10), exEnd = ex.end.slice(0,10);
+    if(iso>=exStart && iso<=exEnd) return ex;
+  }
+  return null;
+}
+
+/* Für Monats-/Tagesübersicht: wer "hauptsächlich" an diesem Tag zuständig ist */
 function getCareAssignment(d){
+  const exc = checkExceptions(d);
+  if(exc) return {who:exc.who, ort:exc.ort};
   const dow = d.getDay(); // 0=So..6=Sa
-  if(dow>=1 && dow<=2) return {who:'a', ort:'oben'};
-  if(dow===3) return {who:'a', ort:'oben', splitAfternoon:'b'};
-  if(dow>=4 && dow<=5) return {who:'b', ort:'unten'};
-  return {who:'omami', ort:'unten'};
+  if(dow===4) return {who:'b', ort:'unten'};       // Do ab 17 Uhr Andi (Haupt-Tag-Zuordnung)
+  if(dow===5) return {who:'a', ort:'oben', eveningTo:'b'}; // Fr tags Janine, ab 18 Uhr Andi
+  if(dow===6) return {who:'b', ort:'unten', morningFrom:'a'}; // Sa bis 10 Andi(Rest von Fr), ab 10 Janine
+  if(dow===0) return {who:'a', ort:'oben', eveningTo:'b'}; // So tags Janine, ab 16 Uhr Andi
+  return {who:'a', ort:'oben'}; // Mo-Mi durchgehend Janine
 }
 function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami'}[who] || ''; }
 
@@ -438,7 +511,7 @@ function toggleTimeFields(){
 /* ====================== RENDER: WOCHE ====================== */
 function renderWeek(){
   const start = startOfWeek(currentDate);
-  const startHour=8, endHour=20;
+  const startHour=7, endHour=24;
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   let head = '<div class="week-head"><div></div>';
@@ -455,6 +528,9 @@ function renderWeek(){
 
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
+    const iso = isoDate(d);
+    const dow = d.getDay(); // 0=So..6=Sa
+    const dowIdx1to7 = (dow===0)?7:dow; // 1=Mo..7=So, für SCHOOL_TIMES (1-5)
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
@@ -465,21 +541,78 @@ function renderWeek(){
       continue;
     }
 
-    if(isSchoolDay(d)){
-      body += `<div class="school-block" style="top:0px;height:${(13.5-8)*44}px;">Schule</div>`;
+    // Schulzeiten pro Kind (nebeneinander als schmale Streifen)
+    ['janosch','mischa'].forEach((kid, idx)=>{
+      if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
+        const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+        const top = (s-startHour)*44;
+        const height = (e-s)*44-3;
+        const leftPct = idx===0 ? '0%' : '50%';
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'0%'};font-size:8px;">${kid==='janosch'?'Schule Janosch':'Schule Mischa'}</div>`;
+      }
+    });
+    // Hort Donnerstag-Mittag
+    if(dow===4){
+      ['janosch','mischa'].forEach((kid, idx)=>{
+        if(isSchoolDayForKid(d, kid)){
+          const [s,e] = HORT_THU[kid];
+          const top = (s-startHour)*44, height=(e-s)*44-3;
+          const leftPct = idx===0 ? '0%' : '50%';
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'0%'};background:#EFE6D8;font-size:8px;">Hort</div>`;
+        }
+      });
     }
 
-    const dow = d.getDay();
-    if(dow>=1 && dow<=2){
-      body += eventBlock('a', 13.5, 20, startHour, d);
-    } else if(dow===3){
-      body += eventBlock('a', 13.5, 16, startHour, d, 'Übergabe');
-      body += eventBlock('b', 16, 20, startHour, d);
-    } else if(dow>=4 && dow<=5){
-      body += eventBlock('b', 13.5, 20, startHour, d);
-    } else {
-      body += eventBlock('omami', 9, 20, startHour, d);
+    // Betreuung (Andi/Janine), zeitgenau inkl. Ausnahmen
+    const exc = checkExceptions(d);
+    if(exc){
+      body += eventBlock(exc.who, startHour, 24, startHour, d, exc.label);
+    } else if(dow===4){ // Do: Janine bis 17, dann Andi bis 24 (Fr 8 geht optisch über Mitternacht hinaus, hier bis Tagesende)
+      body += eventBlock('a', startHour, 17, startHour, d);
+      body += eventBlock('b', 17, 24, startHour, d, 'ab 17 Uhr');
+    } else if(dow===5){ // Fr: Janine bis 18, dann Andi
+      body += eventBlock('a', startHour, 18, startHour, d);
+      body += eventBlock('b', 18, 24, startHour, d, 'ab 18 Uhr');
+    } else if(dow===6){ // Sa: Andi bis 10 (Rest von Fr), dann Janine
+      body += eventBlock('b', startHour, 10, startHour, d, 'bis 10 Uhr');
+      body += eventBlock('a', 10, 24, startHour, d);
+    } else if(dow===0){ // So: Janine bis 16, dann Andi
+      body += eventBlock('a', startHour, 16, startHour, d);
+      body += eventBlock('b', 16, 24, startHour, d, 'ab 16 Uhr');
+    } else { // Mo-Mi: Janine durchgehend
+      body += eventBlock('a', startHour, 24, startHour, d);
     }
+
+    // Freitags-Clubs (nur Schul-Freitage)
+    if(dow===5){
+      ['mischa','janosch'].forEach(kid=>{
+        if(isSchoolDayForKid(d, kid)){
+          const c = FRIDAY_CLUBS[kid];
+          const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#EFE6D8;color:#6B5B3A;left:4px;right:4px;" onclick="openModal('${c.label}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${c.start}:00–${c.end}:00 · ${kid==='mischa'?'Mischa':'Janosch'}')"><strong>${c.label}</strong>${kid==='mischa'?'Mischa':'Janosch'}</div>`;
+        }
+      });
+    }
+    // Janine Bandprobe Donnerstagabend
+    if(dow===4){
+      const top=(20-startHour)*44, height=(24-20)*44-3;
+      body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:4px;right:4px;" onclick="openModal('Bandprobe Janine','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 20:00–24:00')"><strong>Janine</strong>Bandprobe</div>`;
+    }
+    // Andi Volleyball Mittwoch (Zeit vorläufig 19–21, Berufsschule-Ferien = Annahme: gleiche Ferien wie Kinder)
+    if(dow===3 && !hol){
+      const top=(19-startHour)*44, height=(21-19)*44-3;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#E4EEF3;color:#2F5D62;left:4px;right:4px;border:1px dashed #2F5D62;" onclick="openModal('Volleyball Andi (Zeit vorläufig)','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 19:00–21:00 · bitte Zeit bestätigen')"><strong>Andi</strong>Volleyball?</div>`;
+    }
+    // Mischa Bandprobe (Einzeltermine)
+    if(BAND_DATES_MISCHA.includes(iso)){
+      const top=(16.5-startHour)*44, height=(17.5-16.5)*44-3;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:#F3E4EC;color:#8C4A6E;left:4px;right:4px;" onclick="openModal('Bandprobe Mischa','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 16:30–17:30')"><strong>Mischa</strong>Bandprobe</div>`;
+    }
+    // Schul-Sondertermine (Klassenfoto, Elternabend, etc.)
+    SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
+      body += `<div class="event pending" style="top:2px;height:20px;z-index:3;left:4px;right:4px;font-size:9px;" onclick="openModal('${ev.title}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} ${ev.time?'· '+ev.time:''}')"><strong>${ev.title}</strong></div>`;
+    });
+
     body += `</div>`;
   }
   body += '</div>';
@@ -518,6 +651,9 @@ function renderMonth(){
       } else {
         const assign = getCareAssignment(d);
         html += `<div class="pill ${assign.who}" onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}')">${whoLabel(assign.who)}</div>`;
+        const iso2 = isoDate(d);
+        if(BAND_DATES_MISCHA.includes(iso2)) html += `<div class="hol-label" style="color:#8C4A6E;">Bandprobe M.</div>`;
+        SCHOOL_EVENTS.filter(ev=>ev.date===iso2).forEach(ev=> html += `<div class="hol-label" style="color:#B4890F;">${ev.title.slice(0,14)}</div>`);
       }
     }
     html += `</div>`;
