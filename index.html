@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChaosKalender</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4F6F6A">
+<meta name="theme-color" content="#5B7A94">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,14 +14,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg: #FAFAF8; --panel: #FFFFFF; --ink: #26312F; --ink-soft: #737F7B;
-    --line: #E6E4DD;
-    --a: #4F6F6A; --a-bg: #EAF0EE; --a-tint: rgba(79,111,106,0.09);
-    --b: #96754F; --b-bg: #F3EBE1; --b-tint: rgba(150,117,79,0.10);
-    --omami: #7D6E9E; --omami-bg: #EFEBF5;
-    --pending: #A98A54; --pending-bg: #F6EFE1;
-    --holiday-bg: #F5E9E9; --holiday-text: #A9645F;
-    --school: #F1F0EA;
+    --bg: #FAFAF9; --panel: #FFFFFF; --ink: #2B2A28; --ink-soft: #7A776F;
+    --line: #E8E4DC;
+    --a: #5B7A94; --a-bg: #E7EDF2; --a-tint: rgba(91,122,148,0.08);
+    --b: #BF8248; --b-bg: #F5E9DB; --b-tint: rgba(191,130,72,0.09);
+    --omami: #9B7CA8; --omami-bg: #F1E9F3;
+    --pending: #C9A54B; --pending-bg: #F8F0DC;
+    --holiday-bg: #FBEEE9; --holiday-text: #C17356;
+    --school: #EFEFE9;
   }
   *{box-sizing:border-box;}
   html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
@@ -116,14 +116,15 @@
   .pill.omami{background:var(--omami-bg); color:var(--omami);}
   .hol-label{font-size:8.5px; color:var(--holiday-text); font-weight:700;}
 
-  /* DAY */
-  .day-list{padding:14px;}
-  .day-item{display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--line);}
-  .day-item:first-child{border-top:none;}
-  .day-time{width:60px; flex-shrink:0; font-size:11px; color:var(--ink-soft); padding-top:10px;}
-  .day-card{flex:1; border-radius:8px; padding:10px 12px; cursor:pointer;}
-  .day-card strong{display:block; font-size:13px; margin-bottom:1px;}
-  .day-card p{margin:0; font-size:11px;}
+  /* DAY (Stundenraster, alle 24 Stunden) */
+  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line);}
+  .day-head-date{font-weight:700; font-size:14px; margin-bottom:4px; text-transform:capitalize;}
+  .day-grid{display:flex;}
+  .day-grid .time-col{width:34px; flex-shrink:0;}
+  .day-grid .time-col .slot-h{text-align:right; padding-right:6px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-6px;}
+  .day-grid .day-col{flex:1; border-left:1px solid var(--line);}
+  .day-grid .hour-row{border-top:1px solid var(--line);}
+  .day-grid .event strong{font-size:11px;}
 
   .overlay{position:fixed; inset:0; background:rgba(28,43,42,0.35); display:none; align-items:flex-end; justify-content:center; z-index:50;}
   .overlay.show{display:flex;}
@@ -292,21 +293,22 @@
 
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
-    <button class="test-btn" onclick="jumpToDate(2026,11,15)">Testwoche Nov 2026</button>
-    <button class="test-btn" onclick="jumpToDate(2026,12,21)">Weihnachtsferien 2026 (echt)</button>
-    <button class="test-btn" onclick="jumpYearsAhead(10)">Engine-Test: +10 Jahre springen</button>
+    <button class="test-btn" onclick="jumpNextWeek()">Nächste Woche</button>
+    <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
+    <button class="test-btn" id="nextHolBtn2" onclick="jumpToNextHoliday(2)">…</button>
+    <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔 Lücken-Check</button>
   </div>
 
   <div class="legend" id="legendRow">
-    <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#4F6F6A"></span>Janine (Mutter)</div>
-    <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#96754F"></span>Andi (Vater)</div>
-    <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#7D6E9E"></span>Omami</div>
-    <div class="legend-item"><span class="dot" style="background:#B98484"></span>Feiertag/Ferien</div>
+    <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#5B7A94"></span>Janine (Mutter)</div>
+    <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#BF8248"></span>Andi (Vater)</div>
+    <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
+    <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
   </div>
   <div class="legend" id="kidsLegendRow" style="margin-top:-8px;">
     <span style="font-size:10.5px; color:var(--ink-soft); margin-right:4px;">Kinder-Kalender:</span>
-    <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:#4F6F6A"></span>Janosch (9)</div>
-    <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#96754F"></span>Mischa (11)</div>
+    <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:#5B7A94"></span>Janosch (9)</div>
+    <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#BF8248"></span>Mischa (11)</div>
   </div>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
     👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)">zurück zur Admin-Ansicht</span>
@@ -579,6 +581,64 @@ function shiftPeriod(dir){
 function jumpToToday(){ currentDate = new Date(); render(); }
 function jumpToDate(y,m,day){ currentDate = new Date(y, m-1, day); render(); }
 function jumpYearsAhead(n){ currentDate.setFullYear(currentDate.getFullYear()+n); render(); }
+function jumpNextWeek(){ currentDate.setDate(currentDate.getDate()+7); render(); }
+
+/* Findet die nächsten zwei Ferienzeiträume ab heute und beschriftet/
+   verknüpft die entsprechenden Buttons dynamisch (kein hartcodiertes
+   Testdatum mehr). */
+function updateHolidayButtons(){
+  const today = isoDate(new Date());
+  const upcoming = SCHOOL_HOLIDAYS.filter(([s,e,name])=> e>=today).sort((a,b)=> a[0]<b[0]?-1:1);
+  const btn1 = document.getElementById('nextHolBtn');
+  const btn2 = document.getElementById('nextHolBtn2');
+  if(upcoming[0]){
+    btn1.textContent = upcoming[0][2] + ' →';
+    btn1.onclick = ()=> jumpToIso(upcoming[0][0]);
+    btn1.style.display = 'inline-block';
+  } else { btn1.style.display = 'none'; }
+  if(upcoming[1]){
+    btn2.textContent = upcoming[1][2] + ' →';
+    btn2.onclick = ()=> jumpToIso(upcoming[1][0]);
+    btn2.style.display = 'inline-block';
+  } else { btn2.style.display = 'none'; }
+}
+function jumpToIso(iso){
+  const [y,m,day] = iso.split('-').map(Number);
+  currentDate = new Date(y, m-1, day);
+  render();
+}
+
+/* Betreuungslücken-Check (Konzept 3.9): sucht ab heute den nächsten
+   Zeitpunkt, an dem NIEMAND (weder Elternteil noch Omami noch Schule)
+   zuständig ist, und springt automatisch dorthin. Mo-Do sind laut
+   Grundregel standardmässig Janine zugeordnet, daher normalerweise
+   keine Lücke zu erwarten – die Prüfung läuft trotzdem vollständig,
+   auch für zukünftige, individuell abweichende Slots. */
+function findNextCareGap(){
+  let d = new Date();
+  for(let dayOffset=0; dayOffset<366; dayOffset++){
+    const check = new Date(d); check.setDate(d.getDate()+dayOffset);
+    const segs = getCustodySegments(check);
+    // Deckt das Segment-Set lückenlos 0–24 Uhr ab?
+    const sorted = segs.slice().sort((a,b)=>(a.from||0)-(b.from||0));
+    let covered = 0;
+    let gapFound = false;
+    for(const seg of sorted){
+      const from = seg.from!==undefined ? seg.from : 0;
+      const to = seg.to!==undefined ? seg.to : 24;
+      if(from > covered) { gapFound = true; break; }
+      covered = Math.max(covered, to);
+    }
+    if(covered < 24) gapFound = true;
+    if(gapFound){
+      currentDate = check;
+      setView('tag');
+      alert('Lücke gefunden am ' + check.toLocaleDateString('de-CH',{weekday:'long',day:'2-digit',month:'long'}) + ' – niemand eingetragen. Bitte im Admin-Bereich prüfen.');
+      return;
+    }
+  }
+  alert('✓ Keine Betreuungslücke in den nächsten 12 Monaten gefunden. Montag–Donnerstag ist standardmässig durchgehend Janine zugeordnet, alle anderen Zeiten sind ebenfalls lückenlos verteilt.');
+}
 
 /* ====================== MODAL ====================== */
 let ortState = 'oben';
@@ -612,18 +672,19 @@ function renderWeek(){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const iso = isoDate(d);
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
+    const schoolFree = !isSchoolDay(d);
     let tag = '';
     if(hol){
-      tag = `<span class="holiday-tag">${hol.length>10?hol.slice(0,9)+'…':hol}</span>`;
-    } else {
-      // Übergabetage bekommen ZWEI Badges (erst X, dann Y), sonst eins
-      const segs = getCustodySegments(d);
-      tag = segs.map(seg=>{
-        const label = personFilteredLabel(seg.who);
-        const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
-        return `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
-      }).join(' ');
+      tag += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
     }
+    // Betreuungs-Badges IMMER zeigen (auch an Feiertagen – die Eltern-
+    // Zuständigkeit gilt unabhängig vom Feiertag weiter)
+    const segs = getCustodySegments(d);
+    tag += segs.map(seg=>{
+      const label = personFilteredLabel(seg.who);
+      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      return `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
+    }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
     const evTag = specialEv ? `<span class="day-event-tag" title="${specialEv.title}">★</span>` : '';
     head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
@@ -643,10 +704,8 @@ function renderWeek(){
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
 
-    if(hol){
-      body += `<div class="holiday-block">${hol}</div></div>`;
-      continue;
-    }
+    // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
+    // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
 
     // Hintergrund-Einfärbung: "wann habe ich die Kinder" auf einen Blick,
     // ganz unten (z-index 0), egal was sonst noch angezeigt wird.
@@ -741,16 +800,14 @@ function renderKidWeek(kid){
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
+    const schoolFree = !isSchoolDay(d);
     let tag = '';
-    if(hol){
-      tag = `<span class="holiday-tag">${hol.length>10?hol.slice(0,9)+'…':hol}</span>`;
-    } else {
-      const segs = getCustodySegments(d);
-      tag = segs.map(seg=>{
-        const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
-        return `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
-      }).join(' ');
-    }
+    if(hol) tag += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
+    const segs = getCustodySegments(d);
+    tag += segs.map(seg=>{
+      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      return `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
+    }).join(' ');
     head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}</div></div>`;
   }
   head += '</div>';
@@ -768,10 +825,8 @@ function renderKidWeek(kid){
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
 
-    if(hol){
-      body += `<div class="holiday-block">${hol}</div></div>`;
-      continue;
-    }
+    // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
+    // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
 
     // Hintergrund: wo/bei wem ist das Kind gerade
     getCustodySegments(d).forEach(seg=>{
@@ -881,121 +936,122 @@ function renderMonth(){
 function renderDay(){
   const d = currentDate;
   const iso = isoDate(d);
-  const hol = getHolidayName(d) || getSchoolHolidayName(d);
-  let html = '<div class="day-list">';
-  if(hol){
-    html += `<div class="day-item"><div class="day-time"></div><div class="day-card" style="background:var(--holiday-bg); color:var(--holiday-text);"><strong>${hol}</strong><p>Kein regulärer Betreuungsblock (Feiertag/Ferien)</p></div></div>`;
-    html += '</div>';
-    return html;
-  }
   const dow = d.getDay();
   const dowIdx1to7 = (dow===0)?7:dow;
-  const items = []; // jedes Element bekommt sortKey (Startzeit in Dezimalstunden) für die chronologische Sortierung
+  const hol = getHolidayName(d) || getSchoolHolidayName(d);
+  const schoolFree = !isSchoolDay(d);
+  const startHour=0, endHour=24, px=48;
 
-  // Kinder-Modus: eigene, einfachere Liste mit echten Fächern
+  // Kopfzeile: Datum + Feiertag-Tag + Betreuungs-Badges (immer sichtbar)
+  let head = `<div class="day-head-row"><div class="day-head-date">${d.toLocaleDateString('de-CH',{weekday:'long', day:'2-digit', month:'long'})}</div><div class="day-tags">`;
+  if(hol) head += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
+  if(currentPerson === 'janosch' || currentPerson === 'mischa'){
+    getCustodySegments(d).forEach(seg=>{
+      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      head += `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
+    });
+  } else {
+    getCustodySegments(d).forEach(seg=>{
+      const label = personFilteredLabel(seg.who);
+      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      head += `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
+    });
+  }
+  head += `</div></div>`;
+
+  // Stundenraster: eine breite Spalte, ALLE 24 Stunden des Tages
+  let body = `<div class="day-grid"><div class="time-col">`;
+  for(let h=startHour; h<endHour; h++) body += `<div class="slot-h" style="height:${px}px;">${h}</div>`;
+  body += `</div><div class="day-col" style="position:relative;">`;
+  for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
+
+  // Hintergrund-Einfärbung: wann ist wer zuständig
+  getCustodySegments(d).forEach(seg=>{
+    const segStart = seg.from!==undefined ? seg.from : startHour;
+    const segEnd = seg.to!==undefined ? seg.to : endHour;
+    const relevantForMe = !currentPerson || currentPerson==='janosch' || currentPerson==='mischa' || seg.who===currentPerson;
+    if(!relevantForMe) return;
+    const top=(segStart-startHour)*px, height=(segEnd-segStart)*px;
+    const tintVar = seg.who==='a' ? 'var(--a-tint)' : 'var(--b-tint)';
+    body += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
+  });
+
+  function block(s,e,label,bgVar,colorVar,clickable,z){
+    const top=(s-startHour)*px, height=(e-s)*px-2;
+    const style = `top:${top}px;height:${height}px;left:6px;right:6px;z-index:${z||1};background:${bgVar};${colorVar?'color:'+colorVar+';':''}`;
+    return `<div class="event" style="${style}" ${clickable?`onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${fmtH(s)}–${fmtH(e)}', '${clickable}')"`:''}><strong>${label}</strong></div>`;
+  }
+
   if(currentPerson === 'janosch' || currentPerson === 'mischa'){
     const kid = currentPerson;
     if(isSchoolDayForKid(d, kid) && SCHOOL_SUBJECTS[kid][dowIdx1to7]){
       SCHOOL_SUBJECTS[kid][dowIdx1to7].forEach(([s,e,subj])=>{
-        items.push({sortKey:s, time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:subj, sub:''});
+        body += block(s,e,subj,'var(--school)',null,false,1);
       });
     }
     if(dow===4 && isSchoolDayForKid(d, kid)){
       const [s,e] = HORT_THU[kid];
-      items.push({sortKey:s, time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:'Hort', sub:''});
+      body += block(s,e,'Hort','var(--school)',null,false,1);
     }
     if(dow===5 && isSchoolDayForKid(d, kid)){
       const c = FRIDAY_CLUBS[kid];
-      items.push({sortKey:c.start, time:`${c.start}:00–${c.end}:00`, who:'club', title:c.label, sub:''});
+      body += block(c.start,c.end,c.label,'var(--school)','#6B5B3A',false,2);
     }
     if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
-      items.push({sortKey:16.5, time:'16:30–17:30', who:'club', title:'Bandprobe', sub:''});
+      body += block(16.5,17.5,'Bandprobe','var(--omami-bg)','var(--omami)',false,2);
     }
-    getCustodySegments(d).forEach(seg=>{
-      const s = seg.from!==undefined ? seg.from : 7;
-      items.push({sortKey:s, time: seg.to?`bis ${seg.to}:00`:(seg.from?`ab ${seg.from}:00`:'ganztags'), who:seg.who, title:'bei '+whoLabel(seg.who), sub:''});
-    });
-    items.sort((x,y)=>x.sortKey-y.sortKey);
-    items.forEach(it=>{
-      const bgMap = {school:'var(--school)', a:'var(--a-bg)', b:'var(--b-bg)', club:'var(--school)'};
-      html += `<div class="day-item"><div class="day-time">${it.time}</div><div class="day-card" style="background:${bgMap[it.who]||'var(--school)'};"><strong>${it.title}</strong></div></div>`;
-    });
-    html += '</div>';
-    return html;
-  }
-
-  ['janosch','mischa'].forEach(kid=>{
-    if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
-      const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
-      items.push({sortKey:s, time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:`Schule ${kid==='janosch'?'Janosch':'Mischa'}`, sub:''});
-    }
-  });
-  if(dow===4){
-    ['janosch','mischa'].forEach(kid=>{
-      if(isSchoolDayForKid(d, kid)){
-        const [s,e] = HORT_THU[kid];
-        items.push({sortKey:s, time:`${fmtH(s)}–${fmtH(e)}`, who:'school', title:`Hort ${kid==='janosch'?'Janosch':'Mischa'}`, sub:''});
+  } else {
+    ['janosch','mischa'].forEach(k=>{
+      if(isSchoolDayForKid(d, k) && SCHOOL_TIMES[k][dowIdx1to7]){
+        const [s,e] = SCHOOL_TIMES[k][dowIdx1to7];
+        body += block(s,e,`Schule ${k==='janosch'?'Janosch':'Mischa'}`,'var(--school)',null,false,1);
       }
     });
+    if(dow===4){
+      ['janosch','mischa'].forEach(k=>{
+        if(isSchoolDayForKid(d, k)){
+          const [s,e] = HORT_THU[k];
+          body += block(s,e,`Hort ${k==='janosch'?'J.':'M.'}`,'var(--school)',null,false,1);
+        }
+      });
+    }
+    const exc = checkExceptions(d);
+    if(exc){
+      if(showFullDetailFor(exc.who)) body += block(startHour,endHour,exc.label,exc.who==='a'?'var(--a-bg)':'var(--b-bg)',exc.who==='a'?'var(--a)':'var(--b)',exc.who,2);
+    } else if(dow>=1 && dow<=3){
+      if(showFullDetailFor('a')) body += block(startHour,endHour,'Janine','var(--a-bg)','var(--a)','a',2);
+    } else if(dow===4){
+      if(showFullDetailFor('a')) body += block(startHour,17,'Janine','var(--a-bg)','var(--a)','a',2);
+      if(showFullDetailFor('b')) body += block(17,endHour,'Andi (ab 17)','var(--b-bg)','var(--b)','b',2);
+    } else if(dow===5){
+      if(showFullDetailFor('a')) body += block(startHour,18,'Janine','var(--a-bg)','var(--a)','a',2);
+      if(showFullDetailFor('b')) body += block(18,endHour,'Andi (ab 18)','var(--b-bg)','var(--b)','b',2);
+    } else if(dow===6){
+      if(showFullDetailFor('b')) body += block(startHour,10,'Andi (bis 10)','var(--b-bg)','var(--b)','b',2);
+      if(showFullDetailFor('a')) body += block(10,endHour,'Janine','var(--a-bg)','var(--a)','a',2);
+    } else {
+      if(showFullDetailFor('a')) body += block(startHour,16,'Janine','var(--a-bg)','var(--a)','a',2);
+      if(showFullDetailFor('b')) body += block(16,endHour,'Andi (ab 16)','var(--b-bg)','var(--b)','b',2);
+    }
+    if(dow===5){
+      ['mischa','janosch'].forEach(k=>{
+        if(isSchoolDayForKid(d, k)){
+          const c = FRIDAY_CLUBS[k];
+          body += block(c.start,c.end,`${c.label} (${k==='mischa'?'Mischa':'Janosch'})`,'var(--school)','#6B5B3A',false,3);
+        }
+      });
+    }
+    if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--omami-bg)','var(--omami)',false,3);
+    if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--a-bg)','var(--a)',false,3);
+    if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--omami-bg)','var(--omami)',false,3);
   }
-
-  const exc = checkExceptions(d);
-  if(exc){
-    if(showFullDetailFor(exc.who)) items.push({sortKey:7, time:'ganztags', who:exc.who, title:whoLabel(exc.who), sub:exc.label});
-    else items.push({sortKey:7, time:'ganztags', who:'info', title:'Kinder bei '+whoLabel(exc.who), sub:''});
-  } else if(dow>=1 && dow<=3){
-    if(showFullDetailFor('a')) items.push({sortKey:7, time:'ganztags', who:'a', title:'Janine', sub:'bestätigt'});
-    else items.push({sortKey:7, time:'ganztags', who:'info', title:'Kinder bei Janine', sub:''});
-  } else if(dow===4){
-    if(showFullDetailFor('a')) items.push({sortKey:7, time:'bis 17:00', who:'a', title:'Janine', sub:''});
-    else items.push({sortKey:7, time:'bis 17:00', who:'info', title:'Kinder bei Janine', sub:''});
-    if(showFullDetailFor('b')) items.push({sortKey:17, time:'ab 17:00', who:'b', title:'Andi', sub:'Übergabe 17 Uhr'});
-    else items.push({sortKey:17, time:'ab 17:00', who:'info', title:'Kinder bei Andi', sub:''});
-  } else if(dow===5){
-    if(showFullDetailFor('a')) items.push({sortKey:7, time:'bis 18:00', who:'a', title:'Janine', sub:''});
-    else items.push({sortKey:7, time:'bis 18:00', who:'info', title:'Kinder bei Janine', sub:''});
-    if(showFullDetailFor('b')) items.push({sortKey:18, time:'ab 18:00', who:'b', title:'Andi', sub:'Übergabe 18 Uhr'});
-    else items.push({sortKey:18, time:'ab 18:00', who:'info', title:'Kinder bei Andi', sub:''});
-  } else if(dow===6){
-    if(showFullDetailFor('b')) items.push({sortKey:7, time:'bis 10:00', who:'b', title:'Andi', sub:''});
-    else items.push({sortKey:7, time:'bis 10:00', who:'info', title:'Kinder bei Andi', sub:''});
-    if(showFullDetailFor('a')) items.push({sortKey:10, time:'ab 10:00', who:'a', title:'Janine', sub:'Übergabe 10 Uhr'});
-    else items.push({sortKey:10, time:'ab 10:00', who:'info', title:'Kinder bei Janine', sub:''});
-  } else { // So
-    if(showFullDetailFor('a')) items.push({sortKey:7, time:'bis 16:00', who:'a', title:'Janine', sub:''});
-    else items.push({sortKey:7, time:'bis 16:00', who:'info', title:'Kinder bei Janine', sub:''});
-    if(showFullDetailFor('b')) items.push({sortKey:16, time:'ab 16:00', who:'b', title:'Andi', sub:'Übergabe 16 Uhr'});
-    else items.push({sortKey:16, time:'ab 16:00', who:'info', title:'Kinder bei Andi', sub:''});
-  }
-
-  if(dow===5){
-    ['mischa','janosch'].forEach(kid=>{
-      if(isSchoolDayForKid(d, kid)){
-        const c = FRIDAY_CLUBS[kid];
-        items.push({sortKey:c.start, time:`${c.start}:00–${c.end}:00`, who:'club', title:c.label, sub:kid==='mischa'?'Mischa':'Janosch'});
-      }
-    });
-  }
-  if(dow===4 && showFullDetailFor('a')) items.push({sortKey:20, time:'20:00–24:00', who:'omami', title:'Bandprobe', sub:'Janine'});
-  if(dow===3 && showFullDetailFor('b')) items.push({sortKey:19, time:'19:00–21:00', who:'club', title:'Volleyball (Zeit vorläufig)', sub:'Andi'});
-  if(BAND_DATES_MISCHA.includes(iso)) items.push({sortKey:16.5, time:'16:30–17:30', who:'club', title:'Bandprobe Mischa', sub:''});
-  SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=> items.push({sortKey:-1, time:ev.time||'', who:'pending', title:ev.title, sub:''})); // Sondertermine ohne feste Zeit ganz oben
-
-  items.sort((x,y)=>x.sortKey-y.sortKey);
-
-  items.forEach(it=>{
-    const bgMap = {school:'var(--school)', a:'var(--a-bg)', b:'var(--b-bg)', omami:'var(--omami-bg)', club:'var(--school)', pending:'var(--pending-bg)', info:'#F0EFEA'};
-    const bg = bgMap[it.who] || 'var(--school)';
-    const clickable = (it.who==='a' || it.who==='b');
-    html += `<div class="day-item">
-      <div class="day-time">${it.time}</div>
-      <div class="day-card" style="background:${bg};" ${clickable?`onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${it.time}', '${it.who==='a'?'oben':'unten'}')"`:''}>
-        <strong>${it.title}</strong>${it.sub?`<p>${it.sub}</p>`:''}
-      </div>
-    </div>`;
+  SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
+    const t = ev.time && ev.time.includes(':') ? parseFloat(ev.time.split(':')[0]) + parseFloat(ev.time.split(':')[1])/60 : 8;
+    body += block(t, t+0.5, ev.title, 'var(--pending-bg)', 'var(--holiday-text)', false, 4);
   });
-  html += '</div>';
-  return html;
+
+  body += `</div></div>`;
+  return head + body;
 }
 function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh}:${mm.toString().padStart(2,'0')}`; }
 
@@ -1057,12 +1113,7 @@ function renderAllColumns(){
     const isToday = iso===todayIso;
 
     html += `<tr class="${isToday?'today-row':''}">`;
-    html += `<td class="daycell">${dowLabels[dow===0?6:dow-1]}<br><span style="font-weight:400;color:var(--ink-soft);">${d.getDate()}. ${d.toLocaleDateString('de-CH',{month:'short'})}</span></td>`;
-
-    if(hol){
-      html += `<td colspan="5"><span class="chip hol">${hol}</span></td></tr>`;
-      continue;
-    }
+    html += `<td class="daycell">${dowLabels[dow===0?6:dow-1]}<br><span style="font-weight:400;color:var(--ink-soft);">${d.getDate()}. ${d.toLocaleDateString('de-CH',{month:'short'})}</span>${hol?`<br><span class="chip hol">${hol}${!isSchoolDay(d)?' · schulfrei':''}</span>`:''}</td>`;
 
     // Schule/Hort
     let schoolCell = '';
@@ -1133,15 +1184,16 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v7 · 21.09.2026';
+const APP_VERSION = 'v8 · 21.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
+updateHolidayButtons();
 render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=7').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=8').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
