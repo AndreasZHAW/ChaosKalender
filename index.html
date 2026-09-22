@@ -64,6 +64,23 @@
   .allcols-table .chip.band{background:#F3E4EC; color:#8C4A6E;}
   .allcols-table .chip.hol{background:var(--holiday-bg); color:var(--holiday-text);}
   .allcols-table .daycell{font-weight:600;}
+
+  /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
+  .swipe-outer{position:relative;}
+  .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:11px; font-weight:600; padding:6px 10px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
+  .swipe-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-row{display:flex;}
+  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 30px; border-right:1px solid var(--line);}
+  .swipe-head{height:46px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:4px 2px; text-align:center;}
+  .swipe-timebody{position:relative;}
+  .swipe-hourlabel{text-align:right; padding-right:4px; font-size:9px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-6px;}
+  .swipe-daycol{flex:0 0 clamp(92px, 31vw, 150px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
+  .swipe-daycol.is-today .swipe-head{background:var(--pending-bg);}
+  .swipe-dow{font-size:10px; color:var(--ink-soft);}
+  .swipe-daynum{font-size:13px; font-weight:700;}
+  .swipe-holtag{font-size:8px; color:var(--holiday-text); font-weight:700;}
+  .swipe-body{position:relative;}
+  .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
@@ -278,7 +295,7 @@
   </header>
 
   <div class="toolbar">
-    <div class="period-nav">
+    <div class="period-nav" id="periodNav">
       <button onclick="shiftPeriod(-1)">←</button>
       <div class="period-label" id="periodLabel"></div>
       <button onclick="shiftPeriod(1)">→</button>
@@ -286,6 +303,7 @@
     <div class="view-toggle" id="viewToggle">
       <button data-view="tag" onclick="setView('tag')">Tag</button>
       <button class="active" data-view="woche" onclick="setView('woche')">Woche</button>
+      <button data-view="swipe" onclick="setView('swipe')">Swipe</button>
       <button data-view="monat" onclick="setView('monat')">Monat</button>
       <button data-view="alle" id="allColsBtn" onclick="setView('alle')" style="display:none;">Alle Spalten</button>
     </div>
@@ -555,6 +573,8 @@ function setRole(r){
 function setView(v){
   currentView = v;
   document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view===v));
+  const nav = document.getElementById('periodNav');
+  if(nav) nav.style.display = v==='swipe' ? 'none' : 'flex';
   render();
 }
 function viewAsPerson(who){
@@ -1055,6 +1075,125 @@ function renderDay(){
 }
 function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh}:${mm.toString().padStart(2,'0')}`; }
 
+/* ====================== RENDER: SWIPE-ANSICHT ======================
+   Durchgehendes horizontales Band aus einzelnen Tagesspalten (0–24 Uhr),
+   Breite pro Tag reagiert auf die Bildschirmbreite (CSS clamp), man
+   wischt mit dem Finger nach links/rechts durch die Tage. Zeitspalte
+   bleibt links stehen (position:sticky). */
+function renderSwipeView(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const startOffset = -7, endOffset = 120;
+  const px = 40, startHour = 0, endHour = 24;
+  const dowLabels = ['So','Mo','Di','Mi','Do','Fr','Sa'];
+
+  let timeCol = '<div class="swipe-timecol"><div class="swipe-head"></div><div class="swipe-timebody">';
+  for(let h=startHour; h<endHour; h++) timeCol += `<div class="swipe-hourlabel" style="height:${px}px;">${h}</div>`;
+  timeCol += '</div></div>';
+
+  let daysHtml = '';
+  for(let off=startOffset; off<=endOffset; off++){
+    const d = new Date(today); d.setDate(today.getDate()+off);
+    const iso = isoDate(d);
+    const dow = d.getDay();
+    const dowIdx1to7 = (dow===0)?7:dow;
+    const hol = getHolidayName(d) || getSchoolHolidayName(d);
+    const isToday = off===0;
+
+    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}">`;
+    daysHtml += `<div class="swipe-head"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
+    if(hol) daysHtml += `<div class="swipe-holtag">${hol.length>12?hol.slice(0,11)+'…':hol}</div>`;
+    daysHtml += `</div>`;
+    daysHtml += `<div class="swipe-body">`;
+    for(let h=startHour; h<endHour; h++) daysHtml += `<div class="hour-row" style="height:${px}px;"></div>`;
+
+    // Hintergrund-Einfärbung
+    getCustodySegments(d).forEach(seg=>{
+      const relevantForMe = !currentPerson || currentPerson==='janosch' || currentPerson==='mischa' || seg.who===currentPerson;
+      if(!relevantForMe) return;
+      const segStart = seg.from!==undefined?seg.from:startHour, segEnd = seg.to!==undefined?seg.to:endHour;
+      const top=(segStart-startHour)*px, height=(segEnd-segStart)*px;
+      const tintVar = seg.who==='a' ? 'var(--a-tint)' : 'var(--b-tint)';
+      daysHtml += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
+    });
+
+    if(currentPerson==='janosch' || currentPerson==='mischa'){
+      const kid = currentPerson;
+      if(isSchoolDayForKid(d, kid) && SCHOOL_SUBJECTS[kid][dowIdx1to7]){
+        SCHOOL_SUBJECTS[kid][dowIdx1to7].forEach(([s,e,subj])=>{
+          const top=(s-startHour)*px, height=(e-s)*px-2;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;font-size:8.5px;">${subj}</div>`;
+        });
+      }
+      if(dow===4 && isSchoolDayForKid(d, kid)){
+        const [s,e] = HORT_THU[kid];
+        daysHtml += `<div class="school-block" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;background:var(--school);">Hort</div>`;
+      }
+    } else {
+      ['janosch','mischa'].forEach((kid, idx)=>{
+        if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
+          const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+          const top=(s-startHour)*px, height=(e-s)*px-2;
+          const leftPct = idx===0?'1px':'50%';
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};font-size:8px;">${kid==='janosch'?'J.':'M.'}</div>`;
+        }
+      });
+      const exc = checkExceptions(d);
+      if(exc){
+        if(showFullDetailFor(exc.who)) daysHtml += swipeBlock(exc.who==='a'?'Janine':'Andi', startHour, endHour, startHour, px, exc.who);
+      } else if(dow>=1 && dow<=3){
+        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, endHour, startHour, px, 'a');
+      } else if(dow===4){
+        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 17, startHour, px, 'a');
+        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 17, endHour, startHour, px, 'b');
+      } else if(dow===5){
+        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 18, startHour, px, 'a');
+        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 18, endHour, startHour, px, 'b');
+      } else if(dow===6){
+        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', startHour, 10, startHour, px, 'b');
+        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', 10, endHour, startHour, px, 'a');
+      } else {
+        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 16, startHour, px, 'a');
+        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 16, endHour, startHour, px, 'b');
+      }
+      if(dow===5){
+        ['mischa','janosch'].forEach(kid=>{
+          if(isSchoolDayForKid(d, kid)){
+            const c = FRIDAY_CLUBS[kid];
+            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:8.5px;"><strong>${c.label}</strong></div>`;
+          }
+        });
+      }
+      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:8.5px;"><strong>Bandprobe</strong></div>`;
+      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:8.5px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
+    }
+    if(BAND_DATES_MISCHA.includes(iso)){
+      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:8.5px;"><strong>Bandprobe M.</strong></div>`;
+    }
+    daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
+  }
+
+  return `<div class="swipe-outer">
+    <button class="swipe-today-btn" onclick="scrollSwipeToToday()">📍 Heute</button>
+    <div class="swipe-wrap" id="swipeWrap"><div class="swipe-row">${timeCol}${daysHtml}</div></div>
+  </div>`;
+}
+function swipeBlock(label, s, e, startHour, px, who){
+  const top=(s-startHour)*px, height=(e-s)*px-2;
+  return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:9px;"><strong>${label}</strong></div>`;
+}
+function initSwipeScroll(){
+  // Beim ersten Öffnen automatisch so scrollen, dass "Heute" sichtbar ist
+  requestAnimationFrame(()=> scrollSwipeToToday(false));
+}
+function scrollSwipeToToday(smooth){
+  const wrap = document.getElementById('swipeWrap');
+  const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
+  if(!wrap || !todayCol) return;
+  const target = todayCol.offsetLeft - 6;
+  wrap.scrollTo({left: target, behavior: smooth===false ? 'auto' : 'smooth'});
+}
+
+
 /* ====================== RENDER: PARTNER-ANSICHT ====================== */
 function renderPartnerStrip(){
   const start = startOfWeek(currentDate);
@@ -1082,6 +1221,11 @@ function render(){
   const container = document.getElementById('calContainer');
   if(currentRole==='partner'){
     container.innerHTML = renderPartnerStrip();
+    return;
+  }
+  if(currentView==='swipe'){
+    container.innerHTML = renderSwipeView();
+    initSwipeScroll();
     return;
   }
   let panelHtml;
@@ -1184,7 +1328,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v8 · 21.09.2026';
+const APP_VERSION = 'v9 · 22.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1193,7 +1337,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=8').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=9').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
