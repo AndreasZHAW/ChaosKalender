@@ -37,6 +37,9 @@
   .gear-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink-soft);font-size:16px;}
 
   .toolbar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; flex-wrap:wrap;}
+  .zoom-controls{display:flex; align-items:center; gap:6px; margin-bottom:10px; font-size:11px; color:var(--ink-soft);}
+  .zoom-controls button{border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:4px 9px; font-size:13px; cursor:pointer; line-height:1;}
+  .zoom-controls #zoomLevelLabel{min-width:34px; text-align:center; font-weight:600; color:var(--ink);}
   .period-nav{display:flex; align-items:center; gap:8px;}
   .period-nav button{width:26px;height:26px;border:none;background:transparent;color:var(--ink-soft);cursor:pointer;font-size:15px;}
   .period-label{font-weight:600; font-size:14.5px; min-width:150px;}
@@ -45,7 +48,7 @@
   .view-toggle button.active{background:var(--panel); color:var(--ink);}
 
   .test-row{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
-  .test-btn{font-size:11px; padding:5px 10px; border-radius:6px; border:1px dashed var(--line); background:var(--panel); color:var(--ink-soft); cursor:pointer;}
+  .test-btn{font-size:12px; padding:5px 10px; border-radius:6px; border:1px dashed var(--line); background:var(--panel); color:var(--ink-soft); cursor:pointer;}
 
   .legend{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:12px; font-size:11.5px; color:var(--ink-soft);}
   .legend-item{display:flex; align-items:center; gap:5px;}
@@ -101,7 +104,7 @@
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
-  .day-who-tag{display:inline-block; font-size:9px; font-weight:700; padding:2px 6px; border-radius:8px; margin-top:2px;}
+  .day-who-tag{display:inline-block; font-size:10px; font-weight:700; padding:2px 6px; border-radius:8px; margin-top:2px;}
   .day-who-tag.a{background:var(--a-bg); color:var(--a);}
   .day-who-tag.b{background:var(--b-bg); color:var(--b);}
   .day-who-tag.omami{background:var(--omami-bg); color:var(--omami);}
@@ -284,7 +287,7 @@
 
   <header class="top">
     <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:10px; color:var(--ink-soft); vertical-align:middle;"></span></div>
-    <div style="display:flex; align-items:center; gap:8px;">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <div class="role-switch">
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Elternteil</button>
         <button data-role="partner" onclick="setRole('partner')">Partner-Ansicht</button>
@@ -293,6 +296,13 @@
       <div class="logout-link" style="margin:0; font-size:11px;" onclick="handleLogout()">Abmelden</div>
     </div>
   </header>
+
+  <div class="zoom-controls">
+    <span class="zoom-label-text">Kalendergröße:</span>
+    <button onclick="adjustCalZoom(-1)" title="Kalender verkleinern">🔍−</button>
+    <span id="zoomLevelLabel">100%</span>
+    <button onclick="adjustCalZoom(1)" title="Kalender vergrößern">🔍+</button>
+  </div>
 
   <div class="toolbar">
     <div class="period-nav" id="periodNav">
@@ -598,6 +608,36 @@ function shiftPeriod(dir){
   else currentDate.setDate(currentDate.getDate()+dir);
   render();
 }
+/* ====================== KALENDER-ZOOM ======================
+   Eigene Vergrößerung NUR für den Kalenderbereich (#calContainer),
+   unabhängig vom Browser-Pinch-Zoom. Kopfzeile/Knöpfe bleiben fix.
+   Nutzt CSS "zoom" (in Chrome/Android zuverlässig unterstützt) und
+   merkt sich die Einstellung pro Gerät. */
+const ZOOM_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6];
+let zoomIndex = 2; // Start bei 1 (100%)
+function loadZoom(){
+  try{
+    const saved = localStorage.getItem('chaoskalender_zoom');
+    if(saved !== null){
+      const idx = ZOOM_STEPS.indexOf(parseFloat(saved));
+      if(idx !== -1) zoomIndex = idx;
+    }
+  } catch(e){}
+  applyZoom();
+}
+function adjustCalZoom(dir){
+  zoomIndex = Math.max(0, Math.min(ZOOM_STEPS.length-1, zoomIndex+dir));
+  applyZoom();
+  try{ localStorage.setItem('chaoskalender_zoom', ZOOM_STEPS[zoomIndex]); } catch(e){}
+}
+function applyZoom(){
+  const level = ZOOM_STEPS[zoomIndex];
+  const el = document.getElementById('calContainer');
+  if(el) el.style.zoom = level;
+  const label = document.getElementById('zoomLevelLabel');
+  if(label) label.textContent = Math.round(level*100) + '%';
+}
+
 function jumpToToday(){ currentDate = new Date(); render(); }
 function jumpToDate(y,m,day){ currentDate = new Date(y, m-1, day); render(); }
 function jumpYearsAhead(n){ currentDate.setFullYear(currentDate.getFullYear()+n); render(); }
@@ -1328,16 +1368,17 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v9 · 22.09.2026';
+const APP_VERSION = 'v10 · 22.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
 updateHolidayButtons();
+loadZoom();
 render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=9').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=10').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
