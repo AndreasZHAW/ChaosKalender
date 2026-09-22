@@ -286,23 +286,16 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:10px; color:var(--ink-soft); vertical-align:middle;"></span></div>
-    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span></div>
+    <div style="display:flex; align-items:center; gap:6px;">
       <div class="role-switch">
-        <button class="active" data-role="eltern" onclick="setRole('eltern')">Elternteil</button>
-        <button data-role="partner" onclick="setRole('partner')">Partner-Ansicht</button>
+        <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
+        <button data-role="partner" onclick="setRole('partner')">Partner</button>
       </div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()">⚙</div>
-      <div class="logout-link" style="margin:0; font-size:11px;" onclick="handleLogout()">Abmelden</div>
+      <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
     </div>
   </header>
-
-  <div class="zoom-controls">
-    <span class="zoom-label-text">Kalendergröße:</span>
-    <button onclick="adjustCalZoom(-1)" title="Kalender verkleinern">🔍−</button>
-    <span id="zoomLevelLabel">100%</span>
-    <button onclick="adjustCalZoom(1)" title="Kalender vergrößern">🔍+</button>
-  </div>
 
   <div class="toolbar">
     <div class="period-nav" id="periodNav">
@@ -321,28 +314,31 @@
 
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
-    <button class="test-btn" onclick="jumpNextWeek()">Nächste Woche</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
-    <button class="test-btn" id="nextHolBtn2" onclick="jumpToNextHoliday(2)">…</button>
-    <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔 Lücken-Check</button>
+    <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔</button>
+    <button class="test-btn" onclick="viewAsPerson('janosch')">👦 Janosch</button>
+    <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
   </div>
 
-  <div class="legend" id="legendRow">
-    <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#5B7A94"></span>Janine (Mutter)</div>
-    <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#BF8248"></span>Andi (Vater)</div>
-    <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
-    <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
-  </div>
-  <div class="legend" id="kidsLegendRow" style="margin-top:-8px;">
-    <span style="font-size:10.5px; color:var(--ink-soft); margin-right:4px;">Kinder-Kalender:</span>
-    <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:#5B7A94"></span>Janosch (9)</div>
-    <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#BF8248"></span>Mischa (11)</div>
-  </div>
+  <details class="legend-details">
+    <summary>ℹ️ Legende &amp; Farben</summary>
+    <div class="legend" id="legendRow">
+      <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#5B7A94"></span>Janine (Mutter)</div>
+      <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#BF8248"></span>Andi (Vater)</div>
+      <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
+      <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
+    </div>
+    <div class="legend" id="kidsLegendRow" style="margin-top:-8px;">
+      <span style="font-size:10.5px; color:var(--ink-soft); margin-right:4px;">Kinder-Kalender:</span>
+      <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:#5B7A94"></span>Janosch (9)</div>
+      <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#BF8248"></span>Mischa (11)</div>
+    </div>
+    <div style="font-size:10.5px; color:var(--ink-soft); margin:6px 0 4px; line-height:1.5;">
+      Heller <span style="background:#EAF0EE; padding:1px 5px; border-radius:4px;">Hintergrund</span> = du hast in dieser Zeit die Kinder. Schulzeit-Blöcke: <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">blau = Janosch</span> <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">braun = Mischa</span> (antippen für Details).
+    </div>
+  </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
     👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)">zurück zur Admin-Ansicht</span>
-  </div>
-  <div style="font-size:10.5px; color:var(--ink-soft); margin:0 0 12px; line-height:1.5;">
-    Heller <span style="background:#EAF0EE; padding:1px 5px; border-radius:4px;">Hintergrund</span> im Kalender = du hast in dieser Zeit die Kinder.
   </div>
 
   <div id="calContainer"></div>
@@ -650,17 +646,21 @@ function updateHolidayButtons(){
   const today = isoDate(new Date());
   const upcoming = SCHOOL_HOLIDAYS.filter(([s,e,name])=> e>=today).sort((a,b)=> a[0]<b[0]?-1:1);
   const btn1 = document.getElementById('nextHolBtn');
-  const btn2 = document.getElementById('nextHolBtn2');
-  if(upcoming[0]){
-    btn1.textContent = upcoming[0][2] + ' →';
-    btn1.onclick = ()=> jumpToIso(upcoming[0][0]);
-    btn1.style.display = 'inline-block';
-  } else { btn1.style.display = 'none'; }
-  if(upcoming[1]){
-    btn2.textContent = upcoming[1][2] + ' →';
-    btn2.onclick = ()=> jumpToIso(upcoming[1][0]);
-    btn2.style.display = 'inline-block';
-  } else { btn2.style.display = 'none'; }
+  const btn2 = document.getElementById('nextHolBtn2'); // existiert evtl. nicht mehr (kompakteres Layout) – null-sicher
+  if(btn1){
+    if(upcoming[0]){
+      btn1.textContent = upcoming[0][2] + ' →';
+      btn1.onclick = ()=> jumpToIso(upcoming[0][0]);
+      btn1.style.display = 'inline-block';
+    } else { btn1.style.display = 'none'; }
+  }
+  if(btn2){
+    if(upcoming[1]){
+      btn2.textContent = upcoming[1][2] + ' →';
+      btn2.onclick = ()=> jumpToIso(upcoming[1][0]);
+      btn2.style.display = 'inline-block';
+    } else { btn2.style.display = 'none'; }
+  }
 }
 function jumpToIso(iso){
   const [y,m,day] = iso.split('-').map(Number);
@@ -780,13 +780,16 @@ function renderWeek(){
       body += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
     });
 
-    // Schulzeiten pro Kind (schmale Streifen nebeneinander)
+    // Schulzeiten pro Kind: FARBCODE statt winzigem Text (blau=Janosch,
+    // braun=Mischa, wie in der Legende erklärt) – antippen zeigt Details.
     ['janosch','mischa'].forEach((kid, idx)=>{
       if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
         const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
         const top = (s-startHour)*44, height = (e-s)*44-3;
         const leftPct = idx===0 ? '1px' : '50%';
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};">${kid==='janosch'?'Schule J.':'Schule M.'}</div>`;
+        const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
+        const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openModal('Schule ${kidName}','${fmtH(s)}–${fmtH(e)} Uhr')"></div>`;
       }
     });
     if(dow===4){
@@ -1174,7 +1177,9 @@ function renderSwipeView(){
           const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
           const top=(s-startHour)*px, height=(e-s)*px-2;
           const leftPct = idx===0?'1px':'50%';
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};font-size:8px;">${kid==='janosch'?'J.':'M.'}</div>`;
+          const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
+          const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openModal('Schule ${kidName}','${fmtH(s)}–${fmtH(e)} Uhr')"></div>`;
         }
       });
       const exc = checkExceptions(d);
@@ -1368,17 +1373,23 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v10 · 22.09.2026';
+const APP_VERSION = 'v11 · 22.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
 updateHolidayButtons();
-loadZoom();
+// Zoom-Knöpfe wurden entfernt (halfen nicht) - evtl. alten gespeicherten
+// Zoom-Wert zurücksetzen, falls jemand ihn vorher genutzt hatte.
+(function resetOldZoom(){
+  const el = document.getElementById('calContainer');
+  if(el) el.style.zoom = '';
+  try{ localStorage.removeItem('chaoskalender_zoom'); } catch(e){}
+})();
 render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=10').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=11').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
