@@ -202,6 +202,9 @@
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
   #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .desktop-site-warning{background:#FBEEE9; border:1px solid var(--holiday-text); border-radius:10px; padding:12px 14px; margin-bottom:12px; font-size:12.5px; color:#7A3B2A; line-height:1.5;}
+  .desktop-site-warning strong{display:block; font-size:13.5px; margin-bottom:4px;}
+  .desktop-site-warning ol{margin:6px 0 0; padding-left:18px;}
   .admin-card h3{font-size:14px; margin:0 0 4px;}
   .admin-card .muted{font-size:12px; color:var(--ink-soft); margin-bottom:14px;}
   #qrcodeBox{display:flex; justify-content:center; padding:12px; background:#fff; border-radius:8px; width:fit-content; margin:0 auto 12px;}
@@ -296,7 +299,7 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span></div>
+    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="role-switch">
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
@@ -350,6 +353,8 @@
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
     👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)">zurück zur Admin-Ansicht</span>
   </div>
+
+  <div id="desktopSiteWarning" style="display:none;"></div>
 
   <div id="calContainer"></div>
 
@@ -666,6 +671,69 @@ function applyZoom(){
   if(el) el.style.zoom = level;
   const label = document.getElementById('zoomLevelLabel');
   if(label) label.textContent = Math.round(level*100) + '%';
+}
+
+/* Erkennt automatisch, ob Chrome den "Desktop-Website"-Modus für diese
+   Seite erzwingt (window.innerWidth >> echte Bildschirmbreite = 980px-
+   Geister-Viewport, siehe Chromium-Quellcode: "Ignore viewport meta tags
+   when Request Desktop Site is enabled"). Zeigt eine unübersehbare
+   Warnung mit Lösung direkt in der App. */
+function checkDesktopSiteMode(){
+  const el = document.getElementById('desktopSiteWarning');
+  if(!el) return;
+  const screenW = window.screen.width || 0;
+  const winW = window.innerWidth;
+  if(screenW > 0 && screenW < 600 && winW >= 900){
+    el.style.display = 'block';
+    el.className = 'desktop-site-warning';
+    el.innerHTML = `<strong>⚠️ "Desktop-Website"-Modus ist für diese Seite aktiv</strong>
+      Dein Browser zeigt diese Seite im Desktop-Modus (erkannte Fensterbreite ${winW}px bei ${screenW}px echtem Bildschirm). Dadurch wird alles winzig dargestellt.
+      <ol>
+        <li>Oben rechts auf die drei Punkte (⋮) im Chrome-Menü tippen</li>
+        <li>Häkchen bei "Desktop-Website" / "Desktop site" entfernen</li>
+        <li>Seite lädt automatisch neu – sollte danach normal aussehen</li>
+      </ol>`;
+    if(window.logEvent) window.logEvent('desktop_site_erkannt', {fensterBreite:winW, bildschirmBreite:screenW});
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+/* Ausführliche Diagnose auf Knopfdruck: viel mehr Details als beim
+   normalen Login-Log, für gezielte Fehlersuche. */
+async function sendVerboseDiagnostic(){
+  const btn = document.getElementById('verboseDiagBtn');
+  if(btn){ btn.textContent = 'Sende…'; btn.disabled = true; }
+  const testEl = document.querySelector('.swipe-daycol');
+  const testRect = testEl ? testEl.getBoundingClientRect() : null;
+  const mediaChecks = {};
+  [400,600,700,900,980,1200].forEach(w=>{
+    mediaChecks['max'+w] = window.matchMedia(`(max-width:${w}px)`).matches;
+  });
+  const payload = {
+    grund: 'manuelle Diagnose',
+    innerWidth: window.innerWidth,
+    innerHeight: window.innerHeight,
+    outerWidth: window.outerWidth,
+    outerHeight: window.outerHeight,
+    screenWidth: window.screen.width,
+    screenHeight: window.screen.height,
+    screenAvailWidth: window.screen.availWidth,
+    docClientWidth: document.documentElement.clientWidth,
+    docScrollWidth: document.documentElement.scrollWidth,
+    devicePixelRatio: window.devicePixelRatio,
+    visualViewportWidth: window.visualViewport ? window.visualViewport.width : '?',
+    visualViewportScale: window.visualViewport ? window.visualViewport.scale : '?',
+    userAgent: navigator.userAgent,
+    plattform: navigator.platform || '?',
+    aktuelleAnsicht: currentView,
+    swipeSpaltenBreitePx: testRect ? Math.round(testRect.width) : 'keine sichtbar',
+    mediaQueries: mediaChecks,
+    verbindung: (navigator.connection && navigator.connection.effectiveType) || '?',
+    vermutlichDesktopModus: (window.screen.width < 600 && window.innerWidth >= 900)
+  };
+  if(window.logEvent) await window.logEvent('verbose_diagnose', payload);
+  if(btn){ btn.textContent = '✓ Gesendet – siehe Admin-Protokoll'; setTimeout(()=>{btn.textContent='🔍 Diagnose senden'; btn.disabled=false;}, 3000); }
 }
 
 function jumpToToday(){ currentDate = new Date(); render(); }
@@ -1296,6 +1364,7 @@ function renderPartnerStrip(){
 
 /* ====================== MAIN RENDER ====================== */
 function render(){
+  checkDesktopSiteMode();
   document.getElementById('periodLabel').textContent = fmtPeriodLabel();
   const container = document.getElementById('calContainer');
   if(currentRole==='partner'){
@@ -1407,11 +1476,12 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v14 · 23.09.2026';
+const APP_VERSION = 'v15 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
 updateHolidayButtons();
+checkDesktopSiteMode();
 document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view===currentView));
 const navInit = document.getElementById('periodNav');
 if(navInit) navInit.style.display = currentView==='swipe' ? 'none' : 'flex';
@@ -1426,7 +1496,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=14').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=15').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1526,7 +1596,7 @@ async function logEvent(type, details){
       pixelRatio: window.devicePixelRatio || 1,
       textSkalierungsVerdacht: textScale.ratio,
       textSkalierungsDetails: `gerendert:${textScale.renderedPx}px erwartet:${textScale.erwartetPx}px`,
-      details: details ? JSON.stringify(details).slice(0,500) : ''
+      details: details ? JSON.stringify(details).slice(0,4000) : ''
     });
   } catch(e){
     console.error('ChaosKalender Log-Fehler:', e);
