@@ -387,6 +387,19 @@
 </div>
 
 <script>
+/* ====================== FEHLER-PROTOKOLL ======================
+   Fängt JS-Fehler global ab und schickt sie (sobald jemand angemeldet
+   ist) ins Admin-Protokoll – hilft, Anzeigeprobleme auf bestimmten
+   Geräten schnell nachzuvollziehen. */
+window.addEventListener('error', function(e){
+  if(window.logEvent) window.logEvent('error', {
+    nachricht: e.message, datei: e.filename, zeile: e.lineno
+  });
+});
+window.addEventListener('unhandledrejection', function(e){
+  if(window.logEvent) window.logEvent('error', { nachricht: 'Promise-Fehler: ' + String(e.reason) });
+});
+
 /* ====================== ECHTE DATEN ======================
    Schweizer Feiertage Kanton Zürich / Rüschlikon (recherchiert,
    feiertagskalender.ch, Gemeinde Rüschlikon).
@@ -552,7 +565,12 @@ let currentDate = new Date(2026,10,15);
 // Platz-Mathematik). Mobile Best Practice ("single-surface, single-task
 // focus") -> auf schmalen Screens automatisch die fokussierte Swipe-
 // Ansicht vorauswählen, auf breiten Screens die Wochenübersicht.
-let currentView = window.innerWidth < 700 ? 'swipe' : 'woche';
+// Robustere Mobil-Erkennung: manche Handys/Browser melden bei aktiviertem
+// "Desktop-Website"-Modus eine viel größere window.innerWidth als die
+// echte Bildschirmbreite. Wir nehmen deshalb den kleineren der beiden
+// Werte, damit echte Handys zuverlässig erkannt werden.
+const effectiveWidth = Math.min(window.innerWidth, window.screen.width || window.innerWidth);
+let currentView = effectiveWidth < 700 ? 'swipe' : 'woche';
 let currentRole = 'eltern';
 var currentPerson = null; // 'a' (Janine), 'b' (Andi) oder null (Admin/ungefiltert) – var statt let, damit das Firebase-Modul-Script (separater Scope) via window.currentPerson darauf zugreifen kann
 var isAdminUser = true; // Default true für die Testdatei; echter Login setzt dies korrekt
@@ -597,6 +615,7 @@ function setView(v){
   const nav = document.getElementById('periodNav');
   if(nav) nav.style.display = v==='swipe' ? 'none' : 'flex';
   render();
+  if(window.logEvent) window.logEvent('view_change', {neueAnsicht:v});
 }
 function viewAsPerson(who){
   if(!isAdminUser) return;
@@ -1388,7 +1407,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v12 · 23.09.2026';
+const APP_VERSION = 'v13 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1407,7 +1426,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=12').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=13').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1448,23 +1467,44 @@ function usernameToEmail(username){
   return clean + '@chaoskalender.local';
 }
 
-/* Schreibt einen Log-Eintrag: wer, wann, mit welchem Gerät/welcher
-   Bildschirmgröße eingeloggt ist. Sichtbar nur im Admin-Bereich. */
+/* Allgemeines Log-System: schreibt JEDES wichtige Ereignis in die
+   "logs"-Sammlung (Login, Ansichtswechsel, Fehler) – sichtbar nur im
+   Admin-Bereich. Läuft nur, wenn jemand angemeldet ist (Firestore-Regeln
+   verlangen einen gültigen uid-Bezug). */
+async function logEvent(type, details){
+  try{
+    const user = auth.currentUser;
+    if(!user) return; // ohne Login kein Log-Eintrag möglich (Sicherheitsregeln)
+    const ua = navigator.userAgent;
+    const deviceGuess = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Macintosh/i.test(ua) ? 'Mac' : 'Unbekannt';
+    await addDoc(collection(db,'logs'), {
+      uid: user.uid,
+      typ: type,
+      username: window.__chaosUsername || '(unbekannt)',
+      role: window.__chaosRole || '?',
+      zeitpunkt: new Date().toISOString(),
+      geraet: deviceGuess,
+      userAgent: ua,
+      bildschirmBreite: window.screen.width,
+      bildschirmHoehe: window.screen.height,
+      fensterBreite: window.innerWidth,
+      fensterHoehe: window.innerHeight,
+      pixelRatio: window.devicePixelRatio || 1,
+      details: details ? JSON.stringify(details).slice(0,500) : ''
+    });
+  } catch(e){ /* Logging darf nie den Rest der App stören */ }
+}
+window.logEvent = logEvent;
+
+/* Login-Eintrag: wer, wann, mit welchem Gerät/welcher Bildschirmgröße,
+   inkl. welche Ansicht automatisch gewählt wurde (Diagnose für
+   Mobil-Layout-Probleme). */
 async function writeLoginLog(user, userData){
-  const ua = navigator.userAgent;
-  const deviceGuess = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Macintosh/i.test(ua) ? 'Mac' : 'Unbekannt';
-  await addDoc(collection(db,'logs'), {
-    uid: user.uid,
-    username: userData.username || '(unbekannt)',
-    role: userData.role || userData.status || 'pending',
-    zeitpunkt: new Date().toISOString(),
-    geraet: deviceGuess,
-    userAgent: ua,
-    bildschirmBreite: window.screen.width,
-    bildschirmHoehe: window.screen.height,
-    fensterBreite: window.innerWidth,
-    fensterHoehe: window.innerHeight,
-    pixelRatio: window.devicePixelRatio || 1
+  window.__chaosUsername = userData.username || '(unbekannt)';
+  window.__chaosRole = userData.role || userData.status || 'pending';
+  await logEvent('login', {
+    gewaehlteAnsicht: (typeof currentView!=='undefined') ? currentView : '?',
+    effektiveBreite: (typeof effectiveWidth!=='undefined') ? effectiveWidth : '?'
   });
 }
 
@@ -1572,26 +1612,29 @@ let pendingUnsub = null;
 let logUnsub = null;
 function startLogListener(){
   if(logUnsub) return; // schon aktiv, nicht doppelt registrieren
-  const q = query(collection(db,'logs'), orderBy('zeitpunkt','desc'), limit(50));
+  const q = query(collection(db,'logs'), orderBy('zeitpunkt','desc'), limit(80));
   logUnsub = onSnapshot(q, (snap)=>{
     const list = document.getElementById('logList');
     if(snap.empty){
       list.innerHTML = '<div class="empty-note">Noch keine Log-Einträge.</div>';
       return;
     }
+    const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler'};
     let html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Rolle</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Auflösung</th><th style="padding:6px 8px;">Fenster</th></tr>';
+    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Details</th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
       const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
-      const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '–';
-      html += `<tr style="border-bottom:1px solid var(--line);">
+      const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
+      const isError = d.typ === 'error';
+      html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
         <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
-        <td style="padding:6px 8px;">${escapeHtml(d.username||'?')}</td>
-        <td style="padding:6px 8px;">${escapeHtml(d.role||'?')}</td>
+        <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
+        <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
         <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
         <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
         <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
+        <td style="padding:6px 8px; max-width:220px; font-size:10.5px; color:var(--ink-soft); word-break:break-word;">${escapeHtml(d.details||'')}</td>
       </tr>`;
     });
     html += '</table>';
