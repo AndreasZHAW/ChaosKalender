@@ -1407,7 +1407,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v13 · 23.09.2026';
+const APP_VERSION = 'v14 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1426,7 +1426,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=13').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=14').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1471,28 +1471,66 @@ function usernameToEmail(username){
    "logs"-Sammlung (Login, Ansichtswechsel, Fehler) – sichtbar nur im
    Admin-Bereich. Läuft nur, wenn jemand angemeldet ist (Firestore-Regeln
    verlangen einen gültigen uid-Bezug). */
+/* Best-Effort-Erkennung von Chrome-Android-"Textskalierung": misst einen
+   unsichtbaren Test-Text sowohl im echten DOM (von Textskalierung
+   betroffen) als auch über Canvas (NICHT betroffen, dient als
+   "Grundwahrheit"). Weicht das Verhältnis deutlich von 1.0 ab, ist
+   Textskalierung sehr wahrscheinlich aktiv. Nutzt bewusst >122 Zeichen,
+   da Chrome Textskalierung laut bekannten Chromium-Bugs erst ab dieser
+   Länge zuverlässig greift. */
+function detectTextScaling(){
+  try{
+    const testText = 'M'.repeat(130);
+    const span = document.createElement('span');
+    span.style.cssText = 'position:absolute; visibility:hidden; white-space:nowrap; font-size:16px; font-family:Arial,sans-serif; left:-9999px;';
+    span.textContent = testText;
+    document.body.appendChild(span);
+    const renderedWidth = span.getBoundingClientRect().width;
+    document.body.removeChild(span);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = '16px Arial,sans-serif';
+    const expectedWidth = ctx.measureText(testText).width;
+    const ratio = expectedWidth > 0 ? renderedWidth / expectedWidth : 1;
+    return { ratio: Math.round(ratio*100)/100, renderedPx: Math.round(renderedWidth), erwartetPx: Math.round(expectedWidth) };
+  } catch(e){ return { ratio:'?', fehler:String(e) }; }
+}
+
 async function logEvent(type, details){
   try{
     const user = auth.currentUser;
     if(!user) return; // ohne Login kein Log-Eintrag möglich (Sicherheitsregeln)
     const ua = navigator.userAgent;
     const deviceGuess = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Macintosh/i.test(ua) ? 'Mac' : 'Unbekannt';
+    const versionTagEl = document.getElementById('versionTag');
+    const textScale = detectTextScaling();
     await addDoc(collection(db,'logs'), {
       uid: user.uid,
       typ: type,
       username: window.__chaosUsername || '(unbekannt)',
       role: window.__chaosRole || '?',
       zeitpunkt: new Date().toISOString(),
+      appVersion: versionTagEl ? versionTagEl.textContent : '?',
+      url: window.location.href,
+      sprache: navigator.language || '?',
+      zeitzone: Intl.DateTimeFormat().resolvedOptions().timeZone || '?',
+      online: navigator.onLine,
       geraet: deviceGuess,
       userAgent: ua,
       bildschirmBreite: window.screen.width,
       bildschirmHoehe: window.screen.height,
       fensterBreite: window.innerWidth,
       fensterHoehe: window.innerHeight,
+      documentClientBreite: document.documentElement.clientWidth,
+      visualViewportScale: window.visualViewport ? Math.round(window.visualViewport.scale*100)/100 : '?',
       pixelRatio: window.devicePixelRatio || 1,
+      textSkalierungsVerdacht: textScale.ratio,
+      textSkalierungsDetails: `gerendert:${textScale.renderedPx}px erwartet:${textScale.erwartetPx}px`,
       details: details ? JSON.stringify(details).slice(0,500) : ''
     });
-  } catch(e){ /* Logging darf nie den Rest der App stören */ }
+  } catch(e){
+    console.error('ChaosKalender Log-Fehler:', e);
+  }
 }
 window.logEvent = logEvent;
 
@@ -1621,24 +1659,34 @@ function startLogListener(){
     }
     const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler'};
     let html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Details</th></tr>';
+    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
       const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
       const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
       const isError = d.typ === 'error';
+      const scaleRatio = d.textSkalierungsVerdacht;
+      const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
       html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
         <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
         <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
         <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
+        <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(d.appVersion||'?')}</td>
         <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
         <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
         <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
+        <td style="padding:6px 8px; white-space:nowrap; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
         <td style="padding:6px 8px; max-width:220px; font-size:10.5px; color:var(--ink-soft); word-break:break-word;">${escapeHtml(d.details||'')}</td>
       </tr>`;
     });
     html += '</table>';
     list.innerHTML = html;
+  }, (err)=>{
+    // WICHTIG: ohne diesen Fehler-Callback bleibt "Lade..." für immer stehen,
+    // wenn z.B. die Firestore-Regeln die "logs"-Sammlung noch nicht kennen.
+    document.getElementById('logList').innerHTML =
+      `<div class="empty-note" style="color:var(--holiday-text);">⚠️ Fehler beim Laden: ${escapeHtml(err.message||String(err))}<br>
+      Häufigste Ursache: die Firestore-Sicherheitsregeln wurden noch nicht mit der neuesten firestore.rules-Datei aktualisiert (braucht die "logs"-Sammlung). Bitte in der Firebase-Konsole unter Firestore → Regeln erneut einfügen und veröffentlichen.</div>`;
   });
 }
 function startPendingListener(){
@@ -1669,6 +1717,9 @@ function startPendingListener(){
       </div>`;
     });
     list.innerHTML = html;
+  }, (err)=>{
+    document.getElementById('pendingList').innerHTML =
+      `<div class="empty-note" style="color:var(--holiday-text);">⚠️ Fehler beim Laden: ${escapeHtml(err.message||String(err))}</div>`;
   });
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

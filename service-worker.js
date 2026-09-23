@@ -1,7 +1,7 @@
 // ChaosKalender Service Worker
 // WICHTIG: CACHE_NAME bei jedem Deployment hochzählen (v5, v6, ...),
 // sonst bleiben alte Dateien im Cache hängen und Updates kommen nicht an.
-const CACHE_NAME = 'chaoskalender-v13';
+const CACHE_NAME = 'chaoskalender-v14';
 const ASSETS = [
   './',
   './index.html',
