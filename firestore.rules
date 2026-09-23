@@ -35,8 +35,10 @@ service cloud.firestore {
 
     // --- users ---------------------------------------------------------
     match /users/{userId} {
-      // Lesen: nur das eigene Profil, oder Admin liest alle
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Lesen: eigenes Profil, Admin, oder jede AKTIVE Person (nötig, damit
+      // z.B. Andi den Namen/die UID von Janine finden kann, um ihr eine
+      // Änderungsanfrage zu schicken). Reine Profildaten, keine Kalenderdaten.
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isActive());
 
       // Registrierung: ein neuer Account legt AUSSCHLIESSLICH sein eigenes
       // Dokument an, zwingend mit status "pending" und OHNE eigene
@@ -68,6 +70,28 @@ service cloud.firestore {
       // Nutzungsdaten sind sensibel).
       allow read: if isAdmin();
       allow update, delete: if false;
+    }
+
+    // --- slot_changes: Änderungsanfragen zwischen den Elternteilen -----
+    match /slot_changes/{changeId} {
+      // Lesen: nur die beiden Beteiligten (Anfragende/r + Empfänger/in)
+      // oder Admin.
+      allow read: if isSignedIn() && (
+                     isAdmin() ||
+                     request.auth.uid == resource.data.angefragtVonUid ||
+                     request.auth.uid == resource.data.angefragtAnUid
+                   );
+      // Neu anlegen: nur eine aktive Person, und zwar als "angefragtVon"
+      // über sich selbst (nicht im Namen anderer).
+      allow create: if isSignedIn() && isActive()
+                    && request.resource.data.angefragtVonUid == request.auth.uid;
+      // Ändern (akzeptieren/ablehnen/gegenvorschlagen): nur die beiden
+      // Beteiligten dürfen den Status/Verlauf fortschreiben.
+      allow update: if isSignedIn() && (
+                       request.auth.uid == resource.data.angefragtVonUid ||
+                       request.auth.uid == resource.data.angefragtAnUid
+                     );
+      allow delete: if isAdmin();
     }
 
     // --- alles andere: vorerst komplett gesperrt ------------------------

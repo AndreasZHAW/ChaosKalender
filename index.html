@@ -77,8 +77,10 @@
   .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center;}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
-  .swipe-daycol{flex:0 0 clamp(150px, 46vw, 220px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
+  .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
+  .swipe-daycol.is-today{border-left:3px solid var(--pending); border-right:3px solid var(--pending);}
   .swipe-daycol.is-today .swipe-head{background:var(--pending-bg);}
+  .swipe-head{cursor:pointer;}
   .swipe-dow{font-size:12px; color:var(--ink-soft);}
   .swipe-daynum{font-size:16px; font-weight:700;}
   .swipe-holtag{font-size:10px; color:var(--holiday-text); font-weight:700;}
@@ -127,6 +129,7 @@
   .month-grid{display:grid; grid-template-columns:repeat(7,1fr);}
   .month-dow{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .month-cell{min-height:68px; border-top:1px solid var(--line); padding:5px; position:relative;}
+  .month-cell.is-today-cell{border:3px solid var(--pending); border-radius:6px;}
   .month-cell .num{font-size:11px; color:var(--ink-soft); margin-bottom:4px;}
   .month-cell.out .num{color:#D8D5CC;}
   .month-cell.holiday{background:var(--holiday-bg);}
@@ -138,6 +141,7 @@
 
   /* DAY (Stundenraster, alle 24 Stunden) */
   .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line);}
+  .day-head-row.is-today-row{border:3px solid var(--pending); border-radius:10px 10px 0 0; background:var(--pending-bg);}
   .day-head-date{font-weight:700; font-size:14px; margin-bottom:4px; text-transform:capitalize;}
   .day-grid{display:flex;}
   .day-grid .time-col{width:34px; flex-shrink:0;}
@@ -218,6 +222,27 @@
   .btn-approve{background:var(--a); color:#fff;}
   .btn-reject{background:#F0EFEA; color:var(--ink);}
   .empty-note{font-size:12.5px; color:var(--ink-soft); text-align:center; padding:20px 0;}
+  .req-card{border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
+  .req-card.mine-turn{border-color:var(--pending); background:var(--pending-bg);}
+  .req-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;}
+  .req-date{font-weight:700; font-size:13.5px;}
+  .req-status{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:10px; white-space:nowrap;}
+  .req-status.offen{background:var(--pending-bg); color:#8a5a1d;}
+  .req-status.akzeptiert{background:var(--a-bg); color:var(--a);}
+  .req-status.abgelehnt{background:#F0EFEA; color:var(--ink-soft);}
+  .req-status.gegenvorschlag{background:var(--omami-bg); color:var(--omami);}
+  .req-times{font-size:12px; color:var(--ink-soft); margin-bottom:4px;}
+  .req-reason{font-size:12px; margin-bottom:8px;}
+  .req-meta{font-size:10.5px; color:var(--ink-soft); margin-bottom:8px;}
+  .req-actions{display:flex; gap:6px; flex-wrap:wrap;}
+  .req-actions button{border:none; border-radius:6px; padding:7px 11px; font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;}
+  .req-btn-accept{background:var(--a); color:#fff;}
+  .req-btn-reject{background:#F0EFEA; color:var(--ink);}
+  .req-btn-counter{background:var(--panel); border:1px solid var(--line) !important; color:var(--ink);}
+  .req-counter-form{margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); display:none;}
+  .req-counter-form.show{display:block;}
+  .req-counter-form .time-row{margin-bottom:8px;}
+  .req-counter-form textarea{width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-family:inherit; font-size:12px; margin-bottom:8px; resize:vertical; min-height:44px;}
 </style>
 </head>
 <body>
@@ -305,6 +330,7 @@
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
         <button data-role="partner" onclick="setRole('partner')">Partner</button>
       </div>
+      <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()">⚙</div>
       <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
     </div>
@@ -363,6 +389,17 @@
   </div>
 </div>
 
+<div class="overlay" id="requestsOverlay">
+  <div class="modal" style="max-width:640px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <h3 style="margin:0;">Änderungsanfragen</h3>
+      <span onclick="document.getElementById('requestsOverlay').classList.remove('show')" style="cursor:pointer; font-size:20px; color:var(--ink-soft); line-height:1;">×</span>
+    </div>
+    <div class="sub" style="margin-bottom:14px;">Alle Anfragen, die du geschickt hast oder die an dich gerichtet sind.</div>
+    <div id="requestsList" style="max-height:60vh; overflow-y:auto;"><div class="empty-note">Lade …</div></div>
+  </div>
+</div>
+
 <div class="overlay" id="overlay">
   <div class="modal">
     <h3 id="modalTitle">Slot ändern</h3>
@@ -383,10 +420,13 @@
       Nur streichen, keinen neuen Zeitraum vorschlagen
     </label>
 
-    <textarea placeholder="Grund (optional) …"></textarea>
+    <textarea id="modalReasonInput" placeholder="Grund (optional) …"></textarea>
+    <div id="modalNoRequestNote" style="display:none; font-size:11.5px; color:var(--ink-soft); margin:-8px 0 12px;">
+      Das ist ein Info-Block (z. B. Schule/Hort/Club) – dafür gibt es keine Änderungsanfrage.
+    </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="closeModal()">Abbrechen</button>
-      <button class="btn" onclick="closeModal()">Anfragen</button>
+      <button class="btn" id="modalActionBtn" onclick="submitSlotChangeRequest()">Anfragen</button>
     </div>
   </div>
 </div>
@@ -804,12 +844,30 @@ function findNextCareGap(){
 
 /* ====================== MODAL ====================== */
 let ortState = 'oben';
-function openModal(title, sub, ort){
+var modalCtx = null; // {iso, altVon, altBis, who} – var statt let, damit das Firebase-Modul-Script darauf zugreifen kann
+function openModal(title, sub, ort, iso, altVon, altBis, who){
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalSub').textContent = sub;
   ortState = ort || 'oben';
   document.getElementById('ortSwitch').className = 'switch' + (ortState==='unten' ? ' unten' : '');
   document.getElementById('overlay').classList.add('show');
+  document.getElementById('modalReasonInput').value = '';
+  document.getElementById('skipTime').checked = false;
+  toggleTimeFields();
+  const isRealSlot = !!(iso && altVon && altBis);
+  modalCtx = isRealSlot ? {iso, altVon, altBis, who} : null;
+  document.getElementById('newFrom').value = isRealSlot ? altVon : '15:00';
+  document.getElementById('newTo').value = isRealSlot ? altBis : '19:00';
+  const actionBtn = document.getElementById('modalActionBtn');
+  const infoNote = document.getElementById('modalNoRequestNote');
+  if(isRealSlot){
+    actionBtn.style.display = 'inline-block';
+    infoNote.style.display = 'none';
+  } else {
+    // Info-/Schulblöcke etc.: keine Änderungsanfrage möglich, nur Infofenster
+    actionBtn.style.display = 'none';
+    infoNote.style.display = 'block';
+  }
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
 function toggleOrt(){
@@ -849,7 +907,7 @@ function renderWeek(){
     }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
     const evTag = specialEv ? `<span class="day-event-tag" title="${specialEv.title}">★</span>` : '';
-    head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
+    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
   }
   head += '</div>';
 
@@ -973,7 +1031,7 @@ function renderKidWeek(kid){
       const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
       return `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
     }).join(' ');
-    head += `<div>${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}</div></div>`;
+    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}</div></div>`;
   }
   head += '</div>';
 
@@ -1057,7 +1115,8 @@ function eventBlock(who, start, end, startHour, dateObj, note){
   const top = (start-startHour)*44;
   const height = (end-start)*44-3;
   const sub = dateObj.toLocaleDateString('de-CH',{weekday:'short', day:'2-digit', month:'short'});
-  return `<div class="event ${who}" style="top:${top}px;height:${height}px;z-index:1;" onclick="openModal('Slot ändern','${sub} · ${start}:00–${end}:00', '${who==='a'?'oben':'unten'}')">
+  const iso = isoDate(dateObj);
+  return `<div class="event ${who}" style="top:${top}px;height:${height}px;z-index:1;" onclick="openModal('Slot ändern','${sub} · ${start}:00–${end}:00', '${who==='a'?'oben':'unten'}', '${iso}', '${fmtH(start)}', '${fmtH(end)}', '${who}')">
     <strong>${whoLabel(who)}</strong>${note?note:''}
   </div>`;
 }
@@ -1074,18 +1133,20 @@ function renderMonth(){
   dows.forEach(d=> html += `<div class="month-dow">${d}</div>`);
 
   const totalCells = Math.ceil((firstWeekday+daysInMonth)/7)*7;
+  const todayIsoM = isoDate(new Date());
   for(let i=0;i<totalCells;i++){
     const dayNum = i - firstWeekday + 1;
     const inMonth = dayNum>=1 && dayNum<=daysInMonth;
     const d = new Date(y,m,dayNum);
+    const isTodayCell = inMonth && isoDate(d)===todayIsoM;
     const hol = inMonth ? (getHolidayName(d) || getSchoolHolidayName(d)) : null;
-    html += `<div class="month-cell ${inMonth?'':'out'} ${hol?'holiday':''}"><div class="num">${inMonth?dayNum:''}</div>`;
+    html += `<div class="month-cell ${inMonth?'':'out'} ${hol?'holiday':''} ${isTodayCell?'is-today-cell':''}"><div class="num" ${inMonth?`onclick="jumpToIso('${isoDate(d)}'); setView('tag');" style="cursor:pointer;"`:''}>${inMonth?dayNum:''}</div>`;
     if(inMonth){
       if(hol){
         html += `<div class="hol-label">${hol}</div>`;
       } else {
         const assign = getCareAssignment(d);
-        html += `<div class="pill ${assign.who}" onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}')">${personFilteredLabel(assign.who)}</div>`;
+        html += `<div class="pill ${assign.who}" onclick="event.stopPropagation(); openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}', '${isoDate(d)}', '07:00', '23:00', '${assign.who}')">${personFilteredLabel(assign.who)}</div>`;
         const iso2 = isoDate(d);
         if(BAND_DATES_MISCHA.includes(iso2)) html += `<div class="hol-label" style="color:#8C4A6E;">Bandprobe M.</div>`;
         SCHOOL_EVENTS.filter(ev=>ev.date===iso2).forEach(ev=> html += `<div class="hol-label" style="color:var(--pending);">${ev.title.slice(0,14)}</div>`);
@@ -1108,7 +1169,8 @@ function renderDay(){
   const startHour=0, endHour=24, px=48;
 
   // Kopfzeile: Datum + Feiertag-Tag + Betreuungs-Badges (immer sichtbar)
-  let head = `<div class="day-head-row"><div class="day-head-date">${d.toLocaleDateString('de-CH',{weekday:'long', day:'2-digit', month:'long'})}</div><div class="day-tags">`;
+  const isToday = iso === isoDate(new Date());
+  let head = `<div class="day-head-row ${isToday?'is-today-row':''}"><div class="day-head-date">${d.toLocaleDateString('de-CH',{weekday:'long', day:'2-digit', month:'long'})}${isToday?' · Heute':''}</div><div class="day-tags">`;
   if(hol) head += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
   if(currentPerson === 'janosch' || currentPerson === 'mischa'){
     getCustodySegments(d).forEach(seg=>{
@@ -1144,7 +1206,11 @@ function renderDay(){
   function block(s,e,label,bgVar,colorVar,clickable,z){
     const top=(s-startHour)*px, height=(e-s)*px-2;
     const style = `top:${top}px;height:${height}px;left:6px;right:6px;z-index:${z||1};background:${bgVar};${colorVar?'color:'+colorVar+';':''}`;
-    return `<div class="event" style="${style}" ${clickable?`onclick="openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${fmtH(s)}–${fmtH(e)}', '${clickable}')"`:''}><strong>${label}</strong></div>`;
+    const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+    const onclickAttr = clickable
+      ? `onclick="openModal('Slot ändern','${dateLbl} · ${fmtH(s)}–${fmtH(e)}', '${clickable}', '${iso}', '${fmtH(s)}', '${fmtH(e)}', '${clickable}')"`
+      : '';
+    return `<div class="event" style="${style}" ${onclickAttr}><strong>${label}</strong></div>`;
   }
 
   if(currentPerson === 'janosch' || currentPerson === 'mischa'){
@@ -1245,7 +1311,7 @@ function renderSwipeView(){
     const isToday = off===0;
 
     daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}">`;
-    daysHtml += `<div class="swipe-head"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
+    daysHtml += `<div class="swipe-head" onclick="jumpToIso('${iso}'); setView('tag');"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
     if(hol) daysHtml += `<div class="swipe-holtag">${hol.length>12?hol.slice(0,11)+'…':hol}</div>`;
     daysHtml += `</div>`;
     daysHtml += `<div class="swipe-body">`;
@@ -1266,7 +1332,7 @@ function renderSwipeView(){
       if(isSchoolDayForKid(d, kid) && SCHOOL_SUBJECTS[kid][dowIdx1to7]){
         SCHOOL_SUBJECTS[kid][dowIdx1to7].forEach(([s,e,subj])=>{
           const top=(s-startHour)*px, height=(e-s)*px-2;
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;font-size:13px;">${subj}</div>`;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;font-size:10.5px;">${subj}</div>`;
         });
       }
       if(dow===4 && isSchoolDayForKid(d, kid)){
@@ -1306,15 +1372,15 @@ function renderSwipeView(){
         ['mischa','janosch'].forEach(kid=>{
           if(isSchoolDayForKid(d, kid)){
             const c = FRIDAY_CLUBS[kid];
-            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:13px;"><strong>${c.label}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;"><strong>${c.label}</strong></div>`;
           }
         });
       }
-      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:13px;"><strong>Bandprobe</strong></div>`;
-      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:13px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
+      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;"><strong>Bandprobe</strong></div>`;
+      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
     }
     if(BAND_DATES_MISCHA.includes(iso)){
-      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:13px;"><strong>Bandprobe M.</strong></div>`;
+      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;"><strong>Bandprobe M.</strong></div>`;
     }
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -1326,7 +1392,7 @@ function renderSwipeView(){
 }
 function swipeBlock(label, s, e, startHour, px, who){
   const top=(s-startHour)*px, height=(e-s)*px-2;
-  return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:13px;"><strong>${label}</strong></div>`;
+  return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:10.5px;"><strong>${label}</strong></div>`;
 }
 function initSwipeScroll(){
   // Beim ersten Öffnen automatisch so scrollen, dass "Heute" sichtbar ist
@@ -1476,7 +1542,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v15 · 23.09.2026';
+const APP_VERSION = 'v17 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1496,7 +1562,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=15').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=17').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1514,7 +1580,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
-  collection, query, where, onSnapshot, addDoc, orderBy, limit
+  collection, query, where, onSnapshot, addDoc, orderBy, limit,
+  arrayUnion, getDocs
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -1614,7 +1681,186 @@ async function writeLoginLog(user, userData){
     gewaehlteAnsicht: (typeof currentView!=='undefined') ? currentView : '?',
     effektiveBreite: (typeof effectiveWidth!=='undefined') ? effectiveWidth : '?'
   });
+  // Für den Änderungs-Workflow: Uid/Name der eigenen Person merken und
+  // die/den jeweils andere/n Elternteil suchen (nötig, um Anfragen zu
+  // adressieren).
+  window.myUid = user.uid;
+  window.myName = userData.username || '?';
+  if(userData.role === 'elternteil'){
+    await findPartnerInfo();
+    startRequestListeners();
+  }
 }
+
+/* Sucht die/den jeweils andere/n Elternteil (role=='elternteil', nicht
+   ich selbst) und merkt UID+Name für den Änderungs-Workflow. */
+async function findPartnerInfo(){
+  try{
+    // Nur EIN Firestore-Filter (vermeidet einen zusätzlich nötigen
+    // Composite-Index) – der Status-Check läuft clientseitig.
+    const q = query(collection(db,'users'), where('role','==','elternteil'));
+    const snap = await getDocs(q);
+    snap.forEach(docSnap=>{
+      const d = docSnap.data();
+      if(docSnap.id !== window.myUid && d.status === 'active'){
+        window.partnerUid = docSnap.id;
+        window.partnerName = d.username || '?';
+      }
+    });
+  } catch(e){ console.error('Partner-Suche fehlgeschlagen:', e); }
+}
+
+/* Erstellt eine echte Änderungsanfrage aus dem "Slot ändern"-Formular. */
+async function submitSlotChangeRequest(){
+  if(!modalCtx){ closeModal(); return; }
+  if(!window.partnerUid){
+    alert('Konnte die/den andere/n Elternteil nicht finden. Bitte später erneut versuchen.');
+    return;
+  }
+  const skip = document.getElementById('skipTime').checked;
+  const neuVon = skip ? null : document.getElementById('newFrom').value;
+  const neuBis = skip ? null : document.getElementById('newTo').value;
+  const grund = document.getElementById('modalReasonInput').value.trim();
+  const btn = document.getElementById('modalActionBtn');
+  btn.disabled = true; btn.textContent = 'Sende…';
+  try{
+    await addDoc(collection(db,'slot_changes'), {
+      datum: modalCtx.iso,
+      altVon: modalCtx.altVon,
+      altBis: modalCtx.altBis,
+      urspruenglichWer: modalCtx.who,
+      nurStreichen: skip,
+      neuVon: neuVon, neuBis: neuBis,
+      angefragtVonUid: window.myUid, angefragtVonName: window.myName,
+      angefragtAnUid: window.partnerUid, angefragtAnName: window.partnerName,
+      aktuellAmZugUid: window.partnerUid,
+      status: 'offen',
+      verlauf: [{ aktion:'angefragt', vonUid:window.myUid, vonName:window.myName, neuVon, neuBis, nurStreichen:skip, grund, zeitstempel:new Date().toISOString() }],
+      erstelltAm: new Date().toISOString(),
+      aktualisiertAm: new Date().toISOString()
+    });
+    if(window.logEvent) window.logEvent('anfrage_erstellt', {datum:modalCtx.iso});
+    closeModal();
+    alert('Anfrage an ' + window.partnerName + ' gesendet.');
+  } catch(e){
+    alert('Fehler beim Senden: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Anfragen';
+  }
+}
+
+/* ====================== ANFRAGEN-LISTE (live) ====================== */
+window.__reqSent = [];
+window.__reqReceived = [];
+let reqUnsub1 = null, reqUnsub2 = null;
+function startRequestListeners(){
+  if(reqUnsub1 || !window.myUid) return; // schon aktiv
+  const q1 = query(collection(db,'slot_changes'), where('angefragtVonUid','==', window.myUid));
+  reqUnsub1 = onSnapshot(q1, snap=>{
+    window.__reqSent = [];
+    snap.forEach(d=> window.__reqSent.push({id:d.id, ...d.data()}));
+    renderRequestsUI();
+  }, err=> console.error('Anfragen (gesendet) Fehler:', err));
+  const q2 = query(collection(db,'slot_changes'), where('angefragtAnUid','==', window.myUid));
+  reqUnsub2 = onSnapshot(q2, snap=>{
+    window.__reqReceived = [];
+    snap.forEach(d=> window.__reqReceived.push({id:d.id, ...d.data()}));
+    renderRequestsUI();
+  }, err=> console.error('Anfragen (empfangen) Fehler:', err));
+}
+
+function renderRequestsUI(){
+  // Zusammenführen + doppelte (falls je gesendet UND empfangen, kommt
+  // theoretisch nicht vor, aber sicherheitshalber) nach id eindeutig machen
+  const map = new Map();
+  [...window.__reqSent, ...window.__reqReceived].forEach(r=> map.set(r.id, r));
+  const all = Array.from(map.values()).sort((a,b)=> (b.aktualisiertAm||'').localeCompare(a.aktualisiertAm||''));
+
+  // Badge: Anzahl, bei denen ICH am Zug bin
+  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length;
+  const badge = document.getElementById('requestsBadge');
+  if(badge){
+    badge.style.display = myTurnCount>0 ? 'flex' : 'none';
+    badge.textContent = myTurnCount;
+  }
+
+  const listEl = document.getElementById('requestsList');
+  if(!listEl) return;
+  if(all.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
+
+  let html = '';
+  all.forEach(r=>{
+    const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
+    const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
+    const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '?');
+    const dateStr = r.datum ? new Date(r.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
+    const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
+    html += `<div class="req-card ${isMyTurn?'mine-turn':''}">
+      <div class="req-top">
+        <div class="req-date">${dateStr}</div>
+        <div class="req-status ${r.status}">${statusLabel}</div>
+      </div>
+      <div class="req-times">Ursprünglich: ${r.altVon}–${r.altBis} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${vorschlagText!=='nur streichen'?' Uhr':''}</div>
+      ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
+      <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
+      ${isMyTurn ? `
+        <div class="req-actions">
+          <button class="req-btn-accept" onclick="acceptRequest('${r.id}')">✓ Akzeptieren</button>
+          <button class="req-btn-counter" onclick="toggleCounterForm('${r.id}')">↩ Anders vorschlagen</button>
+          <button class="req-btn-reject" onclick="rejectRequest('${r.id}')">✗ Ablehnen</button>
+        </div>
+        <div class="req-counter-form" id="counterForm-${r.id}">
+          <div class="time-row">
+            <div class="time-field"><label>Von</label><input type="time" id="counterVon-${r.id}" value="${lastEntry?lastEntry.neuVon||'15:00':'15:00'}"></div>
+            <div class="time-field"><label>Bis</label><input type="time" id="counterBis-${r.id}" value="${lastEntry?lastEntry.neuBis||'19:00':'19:00'}"></div>
+          </div>
+          <textarea id="counterGrund-${r.id}" placeholder="Grund (optional) …"></textarea>
+          <button class="req-btn-accept" style="width:100%;" onclick="submitCounter('${r.id}')">Gegenvorschlag senden</button>
+        </div>
+      ` : ''}
+    </div>`;
+  });
+  listEl.innerHTML = html;
+}
+
+window.openRequestsModal = function(){
+  document.getElementById('requestsOverlay').classList.add('show');
+  renderRequestsUI();
+};
+
+window.toggleCounterForm = function(id){
+  const el = document.getElementById('counterForm-'+id);
+  if(el) el.classList.toggle('show');
+};
+
+window.acceptRequest = async function(id){
+  await updateDoc(doc(db,'slot_changes',id), {
+    status: 'akzeptiert', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
+    verlauf: arrayUnion({ aktion:'akzeptiert', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
+  });
+  if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
+};
+window.rejectRequest = async function(id){
+  await updateDoc(doc(db,'slot_changes',id), {
+    status: 'abgelehnt', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
+    verlauf: arrayUnion({ aktion:'abgelehnt', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
+  });
+  if(window.logEvent) window.logEvent('anfrage_abgelehnt', {id});
+};
+window.submitCounter = async function(id){
+  const neuVon = document.getElementById('counterVon-'+id).value;
+  const neuBis = document.getElementById('counterBis-'+id).value;
+  const grund = document.getElementById('counterGrund-'+id).value.trim();
+  // Herausfinden, wer als nächstes am Zug ist (die jeweils andere Person)
+  const r = [...window.__reqSent, ...window.__reqReceived].find(x=>x.id===id);
+  if(!r) return;
+  const nextTurnUid = window.myUid === r.angefragtVonUid ? r.angefragtAnUid : r.angefragtVonUid;
+  await updateDoc(doc(db,'slot_changes',id), {
+    status: 'gegenvorschlag', aktuellAmZugUid: nextTurnUid, aktualisiertAm: new Date().toISOString(),
+    verlauf: arrayUnion({ aktion:'gegenvorschlag', vonUid:window.myUid, vonName:window.myName, neuVon, neuBis, nurStreichen:false, grund, zeitstempel:new Date().toISOString() })
+  });
+  if(window.logEvent) window.logEvent('anfrage_gegenvorschlag', {id});
+};
 
 const screenDisplay = { authScreen:'flex', pendingScreen:'block', adminScreen:'block', calendarScreen:'block' };
 function showScreen(id){
@@ -1723,12 +1969,14 @@ function startLogListener(){
   const q = query(collection(db,'logs'), orderBy('zeitpunkt','desc'), limit(80));
   logUnsub = onSnapshot(q, (snap)=>{
     const list = document.getElementById('logList');
+    console.log('ChaosKalender Log-Snapshot:', snap.size, 'Einträge, fromCache:', snap.metadata.fromCache);
     if(snap.empty){
-      list.innerHTML = '<div class="empty-note">Noch keine Log-Einträge.</div>';
+      list.innerHTML = '<div class="empty-note">Noch keine Log-Einträge. (Snapshot war leer – falls hier vorher Einträge standen, bitte Seite neu laden und mir Bescheid geben, das ist ein Bug-Hinweis.)</div>';
       return;
     }
     const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler'};
-    let html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+    let html = `<div style="font-size:10px; color:var(--ink-soft); margin-bottom:6px;">${snap.size} Einträge geladen ${snap.metadata.fromCache?'(aus Cache)':'(live)'}</div>`;
+    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
     html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
@@ -1858,15 +2106,18 @@ onAuthStateChanged(auth, async (user) => {
     if(typeof setAdminUIState === 'function') setAdminUIState(false);
     if(typeof render === 'function') render();
   }
-  // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen
+  // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen;
+  // den Anfragen-Knopf nur für Elternteile (echter Workflow) zeigen.
   const roleSwitchEl = document.querySelector('.role-switch');
   const gearEl = document.getElementById('calGearBtn');
+  const reqEl = document.getElementById('requestsBtn');
   if(data.role === 'partner'){
     if(roleSwitchEl) roleSwitchEl.style.display = 'none';
     if(gearEl) gearEl.style.display = 'none';
   } else if(data.role !== 'admin'){
     if(gearEl) gearEl.style.display = 'none';
   }
+  if(reqEl) reqEl.style.display = (data.role === 'elternteil') ? 'flex' : 'none';
 });
 </script>
 </body>
