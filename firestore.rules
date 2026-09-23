@@ -59,6 +59,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // --- logs: Login-/Geräte-Protokoll --------------------------------
+    match /logs/{logId} {
+      // Jede angemeldete Person darf einen Log-Eintrag über SICH SELBST
+      // anlegen (uid muss der eigenen entsprechen) – nie für andere.
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      // Lesen darf ausschliesslich der Admin (Datenschutz: Geräte-/
+      // Nutzungsdaten sind sensibel).
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
     // --- alles andere: vorerst komplett gesperrt ------------------------
     match /{document=**} {
       allow read, write: if false;

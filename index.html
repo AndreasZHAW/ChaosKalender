@@ -70,18 +70,18 @@
 
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
-  .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:11px; font-weight:600; padding:6px 10px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
+  .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
   .swipe-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   .swipe-row{display:flex;}
-  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 30px; border-right:1px solid var(--line);}
-  .swipe-head{height:46px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:4px 2px; text-align:center;}
+  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
+  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center;}
   .swipe-timebody{position:relative;}
-  .swipe-hourlabel{text-align:right; padding-right:4px; font-size:9px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-6px;}
-  .swipe-daycol{flex:0 0 clamp(92px, 31vw, 150px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
+  .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
+  .swipe-daycol{flex:0 0 clamp(150px, 46vw, 220px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
   .swipe-daycol.is-today .swipe-head{background:var(--pending-bg);}
-  .swipe-dow{font-size:10px; color:var(--ink-soft);}
-  .swipe-daynum{font-size:13px; font-weight:700;}
-  .swipe-holtag{font-size:8px; color:var(--holiday-text); font-weight:700;}
+  .swipe-dow{font-size:12px; color:var(--ink-soft);}
+  .swipe-daynum{font-size:16px; font-weight:700;}
+  .swipe-holtag{font-size:10px; color:var(--holiday-text); font-weight:700;}
   .swipe-body{position:relative;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
@@ -201,6 +201,7 @@
   .admin-nav button{border:1px solid var(--line); background:var(--panel); color:var(--ink-soft); padding:8px 14px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
+  #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   .admin-card h3{font-size:14px; margin:0 0 4px;}
   .admin-card .muted{font-size:12px; color:var(--ink-soft); margin-bottom:14px;}
   #qrcodeBox{display:flex; justify-content:center; padding:12px; background:#fff; border-radius:8px; width:fit-content; margin:0 auto 12px;}
@@ -261,6 +262,7 @@
   <div class="admin-nav">
     <button class="active" data-admintab="registrations" onclick="switchAdminTab('registrations')">Neue Registrierungen</button>
     <button data-admintab="qr" onclick="switchAdminTab('qr')">QR-Code</button>
+    <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
 
@@ -278,6 +280,14 @@
       <div class="muted">Neue Familienmitglieder scannen diesen Code und registrieren sich selbst. Danach musst du sie hier oben freischalten.</div>
       <div id="qrcodeBox"></div>
       <div class="reg-link" id="regLinkText"></div>
+    </div>
+  </div>
+
+  <div id="adminLog" style="display:none;">
+    <div class="admin-card">
+      <h3>Login-Protokoll</h3>
+      <div class="muted">Wer sich wann mit welchem Gerät und welcher Bildschirmgröße eingeloggt hat – hilfreich, um Anzeigeprobleme auf bestimmten Handys nachzuvollziehen. Nur für dich als Admin sichtbar.</div>
+      <div id="logList"><div class="empty-note">Lade …</div></div>
     </div>
   </div>
 </div>
@@ -537,7 +547,12 @@ function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami'}[who] || '';
 
 /* ====================== STATE ====================== */
 let currentDate = new Date(2026,10,15);
-let currentView = 'woche';
+// Standard-Ansicht abhängig von der Bildschirmbreite: Eine 7-Spalten-
+// Wochenübersicht passt bei KEINER Schriftgröße auf ein Handy (reine
+// Platz-Mathematik). Mobile Best Practice ("single-surface, single-task
+// focus") -> auf schmalen Screens automatisch die fokussierte Swipe-
+// Ansicht vorauswählen, auf breiten Screens die Wochenübersicht.
+let currentView = window.innerWidth < 700 ? 'swipe' : 'woche';
 let currentRole = 'eltern';
 var currentPerson = null; // 'a' (Janine), 'b' (Andi) oder null (Admin/ungefiltert) – var statt let, damit das Firebase-Modul-Script (separater Scope) via window.currentPerson darauf zugreifen kann
 var isAdminUser = true; // Default true für die Testdatei; echter Login setzt dies korrekt
@@ -1164,7 +1179,7 @@ function renderSwipeView(){
       if(isSchoolDayForKid(d, kid) && SCHOOL_SUBJECTS[kid][dowIdx1to7]){
         SCHOOL_SUBJECTS[kid][dowIdx1to7].forEach(([s,e,subj])=>{
           const top=(s-startHour)*px, height=(e-s)*px-2;
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;font-size:8.5px;">${subj}</div>`;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;font-size:13px;">${subj}</div>`;
         });
       }
       if(dow===4 && isSchoolDayForKid(d, kid)){
@@ -1204,15 +1219,15 @@ function renderSwipeView(){
         ['mischa','janosch'].forEach(kid=>{
           if(isSchoolDayForKid(d, kid)){
             const c = FRIDAY_CLUBS[kid];
-            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:8.5px;"><strong>${c.label}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:13px;"><strong>${c.label}</strong></div>`;
           }
         });
       }
-      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:8.5px;"><strong>Bandprobe</strong></div>`;
-      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:8.5px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
+      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:13px;"><strong>Bandprobe</strong></div>`;
+      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:13px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
     }
     if(BAND_DATES_MISCHA.includes(iso)){
-      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:8.5px;"><strong>Bandprobe M.</strong></div>`;
+      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:13px;"><strong>Bandprobe M.</strong></div>`;
     }
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -1224,7 +1239,7 @@ function renderSwipeView(){
 }
 function swipeBlock(label, s, e, startHour, px, who){
   const top=(s-startHour)*px, height=(e-s)*px-2;
-  return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:9px;"><strong>${label}</strong></div>`;
+  return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:13px;"><strong>${label}</strong></div>`;
 }
 function initSwipeScroll(){
   // Beim ersten Öffnen automatisch so scrollen, dass "Heute" sichtbar ist
@@ -1373,11 +1388,14 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v11 · 22.09.2026';
+const APP_VERSION = 'v12 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
 updateHolidayButtons();
+document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('active', b.dataset.view===currentView));
+const navInit = document.getElementById('periodNav');
+if(navInit) navInit.style.display = currentView==='swipe' ? 'none' : 'flex';
 // Zoom-Knöpfe wurden entfernt (halfen nicht) - evtl. alten gespeicherten
 // Zoom-Wert zurücksetzen, falls jemand ihn vorher genutzt hatte.
 (function resetOldZoom(){
@@ -1389,7 +1407,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=11').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=12').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1407,7 +1425,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
-  collection, query, where, onSnapshot
+  collection, query, where, onSnapshot, addDoc, orderBy, limit
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -1428,6 +1446,26 @@ const db = getFirestore(fbApp);
 function usernameToEmail(username){
   const clean = username.trim().toLowerCase().replace(/[^a-z0-9]/g,'');
   return clean + '@chaoskalender.local';
+}
+
+/* Schreibt einen Log-Eintrag: wer, wann, mit welchem Gerät/welcher
+   Bildschirmgröße eingeloggt ist. Sichtbar nur im Admin-Bereich. */
+async function writeLoginLog(user, userData){
+  const ua = navigator.userAgent;
+  const deviceGuess = /Android/i.test(ua) ? 'Android' : /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Windows/i.test(ua) ? 'Windows' : /Macintosh/i.test(ua) ? 'Mac' : 'Unbekannt';
+  await addDoc(collection(db,'logs'), {
+    uid: user.uid,
+    username: userData.username || '(unbekannt)',
+    role: userData.role || userData.status || 'pending',
+    zeitpunkt: new Date().toISOString(),
+    geraet: deviceGuess,
+    userAgent: ua,
+    bildschirmBreite: window.screen.width,
+    bildschirmHoehe: window.screen.height,
+    fensterBreite: window.innerWidth,
+    fensterHoehe: window.innerHeight,
+    pixelRatio: window.devicePixelRatio || 1
+  });
 }
 
 const screenDisplay = { authScreen:'flex', pendingScreen:'block', adminScreen:'block', calendarScreen:'block' };
@@ -1505,7 +1543,9 @@ window.switchAdminTab = function(tab){
   document.querySelectorAll('.admin-nav button[data-admintab]').forEach(b=>b.classList.toggle('active', b.dataset.admintab===tab));
   document.getElementById('adminRegistrations').style.display = tab==='registrations' ? 'block' : 'none';
   document.getElementById('adminQr').style.display = tab==='qr' ? 'block' : 'none';
+  document.getElementById('adminLog').style.display = tab==='log' ? 'block' : 'none';
   if(tab==='qr') renderQrCode();
+  if(tab==='log') startLogListener();
 };
 
 function renderQrCode(){
@@ -1529,6 +1569,35 @@ function makeCanvas(box){
 }
 
 let pendingUnsub = null;
+let logUnsub = null;
+function startLogListener(){
+  if(logUnsub) return; // schon aktiv, nicht doppelt registrieren
+  const q = query(collection(db,'logs'), orderBy('zeitpunkt','desc'), limit(50));
+  logUnsub = onSnapshot(q, (snap)=>{
+    const list = document.getElementById('logList');
+    if(snap.empty){
+      list.innerHTML = '<div class="empty-note">Noch keine Log-Einträge.</div>';
+      return;
+    }
+    let html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Rolle</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Auflösung</th><th style="padding:6px 8px;">Fenster</th></tr>';
+    snap.forEach(docSnap=>{
+      const d = docSnap.data();
+      const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
+      const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '–';
+      html += `<tr style="border-bottom:1px solid var(--line);">
+        <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
+        <td style="padding:6px 8px;">${escapeHtml(d.username||'?')}</td>
+        <td style="padding:6px 8px;">${escapeHtml(d.role||'?')}</td>
+        <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
+        <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
+        <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
+      </tr>`;
+    });
+    html += '</table>';
+    list.innerHTML = html;
+  });
+}
 function startPendingListener(){
   const q = query(collection(db,'users'), where('status','==','pending'));
   pendingUnsub = onSnapshot(q, (snap)=>{
@@ -1589,6 +1658,14 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   const data = snap.data();
+
+  // Log-Eintrag: wer hat sich wann mit welchem Gerät/welcher Auflösung
+  // eingeloggt (nur einmal pro Browser-Sitzung, nicht bei jedem Redraw)
+  if(!window.__chaosLoggedThisSession){
+    window.__chaosLoggedThisSession = true;
+    writeLoginLog(user, data).catch(()=>{}); // Logging darf den Login nie blockieren
+  }
+
   if(data.status === 'pending'){
     showScreen('pendingScreen');
     return;
