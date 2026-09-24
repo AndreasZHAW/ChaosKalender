@@ -102,6 +102,21 @@ service cloud.firestore {
                      (myRole() == 'elternteil' || isAdmin());
     }
 
+    // --- custom_events: frei eintragbare Termine (z.B. "Zahnarzt
+    // Janosch"), je nach Kontext direkt sichtbar oder als Anfrage -------
+    match /custom_events/{eventId} {
+      allow read: if isSignedIn() && isActive();
+      allow create: if isSignedIn() && isActive() &&
+                     request.resource.data.erstelltVonUid == request.auth.uid;
+      allow update: if isSignedIn() && isActive() && (
+                       resource.data.erstelltVonUid == request.auth.uid ||
+                       resource.data.betroffenUid == request.auth.uid ||
+                       isAdmin()
+                     );
+      allow delete: if isSignedIn() && isActive() &&
+                     (resource.data.erstelltVonUid == request.auth.uid || isAdmin());
+    }
+
     // --- alles andere: vorerst komplett gesperrt ------------------------
     match /{document=**} {
       allow read, write: if false;
