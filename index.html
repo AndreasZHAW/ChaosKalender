@@ -22,6 +22,7 @@
     --pending: #C9A54B; --pending-bg: #F8F0DC;
     --holiday-bg: #FBEEE9; --holiday-text: #C17356;
     --school: #EFEFE9;
+    --bar-andi: #3B6FD6; --bar-janine: #8E4FC4; --bar-school: #9AA0A6; --bar-other: #D64545;
   }
   *{box-sizing:border-box;}
   html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
@@ -71,7 +72,7 @@
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
-  .swipe-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:65vh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   .swipe-row{display:flex;}
   .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
   .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center;}
@@ -89,14 +90,17 @@
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
+  .cal-panel.hour-scroll{max-height:65vh; overflow-y:auto;}
 
   /* Partner-restricted view */
   .partner-strip{display:flex; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:var(--panel);}
   .partner-day{flex:1; text-align:center; padding:16px 4px; border-left:1px solid var(--line);}
+  .partner-bar{position:relative; width:6px; height:70px; margin:0 auto 10px; background:var(--line); border-radius:3px; overflow:hidden;}
   .partner-day:first-child{border-left:none;}
   .partner-day .dow{font-size:11px; color:var(--ink-soft); margin-bottom:2px;}
   .partner-day .num{font-size:13px; font-weight:600; margin-bottom:8px;}
-  .status-pill{font-size:11px; font-weight:700; padding:4px 0; border-radius:6px;}
+  .status-pill{font-size:11px; font-weight:700; padding:4px 0; border-radius:6px; margin-bottom:4px;}
+  .status-pill:last-child{margin-bottom:0;}
   .status-pill.oben{background:#E5EEEC; color:var(--a);}
   .status-pill.unten{background:#F2E9E1; color:var(--b);}
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
@@ -326,10 +330,6 @@
   <header class="top">
     <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
     <div style="display:flex; align-items:center; gap:6px;">
-      <div class="role-switch">
-        <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
-        <button data-role="partner" onclick="setRole('partner')">Partner</button>
-      </div>
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()">⚙</div>
       <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
@@ -354,10 +354,20 @@
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
-    <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔</button>
-    <button class="test-btn" onclick="viewAsPerson('janosch')">👦 Janosch</button>
-    <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
   </div>
+
+  <details class="legend-details">
+    <summary>☰ Mehr (Ansicht, Partner, Kinder, Lücken-Check)</summary>
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0;">
+      <div class="role-switch">
+        <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
+        <button data-role="partner" onclick="setRole('partner')">Partner</button>
+      </div>
+      <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔 Lücken-Check</button>
+      <button class="test-btn" onclick="viewAsPerson('janosch')">👦 Janosch</button>
+      <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
+    </div>
+  </details>
 
   <details class="legend-details">
     <summary>ℹ️ Legende &amp; Farben</summary>
@@ -397,6 +407,22 @@
     </div>
     <div class="sub" style="margin-bottom:14px;">Alle Anfragen, die du geschickt hast oder die an dich gerichtet sind.</div>
     <div id="requestsList" style="max-height:60vh; overflow-y:auto;"><div class="empty-note">Lade …</div></div>
+  </div>
+</div>
+
+<div class="overlay" id="eventEditOverlay">
+  <div class="modal">
+    <h3 id="eventEditTitle">Termin bearbeiten</h3>
+    <div class="sub" id="eventEditSub">—</div>
+    <div class="time-row">
+      <div class="time-field"><label>Von</label><input type="time" id="eventEditVon"></div>
+      <div class="time-field"><label>Bis</label><input type="time" id="eventEditBis"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="document.getElementById('eventEditOverlay').classList.remove('show')">Abbrechen</button>
+      <button class="btn" style="background:var(--holiday-text);" onclick="cancelEventOverride()">Absagen</button>
+      <button class="btn" onclick="saveEventOverride()">Speichern</button>
+    </div>
   </div>
 </div>
 
@@ -565,6 +591,60 @@ function getCustodySegments(d){
   if(dow===5) return [{who:'a', to:18}, {who:'b', from:18}];
   if(dow===6) return [{who:'b', to:10}, {who:'a', from:10}];
   return [{who:'a', to:16}, {who:'b', from:16}]; // Sonntag
+}
+
+/* ====================== FARBLEISTE (blau=Andi, lila=Janine, grau=Schule, rot=unklar) ======
+   Baut pro Tag eine Liste von Zeitabschnitten [start,end,farbe] über 0–24
+   Uhr: Basis ist die Betreuungszuständigkeit, Schulzeiten überschreiben
+   das (grau) während der Unterrichtszeit. "kidFilter" = ein bestimmtes
+   Kind (für die Kinder-Kalenderansicht) oder null (Vereinigung beider
+   Kinder, für Eltern-/Partner-Ansicht). */
+function getUnionSchoolRanges(d, kidFilter){
+  const dow = d.getDay(); const dowIdx = dow===0?7:dow;
+  const kids = kidFilter ? [kidFilter] : ['janosch','mischa'];
+  const ranges = [];
+  kids.forEach(k=>{
+    if(isSchoolDayForKid(d,k) && SCHOOL_TIMES[k][dowIdx]) ranges.push(SCHOOL_TIMES[k][dowIdx]);
+  });
+  return ranges;
+}
+function barColorFor(who){
+  if(who==='a') return 'var(--bar-janine)';
+  if(who==='b') return 'var(--bar-andi)';
+  return 'var(--bar-other)'; // Omami / unklare Fälle
+}
+function buildColorBarSegments(d, kidFilter){
+  const hol = getHolidayName(d) || getSchoolHolidayName(d);
+  if(hol) return [{start:0,end:24,color:'var(--holiday-text)'}];
+  const custody = getCustodySegments(d);
+  const base = custody.map(seg=>({
+    start: seg.from!==undefined?seg.from:0,
+    end: seg.to!==undefined?seg.to:24,
+    color: barColorFor(seg.who)
+  }));
+  const schoolRanges = getUnionSchoolRanges(d, kidFilter).slice().sort((a,b)=>a[0]-b[0]);
+  const out = [];
+  base.forEach(seg=>{
+    let cursor = seg.start;
+    schoolRanges.forEach(([s,e])=>{
+      if(e<=seg.start || s>=seg.end) return;
+      const os = Math.max(s, seg.start), oe = Math.min(e, seg.end);
+      if(os>cursor) out.push({start:cursor, end:os, color:seg.color});
+      out.push({start:os, end:oe, color:'var(--bar-school)'});
+      cursor = oe;
+    });
+    if(cursor<seg.end) out.push({start:cursor, end:seg.end, color:seg.color});
+  });
+  return out;
+}
+function renderColorBarHtml(segments, startHour, px){
+  let html = '';
+  segments.forEach(seg=>{
+    const top = (seg.start-startHour)*px, height = (seg.end-seg.start)*px;
+    if(height<=0) return;
+    html += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;width:4px;background:${seg.color};z-index:4;border-radius:0 2px 2px 0;"></div>`;
+  });
+  return html;
 }
 
 /* ====================== BETREUUNG: ZEITGENAUE REGEL + AUSNAHMEN ======
@@ -776,7 +856,11 @@ async function sendVerboseDiagnostic(){
   if(btn){ btn.textContent = '✓ Gesendet – siehe Admin-Protokoll'; setTimeout(()=>{btn.textContent='🔍 Diagnose senden'; btn.disabled=false;}, 3000); }
 }
 
-function jumpToToday(){ currentDate = new Date(); render(); }
+function jumpToToday(){
+  currentDate = new Date();
+  render();
+  if(currentView==='swipe') setTimeout(()=>scrollSwipeToToday(true), 60);
+}
 function jumpToDate(y,m,day){ currentDate = new Date(y, m-1, day); render(); }
 function jumpYearsAhead(n){ currentDate.setFullYear(currentDate.getFullYear()+n); render(); }
 function jumpNextWeek(){ currentDate.setDate(currentDate.getDate()+7); render(); }
@@ -884,7 +968,7 @@ function renderWeek(){
   if(currentPerson === 'janosch' || currentPerson === 'mischa') return renderKidWeek(currentPerson);
 
   const start = startOfWeek(currentDate);
-  const startHour=7, endHour=23;
+  const startHour=0, endHour=24;
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   let head = '<div class="week-head"><div></div>';
@@ -923,6 +1007,7 @@ function renderWeek(){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
+    body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, 44);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
@@ -941,24 +1026,36 @@ function renderWeek(){
     });
 
     // Schulzeiten pro Kind: FARBCODE statt winzigem Text (blau=Janosch,
-    // braun=Mischa, wie in der Legende erklärt) – antippen zeigt Details.
+    // braun=Mischa, wie in der Legende erklärt) – antippen zum Bearbeiten.
     ['janosch','mischa'].forEach((kid, idx)=>{
       if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
-        const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+        const [defS,defE] = SCHOOL_TIMES[kid][dowIdx1to7];
+        const key = 'schule_'+kid+'_'+iso;
+        const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+        if(ov && ov.geloescht) return;
+        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
         const top = (s-startHour)*44, height = (e-s)*44-3;
         const leftPct = idx===0 ? '1px' : '50%';
         const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
         const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openModal('Schule ${kidName}','${fmtH(s)}–${fmtH(e)} Uhr')"></div>`;
+        const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Schule ${kidName}','${dateLbl}')">${ov?'✎':''}</div>`;
       }
     });
     if(dow===4){
       ['janosch','mischa'].forEach((kid, idx)=>{
         if(isSchoolDayForKid(d, kid)){
-          const [s,e] = HORT_THU[kid];
+          const [defS,defE] = HORT_THU[kid];
+          const key = 'hort_'+kid+'_'+iso;
+          const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+          if(ov && ov.geloescht) return;
+          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top = (s-startHour)*44, height=(e-s)*44-3;
           const leftPct = idx===0 ? '1px' : '50%';
-          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);">Hort</div>`;
+          const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Hort ${kid==='janosch'?'Janosch':'Mischa'}','${dateLbl}')">Hort${ov?' ✎':''}</div>`;
         }
       });
     }
@@ -986,22 +1083,47 @@ function renderWeek(){
       ['mischa','janosch'].forEach(kid=>{
         if(isSchoolDayForKid(d, kid)){
           const c = FRIDAY_CLUBS[kid];
-          const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
-          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;" onclick="openModal('${c.label}','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · ${c.start}:00–${c.end}:00 · ${kid==='mischa'?'Mischa':'Janosch'}')"><strong>${c.label}</strong></div>`;
+          const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
+          const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+          if(ov && ov.geloescht) return;
+          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
+          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
+          const top=(s-startHour)*44, height=(e-s)*44-3;
+          const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(c.start)}','${fmtH(c.end)}','${c.label} (${kid==='mischa'?'Mischa':'Janosch'})','${dateLbl}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
         }
       });
     }
     if(dow===4 && showFullDetailFor('a')){
-      const top=(20-startHour)*44, height=(Math.min(24,endHour)-20)*44-3;
-      body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;" onclick="openModal('Bandprobe Janine','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 20:00–24:00')"><strong>Bandprobe</strong></div>`;
+      const key = 'bandprobe_janine_'+iso;
+      const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+      if(!(ov && ov.geloescht)){
+        const s = ov?parseFloat(ov.von.split(':')[0]):20, e = ov?parseFloat(ov.bis.split(':')[0]):24;
+        const top=(s-startHour)*44, height=(Math.min(24,endHour)-s)*44-3;
+        const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openEventEdit('${key}','20:00','24:00','Bandprobe Janine','${dateLbl}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
+      }
     }
     if(dow===3 && !hol && showFullDetailFor('b')){
-      const top=(19-startHour)*44, height=(21-19)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);" onclick="openModal('Volleyball Andi (Zeit vorläufig)','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 19:00–21:00 · bitte Zeit bestätigen')"><strong>Volleyball?</strong></div>`;
+      const key = 'volleyball_andi_'+iso;
+      const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+      if(!(ov && ov.geloescht)){
+        const s = ov?parseFloat(ov.von.split(':')[0]):19, e = ov?parseFloat(ov.bis.split(':')[0]):21;
+        const top=(s-startHour)*44, height=(e-s)*44-3;
+        const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openEventEdit('${key}','19:00','21:00','Volleyball Andi','${dateLbl}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
+      }
     }
     if(BAND_DATES_MISCHA.includes(iso)){
-      const top=(16.5-startHour)*44, height=(17.5-16.5)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;" onclick="openModal('Bandprobe Mischa','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})} · 16:30–17:30')"><strong>Bandprobe M.</strong></div>`;
+      const key = 'bandprobe_mischa_'+iso;
+      const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+      if(!(ov && ov.geloescht)){
+        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
+        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
+        const top=(s-startHour)*44, height=(e-s)*44-3;
+        const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openEventEdit('${key}','16:30','17:30','Bandprobe Mischa','${dateLbl}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
+      }
     }
 
     body += `</div>`;
@@ -1015,7 +1137,7 @@ function renderWeek(){
    statt "Schule", plus Hintergrund-Einfärbung wo sie gerade sind. */
 function renderKidWeek(kid){
   const start = startOfWeek(currentDate);
-  const startHour=7, endHour=23;
+  const startHour=0, endHour=24;
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
   const kidLabel = kid==='janosch' ? 'Janosch' : 'Mischa';
 
@@ -1047,6 +1169,7 @@ function renderKidWeek(kid){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
+    body += renderColorBarHtml(buildColorBarSegments(d, kid), startHour, 44);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
@@ -1191,6 +1314,7 @@ function renderDay(){
   for(let h=startHour; h<endHour; h++) body += `<div class="slot-h" style="height:${px}px;">${h}</div>`;
   body += `</div><div class="day-col" style="position:relative;">`;
   for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
+  body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
 
   // Hintergrund-Einfärbung: wann ist wer zuständig
   getCustodySegments(d).forEach(seg=>{
@@ -1316,6 +1440,7 @@ function renderSwipeView(){
     daysHtml += `</div>`;
     daysHtml += `<div class="swipe-body">`;
     for(let h=startHour; h<endHour; h++) daysHtml += `<div class="hour-row" style="height:${px}px;"></div>`;
+    daysHtml += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
 
     // Hintergrund-Einfärbung
     getCustodySegments(d).forEach(seg=>{
@@ -1342,14 +1467,36 @@ function renderSwipeView(){
     } else {
       ['janosch','mischa'].forEach((kid, idx)=>{
         if(isSchoolDayForKid(d, kid) && SCHOOL_TIMES[kid][dowIdx1to7]){
-          const [s,e] = SCHOOL_TIMES[kid][dowIdx1to7];
+          const [defS,defE] = SCHOOL_TIMES[kid][dowIdx1to7];
+          const key = 'schule_'+kid+'_'+iso;
+          const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+          if(ov && ov.geloescht) return;
+          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top=(s-startHour)*px, height=(e-s)*px-2;
           const leftPct = idx===0?'1px':'50%';
           const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
           const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openModal('Schule ${kidName}','${fmtH(s)}–${fmtH(e)} Uhr')"></div>`;
+          const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Schule ${kidName}','${dateLbl}')">${ov?'✎':''}</div>`;
         }
       });
+      if(dow===4){
+        ['janosch','mischa'].forEach((kid, idx)=>{
+          if(isSchoolDayForKid(d, kid)){
+            const [defS,defE] = HORT_THU[kid];
+            const key = 'hort_'+kid+'_'+iso;
+            const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+            if(ov && ov.geloescht) return;
+            const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+            const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
+            const top=(s-startHour)*px, height=(e-s)*px-2;
+            const leftPct = idx===0?'1px':'50%';
+            const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Hort ${kid==='janosch'?'Janosch':'Mischa'}','${dateLbl}')">Hort${ov?' ✎':''}</div>`;
+          }
+        });
+      }
       const exc = checkExceptions(d);
       if(exc){
         if(showFullDetailFor(exc.who)) daysHtml += swipeBlock(exc.who==='a'?'Janine':'Andi', startHour, endHour, startHour, px, exc.who);
@@ -1372,21 +1519,50 @@ function renderSwipeView(){
         ['mischa','janosch'].forEach(kid=>{
           if(isSchoolDayForKid(d, kid)){
             const c = FRIDAY_CLUBS[kid];
-            daysHtml += `<div class="event" style="top:${(c.start-startHour)*px}px;height:${(c.end-c.start)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;"><strong>${c.label}</strong></div>`;
+            const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
+            const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+            if(ov && ov.geloescht) return;
+            const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
+            const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
+            const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(c.start)}','${fmtH(c.end)}','${c.label} (${kid==='mischa'?'Mischa':'Janosch'})','${dateLbl}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
           }
         });
       }
-      if(dow===4 && showFullDetailFor('a')) daysHtml += `<div class="event omami" style="top:${(20-startHour)*px}px;height:${4*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;"><strong>Bandprobe</strong></div>`;
-      if(dow===3 && !hol && showFullDetailFor('b')) daysHtml += `<div class="event" style="top:${(19-startHour)*px}px;height:${2*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);"><strong>Volleyball?</strong></div>`;
+      if(dow===4 && showFullDetailFor('a')){
+        const key = 'bandprobe_janine_'+iso;
+        const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+        if(!(ov && ov.geloescht)){
+          const s = ov?parseFloat(ov.von.split(':')[0]):20, e = ov?parseFloat(ov.bis.split(':')[0]):24;
+          const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','20:00','24:00','Bandprobe Janine','${dateLbl}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
+        }
+      }
+      if(dow===3 && !hol && showFullDetailFor('b')){
+        const key = 'volleyball_andi_'+iso;
+        const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+        if(!(ov && ov.geloescht)){
+          const s = ov?parseFloat(ov.von.split(':')[0]):19, e = ov?parseFloat(ov.bis.split(':')[0]):21;
+          const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openEventEdit('${key}','19:00','21:00','Volleyball Andi','${dateLbl}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
+        }
+      }
     }
-    if(BAND_DATES_MISCHA.includes(iso)){
-      daysHtml += `<div class="event" style="top:${(16.5-startHour)*px}px;height:${1*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;"><strong>Bandprobe M.</strong></div>`;
+    {
+      const key = 'bandprobe_mischa_'+iso;
+      const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+      if(BAND_DATES_MISCHA.includes(iso) && !(ov && ov.geloescht)){
+        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
+        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
+        const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
+        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','16:30','17:30','Bandprobe Mischa','${dateLbl}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
+      }
     }
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
 
   return `<div class="swipe-outer">
-    <button class="swipe-today-btn" onclick="scrollSwipeToToday()">📍 Heute</button>
+    <button class="swipe-today-btn" onclick="scrollSwipeToToday()" style="display:none;">📍 Heute</button>
     <div class="swipe-wrap" id="swipeWrap"><div class="swipe-row">${timeCol}${daysHtml}</div></div>
   </div>`;
 }
@@ -1403,7 +1579,7 @@ function scrollSwipeToToday(smooth){
   const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
   if(!wrap || !todayCol) return;
   const target = todayCol.offsetLeft - 6;
-  wrap.scrollTo({left: target, behavior: smooth===false ? 'auto' : 'smooth'});
+  wrap.scrollTo({left: target, top: 6*40, behavior: smooth===false ? 'auto' : 'smooth'});
 }
 
 
@@ -1415,16 +1591,33 @@ function renderPartnerStrip(){
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
+    html += `<div class="partner-day"><div class="dow">${dowLabels[i]}</div><div class="num">${d.getDate()}</div>`;
     if(hol){
-      html += `<div class="partner-day"><div class="dow">${dowLabels[i]}</div><div class="num">${d.getDate()}</div><div class="status-pill" style="background:var(--holiday-bg); color:var(--holiday-text);">frei</div></div>`;
-      continue;
+      html += `<div class="status-pill" style="background:var(--holiday-bg); color:var(--holiday-text);">frei</div>`;
+    } else {
+      // Kompakte Mini-Zeitleiste (0–24 Uhr auf 70px Höhe) mit denselben
+      // Farben wie überall sonst: blau=Andi, lila=Janine, grau=Schule.
+      const barSegs = buildColorBarSegments(d, null);
+      let barHtml = '<div class="partner-bar">';
+      barSegs.forEach(seg=>{
+        const top = (seg.start/24)*70, height = ((seg.end-seg.start)/24)*70;
+        barHtml += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${seg.color};"></div>`;
+      });
+      barHtml += '</div>';
+      html += barHtml;
+      // Halbe Tage wie im Desktop: pro Betreuungs-Segment eine eigene
+      // Pille (z.B. morgens "oben", abends "unten") – weiterhin ohne
+      // Namen oder genaue Uhrzeiten (Konzept 2.0).
+      const segs = getCustodySegments(d);
+      segs.forEach(seg=>{
+        const ort = (seg.who==='a') ? 'oben' : (seg.who==='b') ? 'unten' : 'unten';
+        html += `<div class="status-pill ${ort}">${ort}</div>`;
+      });
     }
-    const assign = getCareAssignment(d);
-    const ort = assign.ort;
-    html += `<div class="partner-day"><div class="dow">${dowLabels[i]}</div><div class="num">${d.getDate()}</div><div class="status-pill ${ort}">${ort}</div></div>`;
+    html += `</div>`;
   }
   html += '</div>';
-  html += '<div class="partner-note">Partner-Ansicht: nur „oben" / „unten" sichtbar — keine Uhrzeiten, keine Namen, keine Termindetails (siehe Konzept 2.0)</div>';
+  html += '<div class="partner-note">Partner-Ansicht: nur „oben" / „unten" pro Tagesabschnitt sichtbar — keine Uhrzeiten, keine Namen, keine Termindetails (siehe Konzept 2.0)</div>';
   return html;
 }
 
@@ -1443,11 +1636,21 @@ function render(){
     return;
   }
   let panelHtml;
+  const isHourGrid = (currentView==='woche' || currentView==='tag');
   if(currentView==='woche') panelHtml = renderWeek();
   else if(currentView==='monat') panelHtml = renderMonth();
   else if(currentView==='alle') panelHtml = renderAllColumns();
   else panelHtml = renderDay();
-  container.innerHTML = `<div class="cal-panel">${panelHtml}</div>`;
+  container.innerHTML = `<div class="cal-panel ${isHourGrid?'hour-scroll':''}">${panelHtml}</div>`;
+  if(isHourGrid) scrollHourGridTo6am();
+}
+
+/* Startansicht zeigt immer 6–20 Uhr, Rest per Scrollen erreichbar. */
+function scrollHourGridTo6am(){
+  const panel = document.querySelector('.cal-panel.hour-scroll');
+  if(!panel) return;
+  const px = currentView==='tag' ? 48 : 44; // Stundenhöhe: Tag=48px, Woche=44px
+  requestAnimationFrame(()=>{ panel.scrollTop = 6*px; });
 }
 
 /* ====================== RENDER: ALLE SPALTEN (Admin, Desktop) ======
@@ -1542,7 +1745,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v17 · 23.09.2026';
+const APP_VERSION = 'v19 · 23.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1562,7 +1765,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=17').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=19').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1690,6 +1893,7 @@ async function writeLoginLog(user, userData){
     await findPartnerInfo();
     startRequestListeners();
   }
+  if(userData.status === 'active') startEventOverrideListener();
 }
 
 /* Sucht die/den jeweils andere/n Elternteil (role=='elternteil', nicht
@@ -1748,6 +1952,58 @@ async function submitSlotChangeRequest(){
     btn.disabled = false; btn.textContent = 'Anfragen';
   }
 }
+
+/* ====================== EVENT-OVERRIDES (Bandprobe/Volleyball/Clubs/Hort verschieben) ======
+   Feste Termine sind im Code hinterlegt (Grundregel), können aber pro
+   einzelnem Datum überschrieben (verschoben) oder abgesagt werden.
+   window.eventOverrides ist ein einfaches key->{von,bis,geloescht}-
+   Objekt, live synchronisiert. */
+window.eventOverrides = {};
+let evOverrideUnsub = null;
+function startEventOverrideListener(){
+  if(evOverrideUnsub) return;
+  evOverrideUnsub = onSnapshot(collection(db,'event_overrides'), snap=>{
+    const map = {};
+    snap.forEach(d=> map[d.id] = d.data());
+    window.eventOverrides = map;
+    if(typeof render === 'function') render();
+  }, err=> console.error('Event-Overrides Fehler:', err));
+}
+window.getEventOverride = function(key){ return window.eventOverrides[key] || null; };
+
+window.openEventEdit = function(key, defaultVon, defaultBis, label, dateLbl){
+  const ov = window.getEventOverride(key);
+  document.getElementById('eventEditTitle').textContent = label;
+  document.getElementById('eventEditSub').textContent = dateLbl;
+  document.getElementById('eventEditVon').value = (ov && !ov.geloescht) ? ov.von : defaultVon;
+  document.getElementById('eventEditBis').value = (ov && !ov.geloescht) ? ov.bis : defaultBis;
+  document.getElementById('eventEditOverlay').dataset.key = key;
+  document.getElementById('eventEditOverlay').classList.add('show');
+};
+window.saveEventOverride = async function(){
+  const key = document.getElementById('eventEditOverlay').dataset.key;
+  const von = document.getElementById('eventEditVon').value;
+  const bis = document.getElementById('eventEditBis').value;
+  try{
+    await setDoc(doc(db,'event_overrides',key), {
+      von, bis, geloescht:false,
+      geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString()
+    });
+    if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
+    document.getElementById('eventEditOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler beim Speichern: '+e.message); }
+};
+window.cancelEventOverride = async function(){
+  const key = document.getElementById('eventEditOverlay').dataset.key;
+  if(!confirm('Diesen Termin wirklich absagen?')) return;
+  try{
+    await setDoc(doc(db,'event_overrides',key), {
+      geloescht:true, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString()
+    });
+    if(window.logEvent) window.logEvent('termin_abgesagt', {key});
+    document.getElementById('eventEditOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler beim Absagen: '+e.message); }
+};
 
 /* ====================== ANFRAGEN-LISTE (live) ====================== */
 window.__reqSent = [];

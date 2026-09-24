@@ -94,6 +94,14 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // --- event_overrides: verschobene/abgesagte Fixtermine (Bandprobe,
+    // Volleyball, Clubs, Hort) -------------------------------------
+    match /event_overrides/{key} {
+      allow read: if isSignedIn() && isActive();
+      allow write: if isSignedIn() && isActive() &&
+                     (myRole() == 'elternteil' || isAdmin());
+    }
+
     // --- alles andere: vorerst komplett gesperrt ------------------------
     match /{document=**} {
       allow read, write: if false;
