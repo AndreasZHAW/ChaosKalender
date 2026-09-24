@@ -72,9 +72,9 @@
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
-  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:65vh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:60vh; max-height:60dvh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   .swipe-row{display:flex;}
-  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
+  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line); transform:translateZ(0);}
   .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center;}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
@@ -90,7 +90,7 @@
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
-  .cal-panel.hour-scroll{max-height:65vh; overflow-y:auto;}
+  .cal-panel.hour-scroll{max-height:60vh; max-height:60dvh; overflow-y:auto;}
   .cal-panel.overview-zoom, .swipe-wrap.overview-zoom{zoom:0.55;}
   #overviewBtn.active{background:var(--ink); color:#fff;}
 
@@ -108,7 +108,7 @@
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
 
   /* WEEK */
-  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
+  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px; position:sticky; top:0; z-index:6; background:var(--panel); transform:translateZ(0);}
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
@@ -119,7 +119,7 @@
   .day-tags{display:flex; flex-wrap:wrap; gap:2px; justify-content:center;}
   .day-event-tag{display:inline-block; margin-left:3px; font-size:9px; color:var(--pending); cursor:default;}
   .week-body{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
-  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:5; background:var(--panel);}
+  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:5; background:var(--panel); transform:translateZ(0);}
   .time-col .slot-h{height:88px; text-align:right; padding-right:4px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-5px;}
   .day-col{border-left:1px solid var(--line); position:relative; cursor:pointer;}
   .hour-row{height:44px; border-top:1px solid var(--line);}
@@ -146,11 +146,11 @@
   .hol-label{font-size:8.5px; color:var(--holiday-text); font-weight:700;}
 
   /* DAY (Stundenraster, alle 24 Stunden) */
-  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line);}
+  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6; background:var(--panel); transform:translateZ(0);}
   .day-head-row.is-today-row{border:3px solid var(--pending); border-radius:10px 10px 0 0; background:var(--pending-bg);}
   .day-head-date{font-weight:700; font-size:14px; margin-bottom:4px; text-transform:capitalize;}
   .day-grid{display:flex;}
-  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:5; background:var(--panel);}
+  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:5; background:var(--panel); transform:translateZ(0);}
   .day-grid .time-col .slot-h{text-align:right; padding-right:6px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-6px;}
   .day-grid .day-col{flex:1; border-left:1px solid var(--line);}
   .day-grid .hour-row{border-top:1px solid var(--line);}
@@ -363,7 +363,7 @@
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
-    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Ganzen Tag (0-24 Uhr) kompakt anzeigen, wie Rauszoomen">🔍− Überblick</button>
+    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Ganzen Tag (0-24 Uhr) kompakt anzeigen, wie Rauszoomen">Delais</button>
     <button class="test-btn" id="overviewBtn" onclick="toggleOverview()">🔎 Übersicht</button>
   </div>
 
@@ -546,7 +546,18 @@ const BAND_DATES_MISCHA = [
   '2027-01-07','2027-01-21','2027-02-04'
 ];
 
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  // WICHTIG: NICHT d.toISOString() verwenden – das rechnet in UTC um.
+  // Die Schweiz liegt vor UTC (UTC+1/+2), daher würde Mitternacht lokal
+  // manchmal auf den Vortag in UTC fallen und das Datum überall im
+  // System um einen Tag verschieben (Feiertage, Bandprobe-Termine,
+  // Stunden-Klick usw.). Stattdessen direkt die lokalen Datumsteile
+  // verwenden.
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 function getHolidayName(d){ return HOLIDAYS_2026[isoDate(d)] || null; }
 function getSchoolHolidayName(d){
   const iso = isoDate(d);
@@ -602,6 +613,17 @@ const SCHOOL_SUBJECTS = {
     5:[[8.333,9.083,'Mathematik'],[9.083,9.833,'Deutsch'],[10.333,11.083,'NMG'],[11.083,11.833,'Medien & Info'],[14,14.75,'Bewegung & Sport'],[14.75,15.5,'Bewegung & Sport']]
   }
 };
+
+// WICHTIG: Diese Konstanten werden auch aus dem Firebase-Modul-Script
+// (eigener Scope, siehe openHourInspector/buildHourEntries) direkt
+// referenziert. "const" hängt sich NICHT automatisch an window, darum
+// hier explizit verfügbar machen – sonst schlägt der Stunden-Klick mit
+// einem stillen ReferenceError fehl.
+window.SCHOOL_TIMES = SCHOOL_TIMES;
+window.HORT_THU = HORT_THU;
+window.FRIDAY_CLUBS = FRIDAY_CLUBS;
+window.BAND_DATES_MISCHA = BAND_DATES_MISCHA;
+window.SCHOOL_SUBJECTS = SCHOOL_SUBJECTS;
 
 /* Wer betreut an welchem Tag wann? Liefert 1 Segment (normaler Tag)
    oder 2 Segmente (Übergabetag) mit Uhrzeit-Grenze. Basis für Kopf-
@@ -775,7 +797,12 @@ function setView(v){
   if(window.logEvent) window.logEvent('view_change', {neueAnsicht:v});
 }
 function viewAsPerson(who){
-  if(!isAdminUser) return;
+  // Die Kinder-Kalenderansicht (welche Fächer sie haben) ist für JEDES
+  // angemeldete Elternteil gedacht, nicht nur zum Admin-Testen. Die
+  // "Vorschau als Janine/Andi/Omami" bleibt dagegen admin-only, da das
+  // eine andere erwachsene Person imitiert.
+  const isKidView = (who==='janosch' || who==='mischa' || who===null);
+  if(!isKidView && !isAdminUser) return;
   currentPerson = who;
   document.querySelectorAll('.legend-item.viewas').forEach(el=>{
     el.classList.toggle('active-view', el.dataset.person===who);
@@ -1797,7 +1824,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v20 · 24.09.2026';
+const APP_VERSION = 'v22 · 24.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1817,7 +1844,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=20').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=22').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
