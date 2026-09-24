@@ -72,10 +72,10 @@
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
-  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:60vh; max-height:60dvh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   .swipe-row{display:flex;}
-  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line); transform:translateZ(0);}
-  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center;}
+  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
+  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:3; background:var(--panel);}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
   .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
@@ -90,8 +90,7 @@
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
-  .cal-panel.hour-scroll{max-height:60vh; max-height:60dvh; overflow-y:auto;}
-  .cal-panel.overview-zoom, .swipe-wrap.overview-zoom{zoom:0.55;}
+  .cal-panel.hour-scroll{max-height:82vh; overflow-y:auto;}
   #overviewBtn.active{background:var(--ink); color:#fff;}
 
   /* Partner-restricted view */
@@ -108,7 +107,7 @@
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
 
   /* WEEK */
-  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px; position:sticky; top:0; z-index:6; background:var(--panel); transform:translateZ(0);}
+  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px; position:sticky; top:0; z-index:6; background:var(--panel);}
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
@@ -119,7 +118,7 @@
   .day-tags{display:flex; flex-wrap:wrap; gap:2px; justify-content:center;}
   .day-event-tag{display:inline-block; margin-left:3px; font-size:9px; color:var(--pending); cursor:default;}
   .week-body{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
-  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:5; background:var(--panel); transform:translateZ(0);}
+  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:5; background:var(--panel);}
   .time-col .slot-h{height:88px; text-align:right; padding-right:4px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-5px;}
   .day-col{border-left:1px solid var(--line); position:relative; cursor:pointer;}
   .hour-row{height:44px; border-top:1px solid var(--line);}
@@ -146,11 +145,11 @@
   .hol-label{font-size:8.5px; color:var(--holiday-text); font-weight:700;}
 
   /* DAY (Stundenraster, alle 24 Stunden) */
-  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6; background:var(--panel); transform:translateZ(0);}
+  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6; background:var(--panel);}
   .day-head-row.is-today-row{border:3px solid var(--pending); border-radius:10px 10px 0 0; background:var(--pending-bg);}
   .day-head-date{font-weight:700; font-size:14px; margin-bottom:4px; text-transform:capitalize;}
   .day-grid{display:flex;}
-  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:5; background:var(--panel); transform:translateZ(0);}
+  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:5; background:var(--panel);}
   .day-grid .time-col .slot-h{text-align:right; padding-right:6px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-6px;}
   .day-grid .day-col{flex:1; border-left:1px solid var(--line);}
   .day-grid .hour-row{border-top:1px solid var(--line);}
@@ -256,6 +255,10 @@
   .req-counter-form.show{display:block;}
   .req-counter-form .time-row{margin-bottom:8px;}
   .req-counter-form textarea{width:100%; border:1px solid var(--line); border-radius:6px; padding:7px 9px; font-family:inherit; font-size:12px; margin-bottom:8px; resize:vertical; min-height:44px;}
+  @media (max-width: 700px){
+    .swipe-wrap{max-height:58vh; max-height:58dvh;}
+    .cal-panel.hour-scroll{max-height:58vh; max-height:58dvh;}
+  }
 </style>
 </head>
 <body>
@@ -363,8 +366,7 @@
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
-    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Ganzen Tag (0-24 Uhr) kompakt anzeigen, wie Rauszoomen">Delais</button>
-    <button class="test-btn" id="overviewBtn" onclick="toggleOverview()">🔎 Übersicht</button>
+    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Ganzen Tag (0-24 Uhr) anzeigen, angepasst an die verfügbare Höhe">Delais</button>
   </div>
 
   <details class="legend-details">
@@ -745,7 +747,17 @@ let currentView = effectiveWidth < 700 ? 'swipe' : 'woche';
 let currentRole = 'eltern';
 var currentPerson = null; // 'a' (Janine), 'b' (Andi) oder null (Admin/ungefiltert) – var statt let, damit das Firebase-Modul-Script (separater Scope) via window.currentPerson darauf zugreifen kann
 var isAdminUser = true; // Default true für die Testdatei; echter Login setzt dies korrekt
-var compactMode = false; // "Rauszoomen": zeigt 0-24 Uhr kompakt gestaucht statt normal groß
+var compactMode = false; // "Delais": zeigt 0-24 Uhr, Zeilenhöhe passt sich der verfügbaren Höhe an
+
+/* Berechnet die Stundenhöhe für den "Delais"-Modus dynamisch aus der
+   tatsächlich verfügbaren Bildschirmhöhe, statt einen festen (oft zu
+   kleinen, mit ungenutztem Platz darunter) Wert zu erzwingen. */
+function getCompactPxH(normalPx){
+  if(!compactMode) return normalPx;
+  const reserved = 300; // grobe Reserve für Kopf/Knöpfe/Ränder oberhalb des Kalenders
+  const available = Math.max(280, window.innerHeight - reserved);
+  return Math.max(12, Math.floor(available / 24));
+}
 
 function toggleCompactView(){
   compactMode = !compactMode;
@@ -1028,7 +1040,7 @@ function renderWeek(){
 
   const start = startOfWeek(currentDate);
   const startHour=0, endHour=24;
-  const PXH = compactMode ? 18 : 44; // Pixel pro Stunde – Kompakt-Überblick oder normal
+  const PXH = getCompactPxH(44);
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
   let head = '<div class="week-head"><div></div>';
@@ -1349,7 +1361,7 @@ function renderDay(){
   const dowIdx1to7 = (dow===0)?7:dow;
   const hol = getHolidayName(d) || getSchoolHolidayName(d);
   const schoolFree = !isSchoolDay(d);
-  const startHour=0, endHour=24, px=compactMode?18:48;
+  const startHour=0, endHour=24, px=getCompactPxH(48);
 
   // Kopfzeile: Datum + Feiertag-Tag + Betreuungs-Badges (immer sichtbar)
   const isToday = iso === isoDate(new Date());
@@ -1478,7 +1490,7 @@ function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh
 function renderSwipeView(){
   const today = new Date(); today.setHours(0,0,0,0);
   const startOffset = -7, endOffset = 120;
-  const px = compactMode ? 16 : 40, startHour = 0, endHour = 24;
+  const px = getCompactPxH(40), startHour = 0, endHour = 24;
   const dowLabels = ['So','Mo','Di','Mi','Do','Fr','Sa'];
 
   let timeCol = '<div class="swipe-timecol"><div class="swipe-head"></div><div class="swipe-timebody">';
@@ -1705,22 +1717,6 @@ function render(){
   else panelHtml = renderDay();
   container.innerHTML = `<div class="cal-panel ${isHourGrid?'hour-scroll':''}">${panelHtml}</div>`;
   if(isHourGrid) scrollHourGridTo6am();
-  applyOverviewZoom();
-}
-
-/* "Übersicht"-Knopf: zoomt NUR den Kalenderbereich raus (CSS zoom),
-   Kopfzeile/Knöpfe bleiben unverändert. Für den Überblick über mehr
-   Stunden/Tage gleichzeitig, unabhängig vom Browser-Zoom. */
-let overviewMode = false;
-function toggleOverview(){
-  overviewMode = !overviewMode;
-  document.getElementById('overviewBtn').classList.toggle('active', overviewMode);
-  applyOverviewZoom();
-}
-function applyOverviewZoom(){
-  document.querySelectorAll('.cal-panel, .swipe-wrap').forEach(el=>{
-    el.classList.toggle('overview-zoom', overviewMode);
-  });
 }
 
 /* Startansicht zeigt immer 6–20 Uhr, Rest per Scrollen erreichbar. */
@@ -1824,7 +1820,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v22 · 24.09.2026';
+const APP_VERSION = 'v23 · 24.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1844,7 +1840,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=22').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=23').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
