@@ -359,7 +359,7 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
+    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="loggedInAs" style="font-weight:600; font-size:10.5px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()">⚙</div>
@@ -843,6 +843,9 @@ function setAdminUIState(isAdmin){
   if(btn) btn.style.display = isAdmin ? 'inline-block' : 'none';
   const legend = document.getElementById('legendRow');
   if(legend) legend.classList.toggle('admin-mode', isAdmin);
+  // Zahnrad (Admin-Bereich) nur für echte Admins sichtbar
+  const gearEl = document.getElementById('calGearBtn');
+  if(gearEl) gearEl.style.display = isAdmin ? 'flex' : 'none';
 }
 
 function startOfWeek(d){
@@ -1170,7 +1173,7 @@ function renderWeek(){
         const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
         const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${defS}, '${key}')">${ov?'✎':''}</div>`;
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${ov?'✎':''}</div>`;
       }
     });
     if(dow===4){
@@ -1185,7 +1188,7 @@ function renderWeek(){
           const top = (s-startHour)*PXH, height=(e-s)*PXH-3;
           const leftPct = idx===0 ? '1px' : '50%';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${defS}, '${key}')">Hort${ov?' ✎':''}</div>`;
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${ov?' ✎':''}</div>`;
         }
       });
     }
@@ -1529,7 +1532,7 @@ function renderSwipeView(){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     const isToday = off===0;
 
-    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}">`;
+    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}" onclick="handleDayColClick(event,'${iso}',${startHour},${px})">`;
     daysHtml += `<div class="swipe-head" onclick="jumpToIso('${iso}'); setView('tag');"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
     if(hol) daysHtml += `<div class="swipe-holtag">${hol.length>12?hol.slice(0,11)+'…':hol}</div>`;
     daysHtml += `</div>`;
@@ -1833,7 +1836,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v25 · 25.09.2026';
+const APP_VERSION = 'v26 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1853,7 +1856,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=25').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=26').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2171,7 +2174,7 @@ function buildHourEntries(iso, hourDec){
 
 window.handleDayColClick = function(event, iso, startHour, px){
   try{
-    if(event.target.closest('.event') || event.target.closest('.school-block')) return; // eigener Klick-Handler übernimmt
+    if(event.target.closest('.event') || event.target.closest('.school-block') || event.target.closest('.swipe-head') || event.target.closest('.day-head-row')) return; // eigener Klick-Handler übernimmt
     const rect = event.currentTarget.getBoundingClientRect();
     const y = event.clientY - rect.top;
     let hourDec = startHour + y/px;
@@ -2847,6 +2850,11 @@ onAuthStateChanged(auth, async (user) => {
     window.__chaosLoggedThisSession = true;
     writeLoginLog(user, data).catch(()=>{}); // Logging darf den Login nie blockieren
   }
+
+  // Zeigt an, als wer man eingeloggt ist – neben der Versionsnummer,
+  // egal in welchem Bereich (Kalender oder Admin) man sich befindet.
+  const loggedInEl = document.getElementById('loggedInAs');
+  if(loggedInEl) loggedInEl.textContent = '· ' + (data.username || '?');
 
   if(data.status === 'pending'){
     showScreen('pendingScreen');
