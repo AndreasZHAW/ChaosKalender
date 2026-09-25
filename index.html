@@ -212,12 +212,14 @@
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
   #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   #custodyRulesTable{overflow-x:auto; -webkit-overflow-scrolling:touch;}
-  .cr-table{width:100%; border-collapse:collapse; font-size:12.5px;}
-  .cr-table th{text-align:left; padding:6px 6px; border-bottom:2px solid var(--line); color:var(--ink-soft); font-size:11px;}
-  .cr-table td{padding:5px 6px; border-bottom:1px solid var(--line); white-space:nowrap;}
-  .cr-table select, .cr-table input[type=time]{border:1px solid var(--line); border-radius:6px; padding:5px 6px; font-family:inherit; font-size:12px;}
-  .cr-table .cr-del{border:none; background:var(--holiday-bg); color:var(--holiday-text); border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600;}
-  .cr-table .cr-save{border:none; background:var(--a); color:#fff; border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600;}
+  .cr-rows{display:flex; flex-direction:column; gap:10px;}
+  .cr-row{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--panel);}
+  .cr-sentence{font-size:13.5px; margin-bottom:8px;}
+  .cr-name{font-weight:700;}
+  .cr-edit{display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:11.5px; color:var(--ink-soft);}
+  .cr-edit select, .cr-edit input[type=time]{border:1px solid var(--line); border-radius:6px; padding:5px 6px; font-family:inherit; font-size:12px;}
+  .cr-del{border:none; background:var(--holiday-bg); color:var(--holiday-text); border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600; font-size:11.5px;}
+  .cr-save{border:none; background:var(--a); color:#fff; border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600; font-size:11.5px;}
   .cr-coverage-warn{font-size:11px; color:var(--holiday-text); margin-top:8px;}
   .desktop-site-warning{background:#FBEEE9; border:1px solid var(--holiday-text); border-radius:10px; padding:12px 14px; margin-bottom:12px; font-size:12.5px; color:#7A3B2A; line-height:1.5;}
   .desktop-site-warning strong{display:block; font-size:13.5px; margin-bottom:4px;}
@@ -362,7 +364,7 @@
     <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="loggedInAs" style="font-weight:600; font-size:10.5px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
-      <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()">⚙</div>
+      <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()" style="display:none;">⚙</div>
       <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
     </div>
   </header>
@@ -1669,6 +1671,15 @@ function scrollSwipeToToday(smooth){
   const target = todayCol.offsetLeft - 6;
   const vTop = compactMode ? 0 : 6*40;
   wrap.scrollTo({left: target, top: vTop, behavior: smooth===false ? 'auto' : 'smooth'});
+  // "Weck-Trick": manche Android-Browser aktivieren position:sticky erst
+  // nach einer ECHTEN Scroll-Bewegung, nicht nach einer programmatisch
+  // gesetzten Position. Eine winzige Hin-und-her-Bewegung erzwingt die
+  // Neuberechnung, damit die Zeitspalte von Anfang an sichtbar ist.
+  setTimeout(()=>{
+    const before = wrap.scrollLeft;
+    wrap.scrollLeft = before + 1;
+    requestAnimationFrame(()=>{ wrap.scrollLeft = before; });
+  }, smooth===false ? 30 : 350);
 }
 
 
@@ -1742,6 +1753,13 @@ function scrollHourGridTo6am(){
   if(!panel) return;
   const px = currentView==='tag' ? 48 : 44; // Stundenhöhe: Tag=48px, Woche=44px
   requestAnimationFrame(()=>{ panel.scrollTop = 6*px; });
+  // Gleicher Weck-Trick wie bei Swipe (siehe scrollSwipeToToday) für die
+  // horizontal sticky Zeitspalte in der Wochenansicht.
+  setTimeout(()=>{
+    const before = panel.scrollLeft;
+    panel.scrollLeft = before + 1;
+    requestAnimationFrame(()=>{ panel.scrollLeft = before; });
+  }, 30);
 }
 
 /* ====================== RENDER: ALLE SPALTEN (Admin, Desktop) ======
@@ -1836,7 +1854,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v26 · 25.09.2026';
+const APP_VERSION = 'v27 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1856,7 +1874,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=26').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=27').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2458,21 +2476,25 @@ function renderCustodyRulesTable(){
   if(!el) return;
   if(!window.custodyRules || !window.custodyRules.length){
     seedCustodyRulesIfEmpty();
-    el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster …</div>';
+    el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster … <button class="cr-save" style="margin-left:8px;" onclick="custodySeedTried=false; seedCustodyRulesIfEmpty();">🔄 Erneut versuchen</button></div>';
     return;
   }
-  let html = '<table class="cr-table"><tr><th>Von Tag</th><th>Uhrzeit</th><th>Bis Tag</th><th>Uhrzeit</th><th>Wer</th><th></th></tr>';
+  const nameOf = w => w==='a' ? 'Janine' : 'Andi';
+  const colorOf = w => w==='a' ? 'var(--a)' : 'var(--b)';
+  let html = '<div class="cr-rows">';
   window.custodyRules.forEach(r=>{
-    html += `<tr>
-      <td>${daySelect('vt_'+r.id, r.vonTag)}</td>
-      <td><input type="time" id="vz_${r.id}" value="${r.vonZeit}"></td>
-      <td>${daySelect('bt_'+r.id, r.bisTag)}</td>
-      <td><input type="time" id="bz_${r.id}" value="${r.bisZeit}"></td>
-      <td>${whoSelect('w_'+r.id, r.wer)}</td>
-      <td><button class="cr-save" onclick="saveCustodyRule('${r.id}')">Speichern</button> <button class="cr-del" onclick="deleteCustodyRule('${r.id}')">✕</button></td>
-    </tr>`;
+    html += `<div class="cr-row">
+      <div class="cr-sentence"><span class="cr-name" style="color:${colorOf(r.wer)};">● ${nameOf(r.wer)}</span> hat die Kinder von <strong>${DOW_NAMES[r.vonTag]} ${r.vonZeit}</strong> bis <strong>${DOW_NAMES[r.bisTag]} ${r.bisZeit}</strong> Uhr.</div>
+      <div class="cr-edit">
+        <span>Von:</span> ${daySelect('vt_'+r.id, r.vonTag)} <input type="time" id="vz_${r.id}" value="${r.vonZeit}">
+        <span>Bis:</span> ${daySelect('bt_'+r.id, r.bisTag)} <input type="time" id="bz_${r.id}" value="${r.bisZeit}">
+        <span>Wer:</span> ${whoSelect('w_'+r.id, r.wer)}
+        <button class="cr-save" onclick="saveCustodyRule('${r.id}')">Speichern</button>
+        <button class="cr-del" onclick="deleteCustodyRule('${r.id}')">✕ Löschen</button>
+      </div>
+    </div>`;
   });
-  html += '</table>';
+  html += '</div>';
   el.innerHTML = html;
 
   // Grobe Lückenprüfung: Summe aller Regel-Dauern sollte 10080 Minuten
