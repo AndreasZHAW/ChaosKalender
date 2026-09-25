@@ -327,6 +327,11 @@
       <div class="muted">Rolle zuweisen und freischalten, oder ablehnen.</div>
       <div id="pendingList"><div class="empty-note">Lade …</div></div>
     </div>
+    <div class="admin-card">
+      <h3>Nutzerverwaltung</h3>
+      <div class="muted">Alle freigeschalteten Accounts. Löschen entfernt den Zugriff auf ChaosKalender (Profil + Rolle) – der reine Login-Eintrag in Firebase Authentication bleibt technisch bestehen, ist aber ohne Profil nicht mehr nutzbar.</div>
+      <div id="userList"><div class="empty-note">Lade …</div></div>
+    </div>
   </div>
 
   <div id="adminQr" style="display:none;">
@@ -683,11 +688,14 @@ function getCustodySegmentsFromRules(d, rules){
 
 function getCustodySegmentsHardcoded(d){
   const dow = d.getDay();
-  if(dow>=1 && dow<=3) return [{who:'a'}];
-  if(dow===4) return [{who:'a', to:17}, {who:'b', from:17}];
-  if(dow===5) return [{who:'a', to:18}, {who:'b', from:18}];
-  if(dow===6) return [{who:'b', to:10}, {who:'a', from:10}];
-  return [{who:'a', to:16}, {who:'b', from:16}]; // Sonntag
+  // Echtes Muster aus dem Konzept: Andi hat Do 17-Fr 08, Fr 18-Sa 10,
+  // So 16-Mo 08. Janine alle anderen Zeiten.
+  if(dow===1) return [{who:'b', to:8}, {who:'a', from:8}]; // Montag: Andi bis 8, dann Janine
+  if(dow>=2 && dow<=3) return [{who:'a'}]; // Di, Mi: ganztags Janine
+  if(dow===4) return [{who:'a', to:17}, {who:'b', from:17}]; // Do: Janine bis 17, dann Andi
+  if(dow===5) return [{who:'b', to:8}, {who:'a', from:8, to:18}, {who:'b', from:18}]; // Fr: Andi bis 8, Janine 8-18, Andi ab 18
+  if(dow===6) return [{who:'b', to:10}, {who:'a', from:10}]; // Sa: Andi bis 10, dann Janine
+  return [{who:'a', to:16}, {who:'b', from:16}]; // So: Janine bis 16, dann Andi
 }
 
 function getCustodySegments(d){
@@ -1854,7 +1862,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v27 · 25.09.2026';
+const APP_VERSION = 'v28 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1874,7 +1882,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=27').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=28').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2452,12 +2460,12 @@ function startCustodyRulesListener(){
    Muster vorbefüllt, damit nichts "verschwindet". */
 const DOW_NAMES = ['','Mo','Di','Mi','Do','Fr','Sa','So'];
 const DEFAULT_CUSTODY_RULES = [
-  {vonTag:1, vonZeit:'00:00', bisTag:4, bisZeit:'17:00', wer:'a'},
-  {vonTag:4, vonZeit:'17:00', bisTag:5, bisZeit:'00:00', wer:'b'},
-  {vonTag:5, vonZeit:'00:00', bisTag:5, bisZeit:'18:00', wer:'a'},
+  {vonTag:1, vonZeit:'08:00', bisTag:4, bisZeit:'17:00', wer:'a'},
+  {vonTag:4, vonZeit:'17:00', bisTag:5, bisZeit:'08:00', wer:'b'},
+  {vonTag:5, vonZeit:'08:00', bisTag:5, bisZeit:'18:00', wer:'a'},
   {vonTag:5, vonZeit:'18:00', bisTag:6, bisZeit:'10:00', wer:'b'},
   {vonTag:6, vonZeit:'10:00', bisTag:7, bisZeit:'16:00', wer:'a'},
-  {vonTag:7, vonZeit:'16:00', bisTag:1, bisZeit:'00:00', wer:'b'},
+  {vonTag:7, vonZeit:'16:00', bisTag:1, bisZeit:'08:00', wer:'b'},
 ];
 let custodySeedTried = false;
 async function seedCustodyRulesIfEmpty(){
@@ -2837,6 +2845,44 @@ function startPendingListener(){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+let userListUnsub = null;
+function startUserListListener(){
+  if(userListUnsub) return;
+  const q = query(collection(db,'users'), where('status','==','active'));
+  userListUnsub = onSnapshot(q, (snap)=>{
+    const list = document.getElementById('userList');
+    if(!list) return;
+    if(snap.empty){
+      list.innerHTML = '<div class="empty-note">Noch keine freigeschalteten Nutzer.</div>';
+      return;
+    }
+    const roleLabel = {admin:'Admin', elternteil:'Elternteil', partner:'Partner', omami:'Omami', kind:'Kind'};
+    let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Name</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Rolle</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
+    snap.forEach(docSnap=>{
+      const d = docSnap.data();
+      const uid = docSnap.id;
+      const isMe = uid === (auth.currentUser && auth.currentUser.uid);
+      html += `<tr>
+        <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}</td>
+        <td style="padding:6px; border-bottom:1px solid var(--line);">${roleLabel[d.role]||d.role||'?'}</td>
+        <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;">${isMe?'':`<button class="cr-del" onclick="deleteUserAccount('${uid}','${escapeHtml(d.username||'?')}')">✕ Löschen</button>`}</td>
+      </tr>`;
+    });
+    html += '</table>';
+    list.innerHTML = html;
+  }, (err)=>{
+    document.getElementById('userList').innerHTML =
+      `<div class="empty-note" style="color:var(--holiday-text);">⚠️ Fehler beim Laden: ${escapeHtml(err.message||String(err))}</div>`;
+  });
+}
+window.deleteUserAccount = async function(uid, username){
+  if(!confirm(`"${username}" wirklich löschen? Diese Person verliert den Zugriff auf ChaosKalender und müsste sich neu registrieren, falls sie zurückkehren soll.`)) return;
+  try{
+    await deleteDoc(doc(db,'users',uid));
+    if(window.logEvent) window.logEvent('nutzer_geloescht', {geloeschtUid:uid, username});
+  } catch(e){ alert('Fehler beim Löschen: '+e.message); }
+};
+
 window.approveUser = async function(uid){
   const role = document.getElementById('role-'+uid).value;
   await updateDoc(doc(db,'users',uid), { status:'active', role: role });
@@ -2885,6 +2931,7 @@ onAuthStateChanged(auth, async (user) => {
   if(data.role === 'admin'){
     showScreen('adminScreen');
     startPendingListener();
+    startUserListListener();
     return;
   }
   // Bekannte, aktive Rolle -> direkt in den Kalender
