@@ -248,6 +248,7 @@
   .req-status.akzeptiert{background:var(--a-bg); color:var(--a);}
   .req-status.abgelehnt{background:#F0EFEA; color:var(--ink-soft);}
   .req-status.gegenvorschlag{background:var(--omami-bg); color:var(--omami);}
+  .req-status.schwebend{background:var(--pending-bg); color:#8a5a1d;}
   .req-times{font-size:12px; color:var(--ink-soft); margin-bottom:4px;}
   .req-reason{font-size:12px; margin-bottom:8px;}
   .req-meta{font-size:10.5px; color:var(--ink-soft); margin-bottom:8px;}
@@ -320,6 +321,7 @@
     <button data-admintab="qr" onclick="switchAdminTab('qr')">QR-Code</button>
     <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
     <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
+    <button data-admintab="events" onclick="switchAdminTab('events')">🗓️ Alle Termine</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
 
@@ -359,6 +361,14 @@
       <div class="muted">Das wiederkehrende Wochen-Grundmuster (die farbige Linie im Kalender). Jede Regel gilt "von Tag+Uhrzeit bis Tag+Uhrzeit", z.B. "Mo 00:00 bis Do 17:00 → Janine". Die Zeilen müssen lückenlos die ganze Woche abdecken.</div>
       <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
       <button class="btn" style="margin-top:12px; width:auto; padding:9px 16px;" onclick="addCustodyRuleRow()">+ Neue Regel</button>
+    </div>
+  </div>
+
+  <div id="adminEvents" style="display:none;">
+    <div class="admin-card">
+      <h3>Alle eigenen Termine</h3>
+      <div class="muted">Übersicht über alle frei eingetragenen Termine, unabhängig vom Datum – zum Aufräumen von Test- oder Fehleinträgen, die im Kalender selbst schwer zu treffen sind.</div>
+      <div id="allEventsList"><div class="empty-note">Lade …</div></div>
     </div>
   </div>
 </div>
@@ -1308,8 +1318,9 @@ function renderWeek(){
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
-      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;left:2px;right:2px;font-size:9.5px;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;left:2px;right:2px;font-size:9.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
     });
 
     body += `</div>`;
@@ -1569,8 +1580,9 @@ function renderDay(){
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*px, height=(e-s)*px-2;
-      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
-      body += `<div class="event" style="top:${top}px;height:${height}px;left:6px;right:6px;z-index:3;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
+      body += `<div class="event" style="top:${top}px;height:${height}px;left:6px;right:6px;z-index:3;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
     });
   }
   SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
@@ -1724,8 +1736,9 @@ function renderSwipeView(){
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
-      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
-      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
+      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
     });
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -1932,7 +1945,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v30 · 25.09.2026';
+const APP_VERSION = 'v31 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1952,7 +1965,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=30').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=31').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2076,20 +2089,21 @@ async function writeLoginLog(user, userData){
   // adressieren).
   window.myUid = user.uid;
   window.myName = userData.username || '?';
-  if(userData.role === 'elternteil'){
+  if(userData.role === 'janine' || userData.role === 'andi'){
     await findPartnerInfo();
     startRequestListeners();
   }
-  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); }
+  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startAllActiveUsersListener(); }
 }
 
-/* Sucht die/den jeweils andere/n Elternteil (role=='elternteil', nicht
-   ich selbst) und merkt UID+Name für den Änderungs-Workflow. */
+/* Sucht die/den jeweils andere/n Elternteil (role=='janine' oder 'andi',
+   nicht ich selbst) und merkt UID+Name für den Änderungs-Workflow. */
 async function findPartnerInfo(){
   try{
-    // Nur EIN Firestore-Filter (vermeidet einen zusätzlich nötigen
-    // Composite-Index) – der Status-Check läuft clientseitig.
-    const q = query(collection(db,'users'), where('role','==','elternteil'));
+    // Sucht die jeweils andere Elternteil-Person (Janine bzw. Andi) direkt
+    // über die konkrete Rolle – robuster als der alte generische
+    // "elternteil" + Namensabgleich-Ansatz.
+    const q = query(collection(db,'users'), where('role','in',['janine','andi']));
     const snap = await getDocs(q);
     snap.forEach(docSnap=>{
       const d = docSnap.data();
@@ -2331,6 +2345,13 @@ function renderNewEntryForm(){
   const defaultMode = iAmCustodian ? 'info' : 'anfrage';
   const vonStr = fmtH(hiState.hourDec);
   const bisStr = fmtH(Math.min(24, hiState.hourDec+1));
+  const others = (window.allActiveUsers||[]).filter(u=>u.uid !== window.myUid);
+  const confirmersHtml = others.map(u=>
+    `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
+      <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+      ${escapeHtml(u.username||'?')}
+    </label>`
+  ).join('') || '<div style="font-size:11.5px; color:var(--ink-soft);">Keine anderen aktiven Personen gefunden.</div>';
   return `
     <div class="auth-field" style="margin-bottom:12px;"><label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Titel</label>
       <input type="text" id="hiNewTitel" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
@@ -2343,6 +2364,10 @@ function renderNewEntryForm(){
       <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
     </div>
     <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+    <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen? (Mehrfachauswahl möglich – erst wenn ALLE bestätigt haben, wird der Termin fest)</div>
+      ${confirmersHtml}
+    </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
       <button class="btn" id="hiNewSaveBtn" onclick="hiSaveNewEntry()">Speichern</button>
@@ -2350,6 +2375,8 @@ function renderNewEntryForm(){
 }
 window.hiSetMode = function(m){
   document.querySelectorAll('#hiModeToggle button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  const box = document.getElementById('hiConfirmersBox');
+  if(box) box.style.display = m==='anfrage' ? 'block' : 'none';
 };
 window.hiSaveNewEntry = async function(){
   const titel = document.getElementById('hiNewTitel').value.trim();
@@ -2366,10 +2393,13 @@ window.hiSaveNewEntry = async function(){
       erstelltVonUid: window.myUid||'?', erstelltVonName: window.myName||'?',
       erstelltAm: new Date().toISOString()
     };
-    if(mode==='anfrage' && window.partnerUid){
-      docData.status = 'anfrage_offen';
-      docData.betroffenUid = window.partnerUid;
-      docData.betroffenName = window.partnerName;
+    if(mode==='anfrage'){
+      const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
+      if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); btn.disabled=false; btn.textContent='Speichern'; return; }
+      docData.status = 'schwebend';
+      docData.bestaetigerUids = checked.map(c=>c.value);
+      docData.bestaetigerNamen = checked.map(c=>c.dataset.name);
+      docData.bestaetigtVon = [];
     } else {
       docData.status = 'info';
     }
@@ -2440,11 +2470,24 @@ function renderExistingEntryForm(entry){
   }
   const ev = entry.data;
   const isMine = ev.erstelltVonUid === window.myUid;
-  const isForMe = ev.betroffenUid === window.myUid;
-  const statusLabel = ev.status==='info' ? 'Info (keine Freigabe nötig)' : ev.status==='akzeptiert' ? 'Akzeptiert' : ev.status==='anfrage_offen' ? ('Wartet auf ' + escapeHtml(ev.betroffenName||'')) : 'Abgelehnt';
+  const bestaetiger = ev.bestaetigerUids || [];
+  const bestaetigt = ev.bestaetigtVon || [];
+  const mussIchBestaetigen = ev.status==='schwebend' && bestaetiger.includes(window.myUid) && !bestaetigt.includes(window.myUid);
+  const darfLoeschen = isMine || bestaetiger.includes(window.myUid);
+  let statusLabel;
+  if(ev.status==='info') statusLabel = 'Info (keine Freigabe nötig)';
+  else if(ev.status==='bestaetigt') statusLabel = 'Bestätigt – fest eingetragen';
+  else if(ev.status==='abgelehnt') statusLabel = 'Abgelehnt';
+  else {
+    const namen = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
+      const uid = bestaetiger[idx];
+      return bestaetigt.includes(uid) ? `${escapeHtml(String(n))} ✓` : `${escapeHtml(String(n))} …`;
+    });
+    statusLabel = 'Wartet auf Bestätigung: ' + namen.join(', ');
+  }
   let actionsHtml = `<button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>`;
-  if(ev.status==='anfrage_offen' && isForMe){
-    actionsHtml = `<button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">Akzeptieren</button>`;
+  if(mussIchBestaetigen){
+    actionsHtml = `<button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">Bestätigen</button>`;
   }
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
@@ -2454,7 +2497,7 @@ function renderExistingEntryForm(entry){
     </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button>
-      ${(isMine||isForMe)?`<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`:''}
+      ${darfLoeschen?`<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`:''}
       ${actionsHtml}
     </div>`;
 }
@@ -2482,8 +2525,18 @@ window.hiSaveCustomEdit = async function(id){
   catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiAcceptCustom = async function(id){
-  try{ await updateDoc(doc(db,'custom_events',id), {status:'akzeptiert'}); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
-  catch(e){ alert('Fehler: '+e.message); }
+  try{
+    const ev = (window.customEvents||[]).find(e=>e.id===id);
+    if(!ev){ alert('Termin nicht gefunden.'); return; }
+    const already = ev.bestaetigtVon || [];
+    if(!already.includes(window.myUid)) already.push(window.myUid);
+    const alleDa = (ev.bestaetigerUids||[]).every(uid => already.includes(uid));
+    await updateDoc(doc(db,'custom_events',id), {
+      bestaetigtVon: already,
+      status: alleDa ? 'bestaetigt' : 'schwebend'
+    });
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiRejectCustom = async function(id){
   try{ await updateDoc(doc(db,'custom_events',id), {status:'abgelehnt'}); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
@@ -2498,13 +2551,59 @@ window.hiDeleteCustom = async function(id){
 /* Custom Events live laden (für alle aktiven Rollen) */
 window.customEvents = [];
 let customEventsUnsub = null;
+/* Liste aller aktiven Personen (für JEDE angemeldete Person, nicht nur
+   Admin) – wird gebraucht, um beim Anlegen eines Termins auszuwählen,
+   wer ihn bestätigen muss. */
+window.allActiveUsers = [];
+let allActiveUsersUnsub = null;
+function startAllActiveUsersListener(){
+  if(allActiveUsersUnsub) return;
+  const q = query(collection(db,'users'), where('status','==','active'));
+  allActiveUsersUnsub = onSnapshot(q, snap=>{
+    window.allActiveUsers = snap.docs.map(d=>({uid:d.id, username:d.data().username, role:d.data().role}));
+  }, err=> console.error('Nutzerliste Fehler:', err));
+}
+
 function startCustomEventsListener(){
   if(customEventsUnsub) return;
   customEventsUnsub = onSnapshot(collection(db,'custom_events'), snap=>{
     window.customEvents = snap.docs.map(d=>({id:d.id, ...d.data()}));
     if(typeof render === 'function') render();
+    if(typeof renderAllEventsList === 'function') renderAllEventsList();
+    if(typeof renderRequestsUI === 'function') renderRequestsUI();
   }, err=> console.error('Custom-Events Fehler:', err));
 }
+
+/* Admin-Übersicht: ALLE frei eingetragenen Termine, unabhängig vom
+   Datum – zum Aufräumen von Termin-Leichen, die im Kalender selbst
+   nicht zuverlässig zu treffen sind (z.B. Tippfehler-Einträge). */
+function renderAllEventsList(){
+  const el = document.getElementById('allEventsList');
+  if(!el) return;
+  const evs = window.customEvents || [];
+  if(!evs.length){
+    el.innerHTML = '<div class="empty-note">Keine eigenen Termine vorhanden.</div>';
+    return;
+  }
+  const sorted = [...evs].sort((a,b)=> (a.datum||'') < (b.datum||'') ? -1 : 1);
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Datum</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Titel</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Zeit</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Status</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Von</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
+  sorted.forEach(ev=>{
+    html += `<tr>
+      <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.datum||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.titel||'(ohne Titel)')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.von||'?')}–${escapeHtml(ev.bis||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.status||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.erstelltVonName||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent('${ev.id}')">✕ Löschen</button></td>
+    </tr>`;
+  });
+  html += '</table>';
+  el.innerHTML = html;
+}
+window.deleteAnyCustomEvent = async function(id){
+  if(!confirm('Diesen Termin wirklich löschen?')) return;
+  try{ await deleteDoc(doc(db,'custom_events',id)); } catch(e){ alert('Fehler: '+e.message); }
+};
 
 /* Standard-Betreuungsregeln (Admin-editierbare Wochen-Vorlage) – für
    ALLE aktiven Personen laden, damit der Kalender überall korrekt
@@ -2654,8 +2753,13 @@ function renderRequestsUI(){
   [...window.__reqSent, ...window.__reqReceived].forEach(r=> map.set(r.id, r));
   const all = Array.from(map.values()).sort((a,b)=> (b.aktualisiertAm||'').localeCompare(a.aktualisiertAm||''));
 
-  // Badge: Anzahl, bei denen ICH am Zug bin
-  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length;
+  // Eigene Termine, bei denen ICH noch bestätigen muss
+  const myPendingEvents = (window.customEvents||[]).filter(ev =>
+    ev.status==='schwebend' && (ev.bestaetigerUids||[]).includes(window.myUid) && !(ev.bestaetigtVon||[]).includes(window.myUid)
+  );
+
+  // Badge: Anzahl, bei denen ICH am Zug bin (Betreuungs-Anfragen + eigene Termine)
+  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length;
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -2664,9 +2768,28 @@ function renderRequestsUI(){
 
   const listEl = document.getElementById('requestsList');
   if(!listEl) return;
-  if(all.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
+  if(all.length===0 && myPendingEvents.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
 
   let html = '';
+  if(myPendingEvents.length){
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Eigene Termine – du musst bestätigen</div>';
+    myPendingEvents.forEach(ev=>{
+      const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
+      html += `<div class="req-card mine-turn">
+        <div class="req-top">
+          <div class="req-date">${dateStr}</div>
+          <div class="req-status schwebend">Schwebend</div>
+        </div>
+        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(ev.von||'')}–${escapeHtml(ev.bis||'')} Uhr</div>
+        <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
+        <div class="req-actions">
+          <button class="req-btn-accept" onclick="hiAcceptCustom('${ev.id}')">✓ Bestätigen</button>
+          <button class="req-btn-reject" onclick="hiRejectCustom('${ev.id}')">✗ Ablehnen</button>
+        </div>
+      </div>`;
+    });
+  }
+  if(all.length) html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Betreuungs-Änderungen</div>';
   all.forEach(r=>{
     const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
     const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
@@ -2817,9 +2940,11 @@ window.switchAdminTab = function(tab){
   document.getElementById('adminQr').style.display = tab==='qr' ? 'block' : 'none';
   document.getElementById('adminLog').style.display = tab==='log' ? 'block' : 'none';
   document.getElementById('adminCustody').style.display = tab==='custody' ? 'block' : 'none';
+  document.getElementById('adminEvents').style.display = tab==='events' ? 'block' : 'none';
   if(tab==='qr') renderQrCode();
   if(tab==='log') startLogListener();
   if(tab==='custody') renderCustodyRulesTable();
+  if(tab==='events') renderAllEventsList();
 };
 
 function renderQrCode(){
@@ -2922,10 +3047,15 @@ function startPendingListener(){
       html += `<div class="pending-item">
         <div class="pname">${escapeHtml(d.username||'(ohne Namen)')}</div>
         <select id="role-${uid}">
-          <option value="elternteil">Elternteil</option>
-          <option value="partner">Partner</option>
+          <option value="janine">Janine (Mutter)</option>
+          <option value="andi">Andi (Vater)</option>
+          <option value="mischa">Mischa (Kind)</option>
+          <option value="janosch">Janosch (Kind)</option>
+          <option value="partner_andi">Partner von Andi</option>
+          <option value="partner_janine">Partner von Janine</option>
+          <option value="oma">Oma</option>
+          <option value="opa">Opa</option>
           <option value="omami">Omami</option>
-          <option value="kind">Kind</option>
           <option value="admin">Admin</option>
         </select>
         <div class="actions">
@@ -2953,7 +3083,7 @@ function startUserListListener(){
       list.innerHTML = '<div class="empty-note">Noch keine freigeschalteten Nutzer.</div>';
       return;
     }
-    const roleLabel = {admin:'Admin', elternteil:'Elternteil', partner:'Partner', omami:'Omami', kind:'Kind'};
+    const roleLabel = {admin:'Admin', janine:'Janine (Mutter)', andi:'Andi (Vater)', mischa:'Mischa (Kind)', janosch:'Janosch (Kind)', partner_andi:'Partner von Andi', partner_janine:'Partner von Janine', oma:'Oma', opa:'Opa', omami:'Omami'};
     let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Name</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Rolle</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
@@ -3033,17 +3163,21 @@ onAuthStateChanged(auth, async (user) => {
   }
   // Bekannte, aktive Rolle -> direkt in den Kalender
   showScreen('calendarScreen');
+  // Rollen-Kategorie: welche grundsätzliche Sicht bekommt diese Person?
+  const PARENT_ROLES = ['janine','andi'];
+  const KID_ROLES = ['mischa','janosch'];
+  const PARTNER_ROLES = ['partner_andi','partner_janine'];
+  const isParent = PARENT_ROLES.includes(data.role);
+  const isKid = KID_ROLES.includes(data.role);
+  const isPartner = PARTNER_ROLES.includes(data.role);
   if(typeof setRole === 'function'){
-    setRole(data.role === 'partner' ? 'partner' : 'eltern');
+    setRole(isPartner ? 'partner' : 'eltern');
   }
-  // Persönlichen Filter setzen: bei Elternteil-Rolle anhand des
-  // Benutzernamens erkennen, ob Andi oder Janine eingeloggt ist, damit
-  // im Kalender nur die eigene Übergabe ausführlich gezeigt wird.
   if(typeof window !== 'undefined'){
-    const uname = (data.username||'').toLowerCase();
-    if(data.role === 'elternteil' && uname.includes('andi')) window.currentPerson = 'b';
-    else if(data.role === 'elternteil' && uname.includes('janine')) window.currentPerson = 'a';
-    else window.currentPerson = null; // Admin, Omami, Kind, Partner: ungefiltert bzw. eigene Logik
+    if(data.role === 'andi') window.currentPerson = 'b';
+    else if(data.role === 'janine') window.currentPerson = 'a';
+    else if(isKid) window.currentPerson = data.role; // 'mischa' / 'janosch' -> eigene Kinder-Kalenderansicht
+    else window.currentPerson = null; // Admin, Omami/Oma/Opa, Partner: ungefiltert bzw. eigene Logik
     // Wer sich hier direkt in den Kalender einloggt, ist NICHT Admin
     // (Admin landet zuerst im Adminbereich, siehe oben) -> Vorschau-
     // Funktionen (Alle Spalten, Namen anklicken) für alle anderen sperren.
@@ -3051,17 +3185,17 @@ onAuthStateChanged(auth, async (user) => {
     if(typeof render === 'function') render();
   }
   // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen;
-  // den Anfragen-Knopf nur für Elternteile (echter Workflow) zeigen.
+  // den Anfragen-Knopf nur für die beiden Elternteile (echter Workflow) zeigen.
   const roleSwitchEl = document.querySelector('.role-switch');
   const gearEl = document.getElementById('calGearBtn');
   const reqEl = document.getElementById('requestsBtn');
-  if(data.role === 'partner'){
+  if(isPartner){
     if(roleSwitchEl) roleSwitchEl.style.display = 'none';
     if(gearEl) gearEl.style.display = 'none';
   } else if(data.role !== 'admin'){
     if(gearEl) gearEl.style.display = 'none';
   }
-  if(reqEl) reqEl.style.display = (data.role === 'elternteil') ? 'flex' : 'none';
+  if(reqEl) reqEl.style.display = isParent ? 'flex' : 'none';
 });
 </script>
 </body>

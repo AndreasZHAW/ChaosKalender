@@ -99,7 +99,7 @@ service cloud.firestore {
     match /event_overrides/{key} {
       allow read: if isSignedIn() && isActive();
       allow write: if isSignedIn() && isActive() &&
-                     (myRole() == 'elternteil' || isAdmin());
+                     (myRole() == 'janine' || myRole() == 'andi' || isAdmin());
     }
 
     // --- custom_events: frei eintragbare Termine (z.B. "Zahnarzt
@@ -111,6 +111,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && isActive() && (
                        resource.data.erstelltVonUid == request.auth.uid ||
                        resource.data.betroffenUid == request.auth.uid ||
+                       (('bestaetigerUids' in resource.data) && request.auth.uid in resource.data.bestaetigerUids) ||
                        isAdmin()
                      );
       allow delete: if isSignedIn() && isActive() &&
