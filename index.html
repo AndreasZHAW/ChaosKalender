@@ -1945,7 +1945,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v31 · 25.09.2026';
+const APP_VERSION = 'v32 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1965,7 +1965,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=31').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=32').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2768,7 +2768,8 @@ function renderRequestsUI(){
 
   const listEl = document.getElementById('requestsList');
   if(!listEl) return;
-  if(all.length===0 && myPendingEvents.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
+  const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
 
   let html = '';
   if(myPendingEvents.length){
@@ -2789,6 +2790,36 @@ function renderRequestsUI(){
       </div>`;
     });
   }
+
+  // Eigene, selbst gesendete Termine, die noch nicht von allen bestätigt
+  // sind – zeigt genau, wer schon zugestimmt hat und wer noch fehlt.
+  const mySentPending = (window.customEvents||[]).filter(ev =>
+    ev.erstelltVonUid===window.myUid && ev.status==='schwebend'
+  );
+  if(mySentPending.length){
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Von mir gesendet – wartet noch</div>';
+    mySentPending.forEach(ev=>{
+      const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
+      const bestaetiger = ev.bestaetigerUids || [];
+      const bestaetigt = ev.bestaetigtVon || [];
+      const namen = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
+        const uid = bestaetiger[idx];
+        return bestaetigt.includes(uid) ? `<span style="color:var(--a);">✓ ${escapeHtml(String(n))}</span>` : `<span>⏳ ${escapeHtml(String(n))}</span>`;
+      }).join(' · ');
+      html += `<div class="req-card">
+        <div class="req-top">
+          <div class="req-date">${dateStr}</div>
+          <div class="req-status schwebend">Schwebend</div>
+        </div>
+        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(ev.von||'')}–${escapeHtml(ev.bis||'')} Uhr</div>
+        <div class="req-meta">${namen}</div>
+        <div class="req-actions">
+          <button class="req-btn-reject" onclick="hiDeleteCustom('${ev.id}')">✕ Zurückziehen</button>
+        </div>
+      </div>`;
+    });
+  }
+
   if(all.length) html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Betreuungs-Änderungen</div>';
   all.forEach(r=>{
     const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
@@ -3195,7 +3226,11 @@ onAuthStateChanged(auth, async (user) => {
   } else if(data.role !== 'admin'){
     if(gearEl) gearEl.style.display = 'none';
   }
-  if(reqEl) reqEl.style.display = isParent ? 'flex' : 'none';
+  // Das Anfragen-Symbol muss ALLE sehen können, nicht nur die Eltern:
+  // seit den frei eintragbaren Terminen mit Mehrfach-Bestätigern kann
+  // jede aktive Person (auch Kinder, Partner, Oma/Opa/Omami) eigene
+  // Anfragen erstellt haben oder bestätigen müssen.
+  if(reqEl) reqEl.style.display = 'flex';
 });
 </script>
 </body>
