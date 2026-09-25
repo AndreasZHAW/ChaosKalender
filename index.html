@@ -74,8 +74,8 @@
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
   .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   .swipe-row{display:flex;}
-  .swipe-timecol{position:sticky; left:0; z-index:5; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
-  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:3; background:var(--panel);}
+  .swipe-timecol{position:sticky; left:0; z-index:8; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
+  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:7; background:var(--panel);}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
   .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
@@ -107,7 +107,7 @@
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
 
   /* WEEK */
-  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px; position:sticky; top:0; z-index:6; background:var(--panel);}
+  .week-head{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px; position:sticky; top:0; z-index:7; background:var(--panel);}
   .week-head div{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .week-head .daynum{font-size:15px; color:var(--ink); font-weight:600; margin-top:1px;}
   .week-head .holiday-tag{display:block; font-size:8px; color:var(--holiday-text); font-weight:700; margin-top:1px;}
@@ -118,7 +118,7 @@
   .day-tags{display:flex; flex-wrap:wrap; gap:2px; justify-content:center;}
   .day-event-tag{display:inline-block; margin-left:3px; font-size:9px; color:var(--pending); cursor:default;}
   .week-body{display:grid; grid-template-columns:34px repeat(7,minmax(92px,1fr)); min-width:698px;}
-  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:5; background:var(--panel);}
+  .time-col{display:flex; flex-direction:column; position:sticky; left:0; z-index:8; background:var(--panel);}
   .time-col .slot-h{height:88px; text-align:right; padding-right:4px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-5px;}
   .day-col{border-left:1px solid var(--line); position:relative; cursor:pointer;}
   .hour-row{height:44px; border-top:1px solid var(--line);}
@@ -145,11 +145,11 @@
   .hol-label{font-size:8.5px; color:var(--holiday-text); font-weight:700;}
 
   /* DAY (Stundenraster, alle 24 Stunden) */
-  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:6; background:var(--panel);}
+  .day-head-row{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:7; background:var(--panel);}
   .day-head-row.is-today-row{border:3px solid var(--pending); border-radius:10px 10px 0 0; background:var(--pending-bg);}
   .day-head-date{font-weight:700; font-size:14px; margin-bottom:4px; text-transform:capitalize;}
   .day-grid{display:flex;}
-  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:5; background:var(--panel);}
+  .day-grid .time-col{width:34px; flex-shrink:0; position:sticky; left:0; z-index:8; background:var(--panel);}
   .day-grid .time-col .slot-h{text-align:right; padding-right:6px; font-size:9.5px; color:var(--ink-soft); position:relative; top:-6px;}
   .day-grid .day-col{flex:1; border-left:1px solid var(--line);}
   .day-grid .hour-row{border-top:1px solid var(--line);}
@@ -389,7 +389,7 @@
   </div>
 
   <details class="legend-details">
-    <summary>☰ Mehr (Ansicht, Partner, Kinder, Lücken-Check)</summary>
+    <summary>☰ Mehr (Ansicht, Partner, Kinder, Legende, Lücken-Check)</summary>
     <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0;">
       <div class="role-switch">
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
@@ -399,10 +399,6 @@
       <button class="test-btn" onclick="viewAsPerson('janosch')">👦 Janosch</button>
       <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
     </div>
-  </details>
-
-  <details class="legend-details">
-    <summary>ℹ️ Legende &amp; Farben</summary>
     <div class="legend" id="legendRow">
       <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#5B7A94"></span>Janine (Mutter)</div>
       <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#BF8248"></span>Andi (Vater)</div>
@@ -415,7 +411,7 @@
       <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#BF8248"></span>Mischa (11)</div>
     </div>
     <div style="font-size:10.5px; color:var(--ink-soft); margin:6px 0 4px; line-height:1.5;">
-      Heller <span style="background:#EAF0EE; padding:1px 5px; border-radius:4px;">Hintergrund</span> = du hast in dieser Zeit die Kinder. Schulzeit-Blöcke: <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">blau = Janosch</span> <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">braun = Mischa</span> (antippen für Details).
+      Farbige Linie links am Tag: <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">blau = Andi</span> <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">lila = Janine</span> <span style="background:#EFEFE9; padding:1px 5px; border-radius:4px;">grau = Schule</span> <span style="background:var(--holiday-bg); color:var(--holiday-text); padding:1px 5px; border-radius:4px;">rot = unklar</span>. Hintergrundfarbe = zusätzlicher Termin (Schule/Hort/Club/Bandprobe) – antippen für Details.
     </div>
   </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
@@ -654,7 +650,7 @@ window.SCHOOL_SUBJECTS = SCHOOL_SUBJECTS;
    Solange noch keine Regeln aus Firestore geladen sind (z.B. offline
    oder ganz am Anfang), wird das bisherige, fest einprogrammierte
    Muster als Rückfallebene genutzt. */
-function timeToMin(t){ const [h,m] = t.split(':').map(Number); return h*60+(m||0); }
+function timeToMin(t){ if(!t) return 0; const parts = String(t).split(':'); const h = Number(parts[0])||0, m = Number(parts[1])||0; return h*60+m; }
 function minToTime(m){ m=((m%1440)+1440)%1440; const h=Math.floor(m/60), mi=m%60; return h+(mi?mi/60:0); }
 
 function getCustodySegmentsFromRules(d, rules){
@@ -695,9 +691,17 @@ function getCustodySegmentsHardcoded(d){
 function getCustodySegments(d){
   const exc = checkExceptions(d);
   if(exc) return [{who:exc.who, label:exc.label}];
-  if(window.custodyRules && window.custodyRules.length){
-    const segs = getCustodySegmentsFromRules(d, window.custodyRules);
-    if(segs.length) return segs;
+  // WICHTIG: try/catch – eine einzelne fehlerhafte/unvollständige Regel
+  // (z.B. während des Speicherns im Admin-Bereich) darf niemals den
+  // kompletten Kalender-Klick lahmlegen. Bei jedem Problem: Rückfall auf
+  // das bewährte, fest einprogrammierte Muster.
+  try{
+    if(window.custodyRules && window.custodyRules.length){
+      const segs = getCustodySegmentsFromRules(d, window.custodyRules);
+      if(segs && segs.length) return segs;
+    }
+  } catch(e){
+    console.error('Standard-Betreuung: Regel fehlerhaft, nutze Rückfallebene:', e);
   }
   return getCustodySegmentsHardcoded(d);
 }
@@ -1186,24 +1190,9 @@ function renderWeek(){
       });
     }
 
-    // Betreuungs-Übergaben: NUR an Tagen mit echtem Wechsel (Do/Fr/Sa/So),
-    // und nur so ausführlich, wie es für die eingeloggte Person relevant ist.
-    const exc = checkExceptions(d);
-    if(exc){
-      if(showFullDetailFor(exc.who)) body += eventBlock(exc.who, startHour, endHour, startHour, d, exc.label);
-    } else if(dow===4){
-      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 17, startHour, d);
-      if(showFullDetailFor('b')) body += eventBlock('b', 17, endHour, startHour, d, 'ab 17 Uhr');
-    } else if(dow===5){
-      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 18, startHour, d);
-      if(showFullDetailFor('b')) body += eventBlock('b', 18, endHour, startHour, d, 'ab 18 Uhr');
-    } else if(dow===6){
-      if(showFullDetailFor('b')) body += eventBlock('b', startHour, 10, startHour, d, 'bis 10 Uhr');
-      if(showFullDetailFor('a')) body += eventBlock('a', 10, endHour, startHour, d);
-    } else if(dow===0){
-      if(showFullDetailFor('a')) body += eventBlock('a', startHour, 16, startHour, d);
-      if(showFullDetailFor('b')) body += eventBlock('b', 16, endHour, startHour, d, 'ab 16 Uhr');
-    }
+    // Betreuung wird jetzt NUR noch über die farbige Linie links gezeigt
+    // (kein eigener Hintergrund-Block mehr nötig). Ein Klick auf den
+    // Tag öffnet trotzdem das Änderungsfenster über handleDayColClick.
 
     if(dow===5){
       ['mischa','janosch'].forEach(kid=>{
@@ -1844,7 +1833,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v24 · 24.09.2026';
+const APP_VERSION = 'v25 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1864,7 +1853,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=24').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=25').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2181,21 +2170,28 @@ function buildHourEntries(iso, hourDec){
 }
 
 window.handleDayColClick = function(event, iso, startHour, px){
-  if(event.target.closest('.event') || event.target.closest('.school-block')) return; // eigener Klick-Handler übernimmt
-  const rect = event.currentTarget.getBoundingClientRect();
-  const y = event.clientY - rect.top;
-  let hourDec = startHour + y/px;
-  hourDec = Math.max(0, Math.min(23.75, Math.round(hourDec*4)/4)); // auf Viertelstunden runden
-  openHourInspector(iso, hourDec);
+  try{
+    if(event.target.closest('.event') || event.target.closest('.school-block')) return; // eigener Klick-Handler übernimmt
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    let hourDec = startHour + y/px;
+    hourDec = Math.max(0, Math.min(23.75, Math.round(hourDec*4)/4)); // auf Viertelstunden runden
+    openHourInspector(iso, hourDec);
+  } catch(e){
+    console.error('Klick-Fehler:', e);
+    if(window.logEvent) window.logEvent('klick_fehler', {nachricht:String(e.message||e)});
+    alert('Da ist etwas schiefgelaufen. Bitte nochmal versuchen – falls es öfter passiert, sag mir Bescheid.');
+  }
 };
 
 window.openHourInspector = function(iso, hourDec, forcedTab){
+  try{
   const d = new Date(iso+'T00:00:00');
   const segs = getCustodySegments(d);
   const custodySeg = segs.find(s=>{
     const from = s.from!==undefined?s.from:0, to = s.to!==undefined?s.to:24;
     return hourDec>=from && hourDec<to;
-  }) || segs[0];
+  }) || segs[0] || {who:'a'};
   const entries = buildHourEntries(iso, hourDec);
   hiState = { iso, hourDec, custodySeg, entries };
 
@@ -2213,6 +2209,11 @@ window.openHourInspector = function(iso, hourDec, forcedTab){
   const defaultTab = forcedTab || (entries.length ? entries[0].id : 'new');
   hiSwitchTab(defaultTab);
   document.getElementById('hourInspectorOverlay').classList.add('show');
+  } catch(e){
+    console.error('openHourInspector Fehler:', e);
+    if(window.logEvent) window.logEvent('klick_fehler', {nachricht:String(e.message||e), stelle:'openHourInspector'});
+    alert('Da ist etwas schiefgelaufen. Bitte nochmal versuchen – falls es öfter passiert, sag mir Bescheid.');
+  }
 };
 
 window.hiSwitchTab = function(tabId){
