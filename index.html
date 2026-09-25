@@ -508,6 +508,13 @@
 </div>
 
 <script>
+/* WICHTIG: ES-Modul-Funktionen (im <script type="module"> weiter unten,
+   z.B. escapeHtml) hängen sich NICHT automatisch an window – anders als
+   normale <script>-Funktionen. Deshalb hier eine eigene Kopie, damit
+   Render-Funktionen in DIESEM Script sie ohne ReferenceError nutzen
+   können. */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 /* ====================== FEHLER-PROTOKOLL ======================
    Fängt JS-Fehler global ab und schickt sie (sobald jemand angemeldet
    ist) ins Admin-Protokoll – hilft, Anzeigeprobleme auf bestimmten
@@ -1805,7 +1812,6 @@ function render(){
   if(currentView==='swipe'){
     container.innerHTML = renderSwipeView();
     initSwipeScroll();
-    applyOverviewZoom();
     return;
   }
   let panelHtml;
@@ -1926,7 +1932,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v29 · 25.09.2026';
+const APP_VERSION = 'v30 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1946,7 +1952,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=29').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=30').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2542,13 +2548,20 @@ async function seedCustodyRulesIfEmpty(){
     }
   } catch(e){ console.error('Vorbefüllung Standard-Betreuung fehlgeschlagen:', e); }
 }
+// Für den "Erneut versuchen"-Knopf im HTML (inline onclick läuft im
+// globalen Scope und kann Modul-interne Variablen/Funktionen sonst
+// nicht erreichen – siehe escapeHtml-Bug oben).
+window.retryCustodySeed = function(){
+  custodySeedTried = false;
+  seedCustodyRulesIfEmpty();
+};
 
 function renderCustodyRulesTable(){
   const el = document.getElementById('custodyRulesTable');
   if(!el) return;
   if(!window.custodyRules || !window.custodyRules.length){
     seedCustodyRulesIfEmpty();
-    el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster … <button class="cr-save" style="margin-left:8px;" onclick="custodySeedTried=false; seedCustodyRulesIfEmpty();">🔄 Erneut versuchen</button></div>';
+    el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster … <button class="cr-save" style="margin-left:8px;" onclick="retryCustodySeed()">🔄 Erneut versuchen</button></div>';
     return;
   }
   const nameOf = w => w==='a' ? 'Janine' : 'Andi';
