@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ChaosKalender</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#5B7A94">
+<meta name="theme-color" content="#C0392B">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -16,13 +16,15 @@
   :root{
     --bg: #FAFAF9; --panel: #FFFFFF; --ink: #2B2A28; --ink-soft: #7A776F;
     --line: #E8E4DC;
-    --a: #5B7A94; --a-bg: #E7EDF2;
-    --b: #BF8248; --b-bg: #F5E9DB;
+    --a: #C0392B; --a-bg: #FBEAE8;
+    --b: #2B6CC0; --b-bg: #E8EFFB;
+    --janosch: #C99A00; --janosch-bg: #FBF3D9;
+    --mischa: #2F9B5B; --mischa-bg: #E7F5ED;
     --omami: #9B7CA8; --omami-bg: #F1E9F3;
     --pending: #C9A54B; --pending-bg: #F8F0DC;
     --holiday-bg: #FBEEE9; --holiday-text: #C17356;
     --school: #EFEFE9;
-    --bar-andi: #3B6FD6; --bar-janine: #8E4FC4; --bar-school: #9AA0A6; --bar-other: #D64545;
+    --bar-andi: var(--b); --bar-janine: var(--a); --bar-school: #9AA0A6; --bar-other: #7A7A7A;
   }
   *{box-sizing:border-box;}
   html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
@@ -366,7 +368,7 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="loggedInAs" style="font-weight:600; font-size:10.5px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span></div>
+    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="loggedInAs" style="font-weight:600; font-size:10.5px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span> <span id="stickyBugBtn" onclick="reportStickyBug()" style="font-weight:400; font-size:9px; color:var(--a); text-decoration:underline; cursor:pointer; vertical-align:middle;">🐛 Zeitleiste jetzt weg? Melden</span></div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()" style="display:none;">⚙</div>
@@ -407,18 +409,18 @@
       <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
     </div>
     <div class="legend" id="legendRow">
-      <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:#5B7A94"></span>Janine (Mutter)</div>
-      <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:#BF8248"></span>Andi (Vater)</div>
+      <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:var(--a)"></span>Janine (Mutter)</div>
+      <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:var(--b)"></span>Andi (Vater)</div>
       <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
       <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
     </div>
     <div class="legend" id="kidsLegendRow" style="margin-top:-8px;">
       <span style="font-size:10.5px; color:var(--ink-soft); margin-right:4px;">Kinder-Kalender:</span>
-      <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:#5B7A94"></span>Janosch (9)</div>
-      <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:#BF8248"></span>Mischa (11)</div>
+      <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:var(--janosch)"></span>Janosch (9)</div>
+      <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:var(--mischa)"></span>Mischa (11)</div>
     </div>
     <div style="font-size:10.5px; color:var(--ink-soft); margin:6px 0 4px; line-height:1.5;">
-      Farbige Linie links am Tag: <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">blau = Andi</span> <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">lila = Janine</span> <span style="background:#EFEFE9; padding:1px 5px; border-radius:4px;">grau = Schule</span> <span style="background:var(--holiday-bg); color:var(--holiday-text); padding:1px 5px; border-radius:4px;">rot = unklar</span>. Hintergrundfarbe = zusätzlicher Termin (Schule/Hort/Club/Bandprobe) – antippen für Details.
+      Farbige Linie links am Tag: <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">blau = Andi</span> <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">rot = Janine</span> <span style="background:var(--janosch-bg); color:var(--janosch); padding:1px 5px; border-radius:4px;">gelb = Janosch</span> <span style="background:var(--mischa-bg); color:var(--mischa); padding:1px 5px; border-radius:4px;">grün = Mischa</span> <span style="background:#EFEFE9; padding:1px 5px; border-radius:4px;">grau = Schule allgemein</span>. Hintergrundfarbe = zusätzlicher Termin (Schule/Hort/Club/Bandprobe) – antippen für Details.
     </div>
   </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
@@ -974,6 +976,48 @@ function checkDesktopSiteMode(){
   }
 }
 
+/* Gezielte Meldung für das "Zeitleiste verschwindet"-Problem: erfasst
+   GENAU JETZT, in diesem Moment, Scroll-Position und die tatsächliche
+   Bildschirm-Position/Sichtbarkeit der Zeitspalte – viel aussagekräftiger
+   als eine allgemeine Diagnose, weil es exakt den Bug-Moment einfängt. */
+async function reportStickyBug(){
+  const btn = document.getElementById('stickyBugBtn');
+  if(btn){ btn.textContent = 'Sende…'; }
+  try{
+    const wrap = document.getElementById('swipeWrap') || document.querySelector('.cal-panel.hour-scroll');
+    const timeCol = document.querySelector('.swipe-timecol') || document.querySelector('.time-col');
+    const wrapRect = wrap ? wrap.getBoundingClientRect() : null;
+    const timeColRect = timeCol ? timeCol.getBoundingClientRect() : null;
+    const timeColStyle = timeCol ? getComputedStyle(timeCol) : null;
+    // Ist die Zeitspalte gerade WIRKLICH innerhalb des sichtbaren
+    // Bereichs des Scroll-Containers? (rechnerisch geprüft, nicht nur
+    // "existiert im DOM")
+    const visuallyInside = (wrapRect && timeColRect) ?
+      (timeColRect.left >= wrapRect.left - 2 && timeColRect.left < wrapRect.right) : null;
+    const payload = {
+      ansicht: currentView,
+      scrollLeft: wrap ? wrap.scrollLeft : '?',
+      scrollTop: wrap ? wrap.scrollTop : '?',
+      scrollWidth: wrap ? wrap.scrollWidth : '?',
+      clientWidth: wrap ? wrap.clientWidth : '?',
+      wrapRect: wrapRect ? {left:Math.round(wrapRect.left), right:Math.round(wrapRect.right), top:Math.round(wrapRect.top)} : null,
+      timeColRect: timeColRect ? {left:Math.round(timeColRect.left), right:Math.round(timeColRect.right), top:Math.round(timeColRect.top), width:Math.round(timeColRect.width)} : 'ZEITSPALTE NICHT IM DOM GEFUNDEN',
+      timeColSichtbarBerechnet: visuallyInside,
+      timeColCssPosition: timeColStyle ? timeColStyle.position : '?',
+      timeColCssDisplay: timeColStyle ? timeColStyle.display : '?',
+      timeColCssVisibility: timeColStyle ? timeColStyle.visibility : '?',
+      timeColCssLeft: timeColStyle ? timeColStyle.left : '?',
+      timeColCssZIndex: timeColStyle ? timeColStyle.zIndex : '?',
+      compactMode: compactMode
+    };
+    if(window.logEvent) await window.logEvent('sticky_problem', payload);
+    if(btn){ btn.textContent = '✓ Gemeldet – danke!'; setTimeout(()=>{btn.textContent='🐛 Zeitleiste jetzt weg? Melden';}, 3000); }
+  } catch(e){
+    console.error('Sticky-Bug-Meldung fehlgeschlagen:', e);
+    if(btn) btn.textContent = '⚠️ Fehler beim Senden';
+  }
+}
+
 /* Ausführliche Diagnose auf Knopfdruck: viel mehr Details als beim
    normalen Login-Log, für gezielte Fehlersuche. */
 async function sendVerboseDiagnostic(){
@@ -1180,7 +1224,7 @@ function renderWeek(){
         const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
         const top = (s-startHour)*PXH, height = (e-s)*PXH-3;
         const leftPct = idx===0 ? '1px' : '50%';
-        const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
+        const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
         const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
         body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${ov?'✎':''}</div>`;
@@ -1253,6 +1297,13 @@ function renderWeek(){
         body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
       }
     }
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+      const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
+      const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
+      const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
+      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;left:2px;right:2px;font-size:9.5px;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+    });
 
     body += `</div>`;
   }
@@ -1507,6 +1558,13 @@ function renderDay(){
     if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--omami-bg)','var(--omami)',false,3);
     if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--a-bg)','var(--a)',false,3);
     if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--omami-bg)','var(--omami)',false,3);
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+      const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
+      const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
+      const top=(s-startHour)*px, height=(e-s)*px-2;
+      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      body += `<div class="event" style="top:${top}px;height:${height}px;left:6px;right:6px;z-index:3;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+    });
   }
   SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
     const t = ev.time && ev.time.includes(':') ? parseFloat(ev.time.split(':')[0]) + parseFloat(ev.time.split(':')[1])/60 : 8;
@@ -1573,10 +1631,10 @@ function renderSwipeView(){
           const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top=(s-startHour)*px, height=(e-s)*px-2;
           const leftPct = idx===0?'1px':'50%';
-          const kidBg = kid==='janosch' ? 'var(--a-bg)' : 'var(--b-bg)';
+          const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
           const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Schule ${kidName}','${dateLbl}')">${ov?'✎':''}</div>`;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${ov?'✎':''}</div>`;
         }
       });
       if(dow===4){
@@ -1591,7 +1649,7 @@ function renderSwipeView(){
             const top=(s-startHour)*px, height=(e-s)*px-2;
             const leftPct = idx===0?'1px':'50%';
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(defS)}','${fmtH(defE)}','Hort ${kid==='janosch'?'Janosch':'Mischa'}','${dateLbl}')">Hort${ov?' ✎':''}</div>`;
+            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${ov?' ✎':''}</div>`;
           }
         });
       }
@@ -1623,7 +1681,7 @@ function renderSwipeView(){
             const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
             const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','${fmtH(c.start)}','${fmtH(c.end)}','${c.label} (${kid==='mischa'?'Mischa':'Janosch'})','${dateLbl}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, '${key}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
           }
         });
       }
@@ -1633,7 +1691,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = ov?parseFloat(ov.von.split(':')[0]):20, e = ov?parseFloat(ov.bis.split(':')[0]):24;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','20:00','24:00','Bandprobe Janine','${dateLbl}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
+          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, '${key}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
         }
       }
       if(dow===3 && !hol && showFullDetailFor('b')){
@@ -1642,7 +1700,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = ov?parseFloat(ov.von.split(':')[0]):19, e = ov?parseFloat(ov.bis.split(':')[0]):21;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openEventEdit('${key}','19:00','21:00','Volleyball Andi','${dateLbl}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
+          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
         }
       }
     }
@@ -1653,9 +1711,15 @@ function renderSwipeView(){
         const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openEventEdit('${key}','16:30','17:30','Bandprobe Mischa','${dateLbl}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
+        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
       }
     }
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+      const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
+      const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
+      const statusMark = ev.status==='anfrage_offen' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
+      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;border:1px solid var(--pending);cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+    });
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
 
@@ -1862,7 +1926,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v28 · 25.09.2026';
+const APP_VERSION = 'v29 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1882,7 +1946,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=28').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=29').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2777,15 +2841,21 @@ function startLogListener(){
       list.innerHTML = '<div class="empty-note">Noch keine Log-Einträge. (Snapshot war leer – falls hier vorher Einträge standen, bitte Seite neu laden und mir Bescheid geben, das ist ein Bug-Hinweis.)</div>';
       return;
     }
-    const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler'};
-    let html = `<div style="font-size:10px; color:var(--ink-soft); margin-bottom:6px;">${snap.size} Einträge geladen ${snap.metadata.fromCache?'(aus Cache)':'(live)'}</div>`;
+    window.__lastLogDocs = []; // für den Kopieren-Knopf gemerkt
+    const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler', sticky_problem:'🐛 Sticky-Bug'};
+    let html = `<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+      <div style="font-size:10px; color:var(--ink-soft);">${snap.size} Einträge geladen ${snap.metadata.fromCache?'(aus Cache)':'(live)'}</div>
+      <button class="cr-save" onclick="copyLogToClipboard()">📋 Ganzes Protokoll kopieren</button>
+      <span id="copyLogStatus" style="font-size:10.5px; color:var(--a);"></span>
+    </div>`;
     html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
     html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
+      window.__lastLogDocs.push(d);
       const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
       const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
-      const isError = d.typ === 'error';
+      const isError = d.typ === 'error' || d.typ === 'sticky_problem';
       const scaleRatio = d.textSkalierungsVerdacht;
       const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
       html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
@@ -2810,6 +2880,20 @@ function startLogListener(){
       Häufigste Ursache: die Firestore-Sicherheitsregeln wurden noch nicht mit der neuesten firestore.rules-Datei aktualisiert (braucht die "logs"-Sammlung). Bitte in der Firebase-Konsole unter Firestore → Regeln erneut einfügen und veröffentlichen.</div>`;
   });
 }
+window.copyLogToClipboard = async function(){
+  const docs = window.__lastLogDocs || [];
+  const text = docs.map(d=>{
+    return `[${d.zeitpunkt||'?'}] ${d.typ||'?'} | ${d.username||'?'} (${d.role||'?'}) | v${d.appVersion||'?'} | ${d.geraet||'?'} | Bildschirm ${d.bildschirmBreite||'?'}x${d.bildschirmHoehe||'?'} | Fenster ${d.fensterBreite||'?'}x${d.fensterHoehe||'?'} | Textskalierung ${d.textSkalierungsVerdacht||'?'} | ${d.details||''}`;
+  }).join('\n');
+  try{
+    await navigator.clipboard.writeText(text);
+    const s = document.getElementById('copyLogStatus');
+    if(s){ s.textContent = '✓ kopiert – jetzt einfügen (z.B. im Chat)'; setTimeout(()=>{ if(s) s.textContent=''; }, 4000); }
+  } catch(e){
+    alert('Kopieren fehlgeschlagen. Text zum manuellen Kopieren:\n\n' + text.slice(0,2000));
+  }
+};
+
 function startPendingListener(){
   const q = query(collection(db,'users'), where('status','==','pending'));
   pendingUnsub = onSnapshot(q, (snap)=>{
