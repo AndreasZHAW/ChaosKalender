@@ -16,8 +16,8 @@
   :root{
     --bg: #FAFAF9; --panel: #FFFFFF; --ink: #2B2A28; --ink-soft: #7A776F;
     --line: #E8E4DC;
-    --a: #5B7A94; --a-bg: #E7EDF2; --a-tint: rgba(91,122,148,0.08);
-    --b: #BF8248; --b-bg: #F5E9DB; --b-tint: rgba(191,130,72,0.09);
+    --a: #5B7A94; --a-bg: #E7EDF2;
+    --b: #BF8248; --b-bg: #F5E9DB;
     --omami: #9B7CA8; --omami-bg: #F1E9F3;
     --pending: #C9A54B; --pending-bg: #F8F0DC;
     --holiday-bg: #FBEEE9; --holiday-text: #C17356;
@@ -211,6 +211,14 @@
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
   #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  #custodyRulesTable{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .cr-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .cr-table th{text-align:left; padding:6px 6px; border-bottom:2px solid var(--line); color:var(--ink-soft); font-size:11px;}
+  .cr-table td{padding:5px 6px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  .cr-table select, .cr-table input[type=time]{border:1px solid var(--line); border-radius:6px; padding:5px 6px; font-family:inherit; font-size:12px;}
+  .cr-table .cr-del{border:none; background:var(--holiday-bg); color:var(--holiday-text); border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600;}
+  .cr-table .cr-save{border:none; background:var(--a); color:#fff; border-radius:6px; padding:5px 9px; cursor:pointer; font-family:inherit; font-weight:600;}
+  .cr-coverage-warn{font-size:11px; color:var(--holiday-text); margin-top:8px;}
   .desktop-site-warning{background:#FBEEE9; border:1px solid var(--holiday-text); border-radius:10px; padding:12px 14px; margin-bottom:12px; font-size:12.5px; color:#7A3B2A; line-height:1.5;}
   .desktop-site-warning strong{display:block; font-size:13.5px; margin-bottom:4px;}
   .desktop-site-warning ol{margin:6px 0 0; padding-left:18px;}
@@ -307,6 +315,7 @@
     <button class="active" data-admintab="registrations" onclick="switchAdminTab('registrations')">Neue Registrierungen</button>
     <button data-admintab="qr" onclick="switchAdminTab('qr')">QR-Code</button>
     <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
+    <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
 
@@ -334,7 +343,17 @@
       <div id="logList"><div class="empty-note">Lade …</div></div>
     </div>
   </div>
+
+  <div id="adminCustody" style="display:none;">
+    <div class="admin-card">
+      <h3>Standard-Betreuungsmuster</h3>
+      <div class="muted">Das wiederkehrende Wochen-Grundmuster (die farbige Linie im Kalender). Jede Regel gilt "von Tag+Uhrzeit bis Tag+Uhrzeit", z.B. "Mo 00:00 bis Do 17:00 → Janine". Die Zeilen müssen lückenlos die ganze Woche abdecken.</div>
+      <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
+      <button class="btn" style="margin-top:12px; width:auto; padding:9px 16px;" onclick="addCustodyRuleRow()">+ Neue Regel</button>
+    </div>
+  </div>
 </div>
+
 
 <!-- ===== KALENDER (aus Paket 1) ===== -->
 <div class="app" id="calendarScreen" style="display:none;">
@@ -366,7 +385,7 @@
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
-    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Ganzen Tag (0-24 Uhr) anzeigen, angepasst an die verfügbare Höhe">Delais</button>
+    <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Zwischen Detail-Ansicht (8-20 Uhr) und ganzem Tag umschalten">Full Day</button>
   </div>
 
   <details class="legend-details">
@@ -630,15 +649,57 @@ window.SCHOOL_SUBJECTS = SCHOOL_SUBJECTS;
 /* Wer betreut an welchem Tag wann? Liefert 1 Segment (normaler Tag)
    oder 2 Segmente (Übergabetag) mit Uhrzeit-Grenze. Basis für Kopf-
    Badges, Hintergrund-Einfärbung und Kinder-Ansicht ("wo bin ich"). */
-function getCustodySegments(d){
-  const exc = checkExceptions(d);
-  if(exc) return [{who:exc.who, label:exc.label}];
+/* Standard-Betreuungsmuster: aus dem Admin-Bereich editierbare Wochen-
+   Regeln (window.custodyRules), z.B. "Mo 00:00 bis Do 17:00 → Janine".
+   Solange noch keine Regeln aus Firestore geladen sind (z.B. offline
+   oder ganz am Anfang), wird das bisherige, fest einprogrammierte
+   Muster als Rückfallebene genutzt. */
+function timeToMin(t){ const [h,m] = t.split(':').map(Number); return h*60+(m||0); }
+function minToTime(m){ m=((m%1440)+1440)%1440; const h=Math.floor(m/60), mi=m%60; return h+(mi?mi/60:0); }
+
+function getCustodySegmentsFromRules(d, rules){
+  const dow = d.getDay()===0 ? 7 : d.getDay(); // 1=Mo..7=So
+  const dayAbsStart = (dow-1)*1440;
+  const dayAbsEnd = dayAbsStart + 1440;
+  const raw = [];
+  rules.forEach(r=>{
+    let von = (r.vonTag-1)*1440 + timeToMin(r.vonZeit);
+    let bis = (r.bisTag-1)*1440 + timeToMin(r.bisZeit);
+    if(bis <= von) bis += 10080; // Regel läuft über das Wochenende hinweg
+    [-10080, 0, 10080].forEach(offset=>{
+      const v = von+offset, b = bis+offset;
+      const os = Math.max(v, dayAbsStart), oe = Math.min(b, dayAbsEnd);
+      if(oe > os){
+        raw.push({ who:r.wer, from:(os-dayAbsStart)/60, to:(oe-dayAbsStart)/60 });
+      }
+    });
+  });
+  raw.sort((a,b)=>a.from-b.from);
+  return raw.map(s=>{
+    const seg = {who:s.who};
+    if(s.from>0.01) seg.from = Math.round(s.from*100)/100;
+    if(s.to<23.99) seg.to = Math.round(s.to*100)/100;
+    return seg;
+  });
+}
+
+function getCustodySegmentsHardcoded(d){
   const dow = d.getDay();
   if(dow>=1 && dow<=3) return [{who:'a'}];
   if(dow===4) return [{who:'a', to:17}, {who:'b', from:17}];
   if(dow===5) return [{who:'a', to:18}, {who:'b', from:18}];
   if(dow===6) return [{who:'b', to:10}, {who:'a', from:10}];
   return [{who:'a', to:16}, {who:'b', from:16}]; // Sonntag
+}
+
+function getCustodySegments(d){
+  const exc = checkExceptions(d);
+  if(exc) return [{who:exc.who, label:exc.label}];
+  if(window.custodyRules && window.custodyRules.length){
+    const segs = getCustodySegmentsFromRules(d, window.custodyRules);
+    if(segs.length) return segs;
+  }
+  return getCustodySegmentsHardcoded(d);
 }
 
 /* ====================== FARBLEISTE (blau=Andi, lila=Janine, grau=Schule, rot=unklar) ======
@@ -762,7 +823,13 @@ function getCompactPxH(normalPx){
 function toggleCompactView(){
   compactMode = !compactMode;
   const btn = document.getElementById('compactBtn');
-  if(btn) btn.classList.toggle('active', compactMode);
+  if(btn){
+    btn.classList.toggle('active', compactMode);
+    // Beschriftung zeigt immer die AKTION, die ein Klick auslöst:
+    // im Detail-Modus (8-20 Uhr) steht "Full Day" (Klick zeigt ganzen Tag),
+    // im Ganztag-Modus steht "Details" (Klick geht zurück zur Detailansicht).
+    btn.textContent = compactMode ? 'Details' : 'Full Day';
+  }
   render();
 }
 
@@ -1084,19 +1151,6 @@ function renderWeek(){
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
 
-    // Hintergrund-Einfärbung: "wann habe ich die Kinder" auf einen Blick,
-    // ganz unten (z-index 0), egal was sonst noch angezeigt wird.
-    const segs = getCustodySegments(d);
-    segs.forEach(seg=>{
-      const segStart = seg.from!==undefined ? seg.from : startHour;
-      const segEnd = seg.to!==undefined ? seg.to : endHour;
-      const relevantForMe = !currentPerson || seg.who===currentPerson;
-      if(!relevantForMe) return;
-      const top=(segStart-startHour)*PXH, height=(segEnd-segStart)*PXH;
-      const tintVar = seg.who==='a' ? 'var(--a-tint)' : seg.who==='b' ? 'var(--b-tint)' : 'rgba(125,110,158,0.08)';
-      body += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
-    });
-
     // Schulzeiten pro Kind: FARBCODE statt winzigem Text (blau=Janosch,
     // braun=Mischa, wie in der Legende erklärt) – antippen zum Bearbeiten.
     ['janosch','mischa'].forEach((kid, idx)=>{
@@ -1246,15 +1300,6 @@ function renderKidWeek(kid){
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
 
-    // Hintergrund: wo/bei wem ist das Kind gerade
-    getCustodySegments(d).forEach(seg=>{
-      const segStart = seg.from!==undefined ? seg.from : startHour;
-      const segEnd = seg.to!==undefined ? seg.to : endHour;
-      const top=(segStart-startHour)*44, height=(segEnd-segStart)*44;
-      const tintVar = seg.who==='a' ? 'var(--a-tint)' : 'var(--b-tint)';
-      body += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
-    });
-
     // Echte Fächer statt "Schule"
     if(isSchoolDayForKid(d, kid) && SCHOOL_SUBJECTS[kid][dowIdx1to7]){
       SCHOOL_SUBJECTS[kid][dowIdx1to7].forEach(([s,e,subj])=>{
@@ -1388,17 +1433,6 @@ function renderDay(){
   for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
   body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
 
-  // Hintergrund-Einfärbung: wann ist wer zuständig
-  getCustodySegments(d).forEach(seg=>{
-    const segStart = seg.from!==undefined ? seg.from : startHour;
-    const segEnd = seg.to!==undefined ? seg.to : endHour;
-    const relevantForMe = !currentPerson || currentPerson==='janosch' || currentPerson==='mischa' || seg.who===currentPerson;
-    if(!relevantForMe) return;
-    const top=(segStart-startHour)*px, height=(segEnd-segStart)*px;
-    const tintVar = seg.who==='a' ? 'var(--a-tint)' : 'var(--b-tint)';
-    body += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
-  });
-
   function block(s,e,label,bgVar,colorVar,clickable,z){
     const top=(s-startHour)*px, height=(e-s)*px-2;
     const style = `top:${top}px;height:${height}px;left:6px;right:6px;z-index:${z||1};background:${bgVar};${colorVar?'color:'+colorVar+';':''}`;
@@ -1513,16 +1547,6 @@ function renderSwipeView(){
     daysHtml += `<div class="swipe-body">`;
     for(let h=startHour; h<endHour; h++) daysHtml += `<div class="hour-row" style="height:${px}px;"></div>`;
     daysHtml += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
-
-    // Hintergrund-Einfärbung
-    getCustodySegments(d).forEach(seg=>{
-      const relevantForMe = !currentPerson || currentPerson==='janosch' || currentPerson==='mischa' || seg.who===currentPerson;
-      if(!relevantForMe) return;
-      const segStart = seg.from!==undefined?seg.from:startHour, segEnd = seg.to!==undefined?seg.to:endHour;
-      const top=(segStart-startHour)*px, height=(segEnd-segStart)*px;
-      const tintVar = seg.who==='a' ? 'var(--a-tint)' : 'var(--b-tint)';
-      daysHtml += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;right:0;background:${tintVar};z-index:0;"></div>`;
-    });
 
     if(currentPerson==='janosch' || currentPerson==='mischa'){
       const kid = currentPerson;
@@ -1820,7 +1844,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v23 · 24.09.2026';
+const APP_VERSION = 'v24 · 24.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1840,7 +1864,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=23').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=24').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -1968,7 +1992,7 @@ async function writeLoginLog(user, userData){
     await findPartnerInfo();
     startRequestListeners();
   }
-  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); }
+  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); }
 }
 
 /* Sucht die/den jeweils andere/n Elternteil (role=='elternteil', nicht
@@ -2382,6 +2406,116 @@ function startCustomEventsListener(){
   }, err=> console.error('Custom-Events Fehler:', err));
 }
 
+/* Standard-Betreuungsregeln (Admin-editierbare Wochen-Vorlage) – für
+   ALLE aktiven Personen laden, damit der Kalender überall korrekt
+   berechnet wird, nicht nur im Admin-Bereich. */
+window.custodyRules = [];
+let custodyRulesUnsub = null;
+function startCustodyRulesListener(){
+  if(custodyRulesUnsub) return;
+  custodyRulesUnsub = onSnapshot(collection(db,'custody_rules'), snap=>{
+    window.custodyRules = snap.docs.map(d=>({id:d.id, ...d.data()})).sort((a,b)=>{
+      const av=(a.vonTag-1)*1440+timeToMin(a.vonZeit), bv=(b.vonTag-1)*1440+timeToMin(b.vonZeit);
+      return av-bv;
+    });
+    if(typeof render === 'function') render();
+    if(typeof renderCustodyRulesTable === 'function') renderCustodyRulesTable();
+  }, err=> console.error('Custody-Rules Fehler:', err));
+}
+
+/* ====================== ADMIN: STANDARD-BETREUUNG (Tabelle) ======
+   Zeigt/bearbeitet die wiederkehrenden Wochen-Regeln, die die farbige
+   Linie im Kalender bestimmen. Ist die Sammlung leer (allererste
+   Nutzung), wird sie einmalig mit dem bisherigen, fest einprogrammierten
+   Muster vorbefüllt, damit nichts "verschwindet". */
+const DOW_NAMES = ['','Mo','Di','Mi','Do','Fr','Sa','So'];
+const DEFAULT_CUSTODY_RULES = [
+  {vonTag:1, vonZeit:'00:00', bisTag:4, bisZeit:'17:00', wer:'a'},
+  {vonTag:4, vonZeit:'17:00', bisTag:5, bisZeit:'00:00', wer:'b'},
+  {vonTag:5, vonZeit:'00:00', bisTag:5, bisZeit:'18:00', wer:'a'},
+  {vonTag:5, vonZeit:'18:00', bisTag:6, bisZeit:'10:00', wer:'b'},
+  {vonTag:6, vonZeit:'10:00', bisTag:7, bisZeit:'16:00', wer:'a'},
+  {vonTag:7, vonZeit:'16:00', bisTag:1, bisZeit:'00:00', wer:'b'},
+];
+let custodySeedTried = false;
+async function seedCustodyRulesIfEmpty(){
+  if(custodySeedTried) return;
+  custodySeedTried = true;
+  if(window.custodyRules && window.custodyRules.length) return; // schon Daten da
+  try{
+    for(const r of DEFAULT_CUSTODY_RULES){
+      await addDoc(collection(db,'custody_rules'), r);
+    }
+  } catch(e){ console.error('Vorbefüllung Standard-Betreuung fehlgeschlagen:', e); }
+}
+
+function renderCustodyRulesTable(){
+  const el = document.getElementById('custodyRulesTable');
+  if(!el) return;
+  if(!window.custodyRules || !window.custodyRules.length){
+    seedCustodyRulesIfEmpty();
+    el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster …</div>';
+    return;
+  }
+  let html = '<table class="cr-table"><tr><th>Von Tag</th><th>Uhrzeit</th><th>Bis Tag</th><th>Uhrzeit</th><th>Wer</th><th></th></tr>';
+  window.custodyRules.forEach(r=>{
+    html += `<tr>
+      <td>${daySelect('vt_'+r.id, r.vonTag)}</td>
+      <td><input type="time" id="vz_${r.id}" value="${r.vonZeit}"></td>
+      <td>${daySelect('bt_'+r.id, r.bisTag)}</td>
+      <td><input type="time" id="bz_${r.id}" value="${r.bisZeit}"></td>
+      <td>${whoSelect('w_'+r.id, r.wer)}</td>
+      <td><button class="cr-save" onclick="saveCustodyRule('${r.id}')">Speichern</button> <button class="cr-del" onclick="deleteCustodyRule('${r.id}')">✕</button></td>
+    </tr>`;
+  });
+  html += '</table>';
+  el.innerHTML = html;
+
+  // Grobe Lückenprüfung: Summe aller Regel-Dauern sollte 10080 Minuten
+  // (eine volle Woche) ergeben – warnt bei offensichtlichen Lücken.
+  let totalMin = 0;
+  window.custodyRules.forEach(r=>{
+    let von=(r.vonTag-1)*1440+timeToMin(r.vonZeit), bis=(r.bisTag-1)*1440+timeToMin(r.bisZeit);
+    if(bis<=von) bis+=10080;
+    totalMin += (bis-von);
+  });
+  if(Math.abs(totalMin-10080) > 1){
+    el.innerHTML += `<div class="cr-coverage-warn">⚠️ Die Regeln decken aktuell ${Math.round(totalMin/1440*10)/10} von 7 Tagen ab – prüfe auf Lücken oder Überschneidungen.</div>`;
+  }
+}
+function daySelect(id, selected){
+  let html = `<select id="${id}">`;
+  for(let i=1;i<=7;i++) html += `<option value="${i}" ${i===selected?'selected':''}>${DOW_NAMES[i]}</option>`;
+  html += `</select>`;
+  return html;
+}
+function whoSelect(id, selected){
+  return `<select id="${id}">
+    <option value="a" ${selected==='a'?'selected':''}>Janine</option>
+    <option value="b" ${selected==='b'?'selected':''}>Andi</option>
+  </select>`;
+}
+window.addCustodyRuleRow = async function(){
+  try{
+    await addDoc(collection(db,'custody_rules'), {vonTag:1, vonZeit:'00:00', bisTag:1, bisZeit:'00:00', wer:'a'});
+  } catch(e){ alert('Fehler: '+e.message); }
+};
+window.saveCustodyRule = async function(id){
+  const vonTag = parseInt(document.getElementById('vt_'+id).value,10);
+  const vonZeit = document.getElementById('vz_'+id).value;
+  const bisTag = parseInt(document.getElementById('bt_'+id).value,10);
+  const bisZeit = document.getElementById('bz_'+id).value;
+  const wer = document.getElementById('w_'+id).value;
+  try{
+    await setDoc(doc(db,'custody_rules',id), {vonTag, vonZeit, bisTag, bisZeit, wer});
+    if(window.logEvent) window.logEvent('standardbetreuung_geaendert', {id});
+  } catch(e){ alert('Fehler: '+e.message); }
+};
+window.deleteCustodyRule = async function(id){
+  if(!confirm('Diese Regel wirklich löschen?')) return;
+  try{ await deleteDoc(doc(db,'custody_rules',id)); } catch(e){ alert('Fehler: '+e.message); }
+};
+
 /* ====================== ANFRAGEN-LISTE (live) ====================== */
 window.__reqSent = [];
 window.__reqReceived = [];
@@ -2571,8 +2705,10 @@ window.switchAdminTab = function(tab){
   document.getElementById('adminRegistrations').style.display = tab==='registrations' ? 'block' : 'none';
   document.getElementById('adminQr').style.display = tab==='qr' ? 'block' : 'none';
   document.getElementById('adminLog').style.display = tab==='log' ? 'block' : 'none';
+  document.getElementById('adminCustody').style.display = tab==='custody' ? 'block' : 'none';
   if(tab==='qr') renderQrCode();
   if(tab==='log') startLogListener();
+  if(tab==='custody') renderCustodyRulesTable();
 };
 
 function renderQrCode(){

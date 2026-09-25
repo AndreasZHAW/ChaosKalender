@@ -117,6 +117,13 @@ service cloud.firestore {
                      (resource.data.erstelltVonUid == request.auth.uid || isAdmin());
     }
 
+    // --- custody_rules: Standard-Betreuungsmuster (wiederkehrend), nur
+    // Admin darf es ändern, alle aktiven Personen dürfen es lesen -------
+    match /custody_rules/{ruleId} {
+      allow read: if isSignedIn() && isActive();
+      allow write: if isAdmin();
+    }
+
     // --- alles andere: vorerst komplett gesperrt ------------------------
     match /{document=**} {
       allow read, write: if false;
