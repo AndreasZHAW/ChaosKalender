@@ -250,14 +250,14 @@
   .req-card{border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px;}
   .req-card.mine-turn{border-color:var(--pending); background:var(--pending-bg);}
   .req-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px;}
-  .req-date{font-weight:700; font-size:13.5px;}
+  .req-date{font-weight:700; font-size:16px;}
   .req-status{font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:10px; white-space:nowrap;}
   .req-status.offen{background:var(--pending-bg); color:#8a5a1d;}
   .req-status.akzeptiert{background:var(--a-bg); color:var(--a);}
   .req-status.abgelehnt{background:#F0EFEA; color:var(--ink-soft);}
   .req-status.gegenvorschlag{background:var(--omami-bg); color:var(--omami);}
   .req-status.schwebend{background:var(--pending-bg); color:#8a5a1d;}
-  .req-times{font-size:12px; color:var(--ink-soft); margin-bottom:4px;}
+  .req-times{font-size:15px; font-weight:600; color:var(--ink); margin-bottom:4px;}
   .req-reason{font-size:12px; margin-bottom:8px;}
   .req-meta{font-size:10.5px; color:var(--ink-soft); margin-bottom:8px;}
   .req-actions{display:flex; gap:6px; flex-wrap:wrap;}
@@ -864,9 +864,15 @@ function getCompactPxH(normalPx){
   // auf dem Bildschirm? War vorher der Grund für Leerraum unten – die
   // Zeilenhöhe wurde mit einer anderen (zu vorsichtigen) Schätzung
   // berechnet als die Container-Höhe später gesetzt wurde.
+  // ZUSÄTZLICHER Sicherheitsabstand: Androids Adressleiste kann sich
+  // dynamisch ein-/ausblenden und window.innerHeight dabei verändern,
+  // nachdem schon gemessen wurde. Lieber die Zeilen etwas kleiner
+  // rechnen (kleiner Rand unten), als dass am Ende doch gescrollt
+  // werden muss.
   const container = document.getElementById('calContainer');
   const top = container ? container.getBoundingClientRect().top : 300;
-  const available = Math.max(280, window.innerHeight - top - 10);
+  const androidToolbarPuffer = 60;
+  const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer);
   return Math.max(11, Math.floor(available / 24));
 }
 
@@ -1816,16 +1822,24 @@ function scrollSwipeToToday(smooth){
   if(!wrap || !todayCol) return;
   const target = todayCol.offsetLeft - 6;
   const vTop = compactMode ? 0 : (8+20/60)*40;
-  wrap.scrollTo({left: target, top: vTop, behavior: smooth===false ? 'auto' : 'smooth'});
+  // WICHTIG: immer sofort (kein "smooth"), nie animiert. Eine laufende
+  // Scroll-Animation konnte vom "Weck-Trick" unten mitten in der
+  // Bewegung unterbrochen werden, wodurch eine falsche Zwischenposition
+  // "eingefroren" wurde – das war der Grund, warum "Heute" manchmal auf
+  // dem falschen Tag landete.
+  wrap.scrollTo({left: target, top: vTop, behavior: 'auto'});
   // "Weck-Trick": manche Android-Browser aktivieren position:sticky erst
   // nach einer ECHTEN Scroll-Bewegung, nicht nach einer programmatisch
   // gesetzten Position. Eine winzige Hin-und-her-Bewegung erzwingt die
   // Neuberechnung, damit die Zeitspalte von Anfang an sichtbar ist.
+  // Läuft jetzt erst NACH der (sofortigen) Positionierung, kein
+  // Animations-Konflikt mehr möglich.
   setTimeout(()=>{
+    wrap.scrollTo({left: target, top: vTop, behavior: 'auto'}); // nochmal sicherstellen
     const before = wrap.scrollLeft;
     wrap.scrollLeft = before + 1;
     requestAnimationFrame(()=>{ wrap.scrollLeft = before; });
-  }, smooth===false ? 30 : 350);
+  }, 80);
 }
 
 
@@ -1918,14 +1932,21 @@ function scrollHourGridTo6am(){
   const panel = document.querySelector('.cal-panel.hour-scroll');
   if(!panel) return;
   const px = currentView==='tag' ? 48 : 44; // Stundenhöhe: Tag=48px, Woche=44px
-  requestAnimationFrame(()=>{ panel.scrollTop = (8+20/60)*px; });
+  const targetTop = (8+20/60)*px;
+  const applyScroll = ()=>{ panel.scrollTop = targetTop; };
+  requestAnimationFrame(applyScroll);
+  // Nochmal etwas später erneut setzen: auf manchen Android-Geräten ist
+  // die max-height-Begrenzung im allerersten Frame noch nicht aktiv,
+  // wodurch das erste Setzen wirkungslos verpufft (es gibt ja noch
+  // nichts zum Scrollen). Der zweite, verzögerte Versuch fängt das ab.
+  setTimeout(applyScroll, 120);
   // Gleicher Weck-Trick wie bei Swipe (siehe scrollSwipeToToday) für die
   // horizontal sticky Zeitspalte in der Wochenansicht.
   setTimeout(()=>{
     const before = panel.scrollLeft;
     panel.scrollLeft = before + 1;
     requestAnimationFrame(()=>{ panel.scrollLeft = before; });
-  }, 30);
+  }, 150);
 }
 
 /* ====================== RENDER: ALLE SPALTEN (Admin, Desktop) ======
@@ -2020,7 +2041,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v39 · 26.09.2026';
+const APP_VERSION = 'v40 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2040,7 +2061,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=39').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=40').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
