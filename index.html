@@ -74,13 +74,18 @@
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
-  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; scroll-snap-type:x proximity; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  /* scroll-snap-type wurde entfernt: mehrere dokumentierte Browser-Bugs
+     zeigen Konflikte zwischen scroll-snap und sticky-positionierten
+     Elementen (Element "springt"/verschwindet bei bestimmten Scroll-
+     Positionen). Passt zum gemeldeten Muster (Zeitspalte verschwindet
+     nach ca. 2 Tagen zurückscrollen). */
   .swipe-row{display:flex;}
   .swipe-timecol{position:sticky; left:0; z-index:8; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
   .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:7; background:var(--panel);}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
-  .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); scroll-snap-align:start; position:relative;}
+  .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); position:relative;}
   .swipe-daycol.is-today{border-left:3px solid var(--pending); border-right:3px solid var(--pending);}
   .swipe-daycol.is-today .swipe-head{background:var(--pending-bg);}
   .swipe-head{cursor:pointer;}
@@ -993,6 +998,34 @@ function checkDesktopSiteMode(){
   }
 }
 
+/* Gemeinsame Erfassungslogik für Sticky-Bug-Diagnose: von Hand (Knopf)
+   ODER automatisch bei jedem Scroll-Ende genutzt. */
+function captureStickyState(){
+  const wrap = document.getElementById('swipeWrap') || document.querySelector('.cal-panel.hour-scroll');
+  const timeCol = document.querySelector('.swipe-timecol') || document.querySelector('.time-col');
+  const wrapRect = wrap ? wrap.getBoundingClientRect() : null;
+  const timeColRect = timeCol ? timeCol.getBoundingClientRect() : null;
+  const timeColStyle = timeCol ? getComputedStyle(timeCol) : null;
+  const visuallyInside = (wrapRect && timeColRect) ?
+    (timeColRect.left >= wrapRect.left - 2 && timeColRect.left < wrapRect.right) : null;
+  return {
+    ansicht: currentView,
+    scrollLeft: wrap ? wrap.scrollLeft : '?',
+    scrollTop: wrap ? wrap.scrollTop : '?',
+    scrollWidth: wrap ? wrap.scrollWidth : '?',
+    clientWidth: wrap ? wrap.clientWidth : '?',
+    wrapRect: wrapRect ? {left:Math.round(wrapRect.left), right:Math.round(wrapRect.right), top:Math.round(wrapRect.top)} : null,
+    timeColRect: timeColRect ? {left:Math.round(timeColRect.left), right:Math.round(timeColRect.right), top:Math.round(timeColRect.top), width:Math.round(timeColRect.width)} : 'ZEITSPALTE NICHT IM DOM GEFUNDEN',
+    timeColSichtbarBerechnet: visuallyInside,
+    timeColCssPosition: timeColStyle ? timeColStyle.position : '?',
+    timeColCssDisplay: timeColStyle ? timeColStyle.display : '?',
+    timeColCssVisibility: timeColStyle ? timeColStyle.visibility : '?',
+    timeColCssLeft: timeColStyle ? timeColStyle.left : '?',
+    timeColCssZIndex: timeColStyle ? timeColStyle.zIndex : '?',
+    compactMode: compactMode
+  };
+}
+
 /* Gezielte Meldung für das "Zeitleiste verschwindet"-Problem: erfasst
    GENAU JETZT, in diesem Moment, Scroll-Position und die tatsächliche
    Bildschirm-Position/Sichtbarkeit der Zeitspalte – viel aussagekräftiger
@@ -1001,32 +1034,7 @@ async function reportStickyBug(){
   const btn = document.getElementById('stickyBugBtn');
   if(btn){ btn.textContent = 'Sende…'; }
   try{
-    const wrap = document.getElementById('swipeWrap') || document.querySelector('.cal-panel.hour-scroll');
-    const timeCol = document.querySelector('.swipe-timecol') || document.querySelector('.time-col');
-    const wrapRect = wrap ? wrap.getBoundingClientRect() : null;
-    const timeColRect = timeCol ? timeCol.getBoundingClientRect() : null;
-    const timeColStyle = timeCol ? getComputedStyle(timeCol) : null;
-    // Ist die Zeitspalte gerade WIRKLICH innerhalb des sichtbaren
-    // Bereichs des Scroll-Containers? (rechnerisch geprüft, nicht nur
-    // "existiert im DOM")
-    const visuallyInside = (wrapRect && timeColRect) ?
-      (timeColRect.left >= wrapRect.left - 2 && timeColRect.left < wrapRect.right) : null;
-    const payload = {
-      ansicht: currentView,
-      scrollLeft: wrap ? wrap.scrollLeft : '?',
-      scrollTop: wrap ? wrap.scrollTop : '?',
-      scrollWidth: wrap ? wrap.scrollWidth : '?',
-      clientWidth: wrap ? wrap.clientWidth : '?',
-      wrapRect: wrapRect ? {left:Math.round(wrapRect.left), right:Math.round(wrapRect.right), top:Math.round(wrapRect.top)} : null,
-      timeColRect: timeColRect ? {left:Math.round(timeColRect.left), right:Math.round(timeColRect.right), top:Math.round(timeColRect.top), width:Math.round(timeColRect.width)} : 'ZEITSPALTE NICHT IM DOM GEFUNDEN',
-      timeColSichtbarBerechnet: visuallyInside,
-      timeColCssPosition: timeColStyle ? timeColStyle.position : '?',
-      timeColCssDisplay: timeColStyle ? timeColStyle.display : '?',
-      timeColCssVisibility: timeColStyle ? timeColStyle.visibility : '?',
-      timeColCssLeft: timeColStyle ? timeColStyle.left : '?',
-      timeColCssZIndex: timeColStyle ? timeColStyle.zIndex : '?',
-      compactMode: compactMode
-    };
+    const payload = captureStickyState();
     if(window.logEvent) await window.logEvent('sticky_problem', payload);
     if(btn){ btn.textContent = '✓ Gemeldet – danke!'; setTimeout(()=>{btn.textContent='🐛 Zeitleiste jetzt weg? Melden';}, 3000); }
   } catch(e){
@@ -1672,24 +1680,10 @@ function renderSwipeView(){
           }
         });
       }
-      const exc = checkExceptions(d);
-      if(exc){
-        if(showFullDetailFor(exc.who)) daysHtml += swipeBlock(exc.who==='a'?'Janine':'Andi', startHour, endHour, startHour, px, exc.who);
-      } else if(dow>=1 && dow<=3){
-        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, endHour, startHour, px, 'a');
-      } else if(dow===4){
-        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 17, startHour, px, 'a');
-        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 17, endHour, startHour, px, 'b');
-      } else if(dow===5){
-        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 18, startHour, px, 'a');
-        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 18, endHour, startHour, px, 'b');
-      } else if(dow===6){
-        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', startHour, 10, startHour, px, 'b');
-        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', 10, endHour, startHour, px, 'a');
-      } else {
-        if(showFullDetailFor('a')) daysHtml += swipeBlock('Janine', startHour, 16, startHour, px, 'a');
-        if(showFullDetailFor('b')) daysHtml += swipeBlock('Andi', 16, endHour, startHour, px, 'b');
-      }
+      // Betreuung wird nur noch über die farbige Linie links gezeigt
+      // (kein eigener Hintergrund-Block mehr), analog zur Wochenansicht.
+      // Ein Klick auf die Spalte öffnet trotzdem das Änderungsfenster
+      // über handleDayColClick.
       if(dow===5){
         ['mischa','janosch'].forEach(kid=>{
           if(isSchoolDayForKid(d, kid)){
@@ -1755,6 +1749,35 @@ function swipeBlock(label, s, e, startHour, px, who){
 function initSwipeScroll(){
   // Beim ersten Öffnen automatisch so scrollen, dass "Heute" sichtbar ist
   requestAnimationFrame(()=> scrollSwipeToToday(false));
+  attachStickyAutoDetector();
+}
+
+/* Automatische Sticky-Bug-Erkennung: prüft nach JEDEM Scroll-Ende (mit
+   kurzer Verzögerung, damit der Browser fertig gerendert hat), ob die
+   Zeitspalte wirklich sichtbar ist. Meldet automatisch, höchstens einmal
+   pro 8 Sekunden (kein Spam), ohne dass der Nutzer selbst etwas merken
+   oder den Knopf drücken muss. */
+let stickyAutoDetectorAttached = false;
+let stickyAutoLastReport = 0;
+function attachStickyAutoDetector(){
+  if(stickyAutoDetectorAttached) return;
+  stickyAutoDetectorAttached = true;
+  const wrap = document.getElementById('swipeWrap');
+  if(!wrap) return;
+  let scrollEndTimer = null;
+  wrap.addEventListener('scroll', ()=>{
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(()=>{
+      const state = captureStickyState();
+      if(state.timeColSichtbarBerechnet === false){
+        const now = Date.now();
+        if(now - stickyAutoLastReport > 8000){
+          stickyAutoLastReport = now;
+          if(window.logEvent) window.logEvent('sticky_problem_auto', state);
+        }
+      }
+    }, 180);
+  }, {passive:true});
 }
 function scrollSwipeToToday(smooth){
   const wrap = document.getElementById('swipeWrap');
@@ -1945,7 +1968,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v32 · 25.09.2026';
+const APP_VERSION = 'v33 · 25.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1965,7 +1988,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=32').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=33').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3011,7 +3034,7 @@ function startLogListener(){
       return;
     }
     window.__lastLogDocs = []; // für den Kopieren-Knopf gemerkt
-    const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler', sticky_problem:'🐛 Sticky-Bug'};
+    const typLabel = {login:'🔑 Login', view_change:'👁 Ansicht', error:'⚠️ Fehler', sticky_problem:'🐛 Sticky-Bug (manuell)', sticky_problem_auto:'🤖 Sticky-Bug (automatisch)'};
     let html = `<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
       <div style="font-size:10px; color:var(--ink-soft);">${snap.size} Einträge geladen ${snap.metadata.fromCache?'(aus Cache)':'(live)'}</div>
       <button class="cr-save" onclick="copyLogToClipboard()">📋 Ganzes Protokoll kopieren</button>
@@ -3024,7 +3047,7 @@ function startLogListener(){
       window.__lastLogDocs.push(d);
       const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
       const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
-      const isError = d.typ === 'error' || d.typ === 'sticky_problem';
+      const isError = d.typ === 'error' || d.typ === 'sticky_problem' || d.typ === 'sticky_problem_auto';
       const scaleRatio = d.textSkalierungsVerdacht;
       const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
       html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
@@ -3115,15 +3138,23 @@ function startUserListListener(){
       return;
     }
     const roleLabel = {admin:'Admin', janine:'Janine (Mutter)', andi:'Andi (Vater)', mischa:'Mischa (Kind)', janosch:'Janosch (Kind)', partner_andi:'Partner von Andi', partner_janine:'Partner von Janine', oma:'Oma', opa:'Opa', omami:'Omami'};
+    const roleOptions = ['janine','andi','mischa','janosch','partner_andi','partner_janine','oma','opa','omami','admin'];
     let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Name</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Rolle</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
       const uid = docSnap.id;
       const isMe = uid === (auth.currentUser && auth.currentUser.uid);
-      html += `<tr>
+      const isOldRole = !roleOptions.includes(d.role); // z.B. noch "elternteil"/"kind"/"partner" aus vor der Umstellung
+      const selectHtml = `<select id="roleSel-${uid}" style="border:1px solid var(--line); border-radius:6px; padding:4px 6px; font-family:inherit; font-size:12px;">
+        ${roleOptions.map(r=>`<option value="${r}" ${d.role===r?'selected':''}>${roleLabel[r]}</option>`).join('')}
+      </select>`;
+      html += `<tr ${isOldRole?'style="background:var(--holiday-bg);"':''}>
         <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}</td>
-        <td style="padding:6px; border-bottom:1px solid var(--line);">${roleLabel[d.role]||d.role||'?'}</td>
-        <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;">${isMe?'':`<button class="cr-del" onclick="deleteUserAccount('${uid}','${escapeHtml(d.username||'?')}')">✕ Löschen</button>`}</td>
+        <td style="padding:6px; border-bottom:1px solid var(--line);">${selectHtml}${isOldRole?' <span style="font-size:10px; color:var(--holiday-text);">⚠️ alte Rolle "'+escapeHtml(d.role||'?')+'" – bitte aktualisieren</span>':''}</td>
+        <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap;">
+          <button class="cr-save" onclick="saveUserRole('${uid}')">Speichern</button>
+          ${isMe?'':`<button class="cr-del" onclick="deleteUserAccount('${uid}','${escapeHtml(d.username||'?')}')">✕ Löschen</button>`}
+        </td>
       </tr>`;
     });
     html += '</table>';
@@ -3133,6 +3164,14 @@ function startUserListListener(){
       `<div class="empty-note" style="color:var(--holiday-text);">⚠️ Fehler beim Laden: ${escapeHtml(err.message||String(err))}</div>`;
   });
 }
+window.saveUserRole = async function(uid){
+  const sel = document.getElementById('roleSel-'+uid);
+  if(!sel) return;
+  try{
+    await updateDoc(doc(db,'users',uid), { role: sel.value });
+    if(window.logEvent) window.logEvent('rolle_geaendert', {uid, neueRolle: sel.value});
+  } catch(e){ alert('Fehler beim Speichern: '+e.message); }
+};
 window.deleteUserAccount = async function(uid, username){
   if(!confirm(`"${username}" wirklich löschen? Diese Person verliert den Zugriff auf ChaosKalender und müsste sich neu registrieren, falls sie zurückkehren soll.`)) return;
   try{
