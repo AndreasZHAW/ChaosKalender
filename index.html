@@ -34,6 +34,9 @@
 
   header.top{display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; flex-wrap:wrap; gap:8px;}
   .brand{font-weight:700; font-size:15.5px; white-space:nowrap;}
+  .brand-title{font-weight:700; font-size:15.5px;}
+  .brand-sub{font-size:9px; color:var(--ink-soft); margin-top:1px;}
+  .brand-sub #loggedInAs{font-weight:600;}
   .role-switch{display:flex; gap:4px; background:var(--line); border-radius:8px; padding:2px;}
   .role-switch button{border:none; background:transparent; color:var(--ink-soft); padding:6px 10px; border-radius:6px; font-family:inherit; font-size:11.5px; font-weight:600; cursor:pointer;}
   .role-switch button.active{background:var(--panel); color:var(--ink);}
@@ -383,7 +386,10 @@
 <div class="app" id="calendarScreen" style="display:none;">
 
   <header class="top">
-    <div class="brand">ChaosKalender <span id="versionTag" style="font-weight:400; font-size:9px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="loggedInAs" style="font-weight:600; font-size:10.5px; color:var(--ink-soft); vertical-align:middle;"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="font-weight:400; font-size:9px; color:var(--pending); text-decoration:underline; cursor:pointer; vertical-align:middle;">🔍 Diagnose senden</span> <span id="stickyBugBtn" onclick="reportStickyBug()" style="font-weight:400; font-size:9px; color:var(--a); text-decoration:underline; cursor:pointer; vertical-align:middle;">🐛 Zeitleiste jetzt weg? Melden</span></div>
+    <div>
+      <div class="brand-title">ChaosKalender</div>
+      <div class="brand-sub"><span id="versionTag"></span> <span id="loggedInAs"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="text-decoration:underline; cursor:pointer;">🔍 Diagnose senden</span></div>
+    </div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()" style="display:none;">⚙</div>
@@ -413,7 +419,7 @@
   </div>
 
   <details class="legend-details">
-    <summary>☰ Mehr (Ansicht, Partner, Kinder, Legende, Lücken-Check)</summary>
+    <summary>☰ Ansicht</summary>
     <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0;">
       <div class="role-switch">
         <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
@@ -445,10 +451,6 @@
   <div id="desktopSiteWarning" style="display:none;"></div>
 
   <div id="calContainer"></div>
-
-  <div class="footnote">
-    Paket 1 · Kalender-Engine · Betreuungsmuster (wer wann) ist noch ein Platzhalter-Rhythmus – wird in Paket 5 über den Admin-Bereich frei einstellbar · Feiertage &amp; Schulferien Rüschlikon sind echte, recherchierte Daten.
-  </div>
 </div>
 
 <div class="overlay" id="requestsOverlay">
@@ -1220,7 +1222,7 @@ function renderWeek(){
       return `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
     }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
-    const evTag = specialEv ? `<span class="day-event-tag" title="${specialEv.title}">★</span>` : '';
+    const evTag = specialEv ? `<span class="day-event-tag" onclick="event.stopPropagation(); alert('${String(specialEv.title).replace(/'/g,"\\'")}')" style="cursor:pointer;">★</span>` : '';
     head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
   }
   head += '</div>';
@@ -1378,7 +1380,7 @@ function renderKidWeek(kid){
     const dow = d.getDay();
     const dowIdx1to7 = (dow===0)?7:dow;
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
-    body += `<div class="day-col">`;
+    body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},44)" onpointerup="handleDayColPointerUp(event)">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, kid), startHour, 44);
 
@@ -1514,7 +1516,7 @@ function renderDay(){
   // Stundenraster: eine breite Spalte, ALLE 24 Stunden des Tages
   let body = `<div class="day-grid"><div class="time-col">`;
   for(let h=startHour; h<endHour; h++) body += `<div class="slot-h" style="height:${px}px;">${h}</div>`;
-  body += `</div><div class="day-col" style="position:relative;">`;
+  body += `</div><div class="day-col" style="position:relative;" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
   for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
   body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
 
@@ -1607,7 +1609,7 @@ function renderDay(){
   body += `</div></div>`;
   return head + body;
 }
-function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh}:${mm.toString().padStart(2,'0')}`; }
+function fmtH(h){ const hh=Math.floor(h), mm=Math.round((h-hh)*60); return `${hh.toString().padStart(2,'0')}:${mm.toString().padStart(2,'0')}`; }
 
 /* ====================== RENDER: SWIPE-ANSICHT ======================
    Durchgehendes horizontales Band aus einzelnen Tagesspalten (0–24 Uhr),
@@ -1870,6 +1872,7 @@ function render(){
   if(currentView==='swipe'){
     container.innerHTML = renderSwipeView();
     initSwipeScroll();
+    if(compactMode) fitCompactHeight('swipeWrap');
     return;
   }
   let panelHtml;
@@ -1880,6 +1883,23 @@ function render(){
   else panelHtml = renderDay();
   container.innerHTML = `<div class="cal-panel ${isHourGrid?'hour-scroll':''}">${panelHtml}</div>`;
   if(isHourGrid) scrollHourGridTo6am();
+  if(isHourGrid && compactMode) fitCompactHeight('.cal-panel.hour-scroll', true);
+}
+
+/* Im "Full Day"-Modus soll wirklich der GANZE Tag ohne Scrollen passen.
+   Statt uns auf eine grobe vh-Schätzung zu verlassen (die je nach Kopf-
+   zeile/Menüzustand daneben liegen kann), messen wir hier die WIRKLICH
+   verfügbare Höhe direkt nach und setzen die maximale Höhe des
+   Kalender-Kastens exakt danach – so bleibt garantiert kein Rest
+   ausserhalb des sichtbaren Bereichs. */
+function fitCompactHeight(selectorOrId, isSelector){
+  requestAnimationFrame(()=>{
+    const el = isSelector ? document.querySelector(selectorOrId) : document.getElementById(selectorOrId);
+    if(!el) return;
+    const top = el.getBoundingClientRect().top;
+    const available = Math.max(200, window.innerHeight - top - 8); // 8px Sicherheitsabstand unten
+    el.style.maxHeight = available + 'px';
+  });
 }
 
 /* Startansicht zeigt immer 6–20 Uhr, Rest per Scrollen erreichbar. */
@@ -1990,7 +2010,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v35 · 26.09.2026';
+const APP_VERSION = 'v37 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2010,7 +2030,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=35').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=37').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2414,8 +2434,16 @@ window.hiSwitchTab = function(tabId){
 function renderNewEntryForm(){
   const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
   const defaultMode = iAmCustodian ? 'info' : 'anfrage';
-  const vonStr = fmtH(hiState.hourDec);
-  const bisStr = fmtH(hiState.endHourDec!==undefined ? hiState.endHourDec : Math.min(24, hiState.hourDec+1));
+  // Absicherung: falls hourDec aus irgendeinem Grund mal keine gültige
+  // Zahl ist, lieber eine sinnvolle Standardzeit zeigen als leere Felder
+  // ("--:--"), die den Eindruck erwecken, gar nichts sei übernommen worden.
+  const safeStart = (typeof hiState.hourDec === 'number' && !isNaN(hiState.hourDec)) ? hiState.hourDec : 15;
+  const safeEnd = (typeof hiState.endHourDec === 'number' && !isNaN(hiState.endHourDec)) ? hiState.endHourDec : Math.min(24, safeStart+1);
+  if(safeStart !== hiState.hourDec && window.logEvent){
+    window.logEvent('zeit_fallback_genutzt', {hourDecWar: String(hiState.hourDec), endHourDecWar: String(hiState.endHourDec)});
+  }
+  const vonStr = fmtH(safeStart);
+  const bisStr = fmtH(safeEnd);
   const others = (window.allActiveUsers||[]).filter(u=>u.uid !== window.myUid);
   const confirmersHtml = others.map(u=>
     `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
@@ -2528,10 +2556,26 @@ window.hiSaveCustodyRequest = async function(){
 
 function renderExistingEntryForm(entry){
   if(entry.type==='event'){
+    const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
+    const defaultMode = iAmCustodian ? 'info' : 'anfrage';
     return `
       <div class="time-row">
         <div class="time-field"><label>Von</label><input type="time" id="hiEvVon" value="${fmtH(entry.defS)}"></div>
         <div class="time-field"><label>Bis</label><input type="time" id="hiEvBis" value="${fmtH(entry.defE)}"></div>
+      </div>
+      <div class="hi-toggle" id="hiModeToggle">
+        <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
+        <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
+      </div>
+      <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+      <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen?</div>
+        ${(window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
+          `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
+            <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+            ${escapeHtml(u.username||'?')}
+          </label>`
+        ).join('')}
       </div>
       <div class="modal-actions">
         <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
@@ -2575,9 +2619,29 @@ function renderExistingEntryForm(entry){
 window.hiSaveEvent = async function(key){
   const von = document.getElementById('hiEvVon').value;
   const bis = document.getElementById('hiEvBis').value;
+  const modeBtn = document.querySelector('#hiModeToggle button.active');
+  const mode = modeBtn ? modeBtn.dataset.mode : 'info';
   try{
-    await setDoc(doc(db,'event_overrides',key), { von, bis, geloescht:false, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() });
-    if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
+    if(mode==='anfrage'){
+      const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
+      if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
+      const entry = hiState.entries.find(e=>e.key===key) || {};
+      await addDoc(collection(db,'custom_events'), {
+        datum: hiState.iso, von, bis,
+        titel: '📝 Änderung: ' + (entry.label || key),
+        zielTyp: 'event_override', zielKey: key,
+        status: 'schwebend',
+        bestaetigerUids: checked.map(c=>c.value),
+        bestaetigerNamen: checked.map(c=>c.dataset.name),
+        bestaetigtVon: [],
+        erstelltVonUid: window.myUid||'?', erstelltVonName: window.myName||'?',
+        erstelltAm: new Date().toISOString()
+      });
+      if(window.logEvent) window.logEvent('termin_anfrage_erstellt', {key, von, bis});
+    } else {
+      await setDoc(doc(db,'event_overrides',key), { von, bis, geloescht:false, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() });
+      if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
+    }
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
