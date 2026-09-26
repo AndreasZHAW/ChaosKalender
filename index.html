@@ -1819,7 +1819,26 @@ function attachStickyAutoDetector(){
 function scrollSwipeToToday(smooth){
   const wrap = document.getElementById('swipeWrap');
   const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
-  if(!wrap || !todayCol) return;
+  // Automatisches, ausführliches Logging – läuft bei JEDEM Aufruf, ohne
+  // dass jemand manuell etwas anklicken muss. Erfasst alles, was zur
+  // Diagnose nötig ist: welches Datum die App gerade als "heute" ansieht,
+  // welche Spalte als "is-today" markiert wurde, und was am Ende
+  // tatsächlich passiert ist.
+  const echtesHeuteJetzt = new Date();
+  const alleSpalten = wrap ? Array.from(wrap.querySelectorAll('.swipe-daycol')).map(el=>({
+    iso: el.dataset.iso, istHeuteMarkiert: el.classList.contains('is-today'), offsetLeft: el.offsetLeft
+  })) : [];
+  if(!wrap || !todayCol){
+    if(window.logEvent) window.logEvent('heute_sprung_fehlgeschlagen', {
+      grund: !wrap ? 'swipeWrap nicht im DOM gefunden' : 'keine Spalte mit is-today-Klasse gefunden',
+      echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
+      echtesHeuteLokal: isoDate(echtesHeuteJetzt),
+      anzahlSpalten: alleSpalten.length,
+      ersteSpalten: alleSpalten.slice(0,5),
+      letzteSpalten: alleSpalten.slice(-5)
+    });
+    return;
+  }
   const target = todayCol.offsetLeft - 6;
   const vTop = compactMode ? 0 : (8+20/60)*40;
   // WICHTIG: immer sofort (kein "smooth"), nie animiert. Eine laufende
@@ -1840,6 +1859,35 @@ function scrollSwipeToToday(smooth){
     wrap.scrollLeft = before + 1;
     requestAnimationFrame(()=>{ wrap.scrollLeft = before; });
   }, 80);
+  // Nach ausreichend Zeit prüfen, was WIRKLICH am Ende zu sehen ist, und
+  // automatisch loggen – auch wenn alles gut ging (damit wir Normalfälle
+  // von Fehlerfällen unterscheiden können).
+  setTimeout(()=>{
+    const tatsaechlicheScrollLeft = wrap.scrollLeft;
+    const tatsaechlicheScrollTop = wrap.scrollTop;
+    const abweichung = Math.abs(tatsaechlicheScrollLeft - target);
+    const abweichungVertikal = Math.abs(tatsaechlicheScrollTop - vTop);
+    if(window.logEvent) window.logEvent('heute_sprung_ergebnis', {
+      echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
+      echtesHeuteLokal: isoDate(echtesHeuteJetzt),
+      todayColIso: todayCol.dataset.iso,
+      todayColOffsetLeft: todayCol.offsetLeft,
+      zielScrollLeft: target,
+      tatsaechlicheScrollLeft: tatsaechlicheScrollLeft,
+      abweichungPx: Math.round(abweichung),
+      stimmtUeberein: abweichung < 20,
+      zielScrollTop: vTop,
+      tatsaechlicheScrollTop: tatsaechlicheScrollTop,
+      abweichungVertikalPx: Math.round(abweichungVertikal),
+      vertikalStimmtUeberein: abweichungVertikal < 20,
+      compactMode: compactMode,
+      scrollWidth: wrap.scrollWidth,
+      clientWidth: wrap.clientWidth,
+      scrollHeightGesamt: wrap.scrollHeight,
+      clientHeight: wrap.clientHeight,
+      anzahlSpalten: alleSpalten.length
+    });
+  }, 400);
 }
 
 
@@ -1921,8 +1969,31 @@ function fitCompactHeight(selectorOrId, isSelector){
     // × dieselbe Zeilenhöhe wie beim Rendern), NICHT auf den gesamten
     // theoretisch verfügbaren Platz – sonst bleibt unten Leerraum, wenn
     // der Inhalt etwas kürzer ist als der Platz.
+    const container = document.getElementById('calContainer');
+    const topVorMessung = container ? container.getBoundingClientRect().top : null;
     const px = getCompactPxH(9999); // Parameter wird ignoriert, da compactMode aktiv ist
-    el.style.maxHeight = (24*px + 4) + 'px';
+    const gesetzteHoehe = 24*px + 4;
+    el.style.maxHeight = gesetzteHoehe + 'px';
+    // Automatische, ausführliche Diagnose – läuft bei JEDEM Full-Day-
+    // Aufbau, kein manueller Knopf nötig. Prüft nach kurzer Verzögerung,
+    // ob der Inhalt WIRKLICH ohne Scrollen komplett passt (scrollHeight
+    // vs. clientHeight), und ob sich window.innerHeight zwischenzeitlich
+    // verändert hat (z.B. durch die Android-Adressleiste).
+    setTimeout(()=>{
+      const passtOhneScrollen = el.scrollHeight <= el.clientHeight + 2;
+      if(window.logEvent) window.logEvent('full_day_diagnose', {
+        px: px,
+        gesetzteMaxHoehe: gesetzteHoehe,
+        inhaltsHoeheScrollHeight: el.scrollHeight,
+        sichtbareHoeheClientHeight: el.clientHeight,
+        passtOhneScrollen: passtOhneScrollen,
+        fehlendePx: passtOhneScrollen ? 0 : (el.scrollHeight - el.clientHeight),
+        windowInnerHeightJetzt: window.innerHeight,
+        containerTopBeiMessung: topVorMessung,
+        containerTopJetzt: container ? container.getBoundingClientRect().top : null,
+        currentView: currentView
+      });
+    }, 300);
   });
 }
 
@@ -2041,7 +2112,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v40 · 26.09.2026';
+const APP_VERSION = 'v41 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2061,7 +2132,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=40').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=41').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3270,7 +3341,7 @@ function startLogListener(){
       <span id="copyLogStatus" style="font-size:10.5px; color:var(--a);"></span>
     </div>`;
     html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Regeln erwartet</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
+    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:4px 6px;">Zeit</th><th style="padding:4px 6px;">Typ</th><th style="padding:4px 6px;">Wer</th><th style="padding:4px 6px;">Version</th><th style="padding:4px 6px;">Regeln erwartet</th><th style="padding:4px 6px;">Gerät</th><th style="padding:4px 6px;">Bildschirm</th><th style="padding:4px 6px;">Fenster</th><th style="padding:4px 6px;">Textskalierung?</th><th style="padding:4px 6px;">Details</th></tr>';
     let rowErrors = 0;
     snap.forEach(docSnap=>{
       try{
@@ -3281,17 +3352,17 @@ function startLogListener(){
         const isError = d.typ === 'error' || d.typ === 'sticky_problem' || d.typ === 'sticky_problem_auto';
         const scaleRatio = d.textSkalierungsVerdacht;
         const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
-        html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
-          <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
-          <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
-          <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
-          <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(d.appVersion||'?')}</td>
-          <td style="padding:6px 8px; white-space:nowrap; font-size:10.5px;">${escapeHtml(d.erwarteteRegelVersion||'?')}</td>
-          <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
-          <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
-          <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
-          <td style="padding:6px 8px; white-space:nowrap; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
-          <td style="padding:6px 8px; max-width:220px; font-size:10.5px; color:var(--ink-soft); word-break:break-word;">${escapeHtml(d.details||'')}</td>
+        html += `<tr style="border-bottom:1px solid var(--line); line-height:1.3; ${isError?'background:var(--holiday-bg);':''}">
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${zeitStr}</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${typLabel[d.typ]||d.typ||'?'}</td>
+          <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.appVersion||'?')}</td>
+          <td style="padding:4px 6px; white-space:nowrap; font-size:10.5px; vertical-align:top;">${escapeHtml(d.erwarteteRegelVersion||'?')}</td>
+          <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.geraet||'?')}</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
+          <td style="padding:4px 6px; max-width:260px; font-size:10px; color:var(--ink-soft); word-break:break-word; vertical-align:top;">${escapeHtml(d.details||'')}</td>
         </tr>`;
       } catch(rowErr){
         rowErrors++;
