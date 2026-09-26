@@ -445,7 +445,7 @@
     </div>
   </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
-    👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)">zurück zur Admin-Ansicht</span>
+    👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)" id="viewAsBackLink">zurück zur Admin-Ansicht</span>
   </div>
 
   <div id="desktopSiteWarning" style="display:none;"></div>
@@ -835,7 +835,7 @@ function getCareAssignment(d){
   if(dow===0) return {who:'a', ort:'oben', eveningTo:'b'}; // So tags Janine, ab 16 Uhr Andi
   return {who:'a', ort:'oben'}; // Mo-Mi durchgehend Janine
 }
-function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami'}[who] || ''; }
+function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami', janosch:'Janosch', mischa:'Mischa'}[who] || ''; }
 
 /* ====================== STATE ====================== */
 let currentDate = new Date(2026,10,15);
@@ -860,9 +860,14 @@ var compactMode = false; // "Delais": zeigt 0-24 Uhr, Zeilenhöhe passt sich der
    kleinen, mit ungenutztem Platz darunter) Wert zu erzwingen. */
 function getCompactPxH(normalPx){
   if(!compactMode) return normalPx;
-  const reserved = 300; // grobe Reserve für Kopf/Knöpfe/Ränder oberhalb des Kalenders
-  const available = Math.max(280, window.innerHeight - reserved);
-  return Math.max(12, Math.floor(available / 24));
+  // Echte Messung statt grober Schätzung: wo genau beginnt der Kalender
+  // auf dem Bildschirm? War vorher der Grund für Leerraum unten – die
+  // Zeilenhöhe wurde mit einer anderen (zu vorsichtigen) Schätzung
+  // berechnet als die Container-Höhe später gesetzt wurde.
+  const container = document.getElementById('calContainer');
+  const top = container ? container.getBoundingClientRect().top : 300;
+  const available = Math.max(280, window.innerHeight - top - 10);
+  return Math.max(11, Math.floor(available / 24));
 }
 
 function toggleCompactView(){
@@ -938,6 +943,8 @@ function viewAsPerson(who){
   if(who){
     hint.style.display = 'block';
     document.getElementById('viewAsName').textContent = who==='omami' ? 'Omami' : whoLabel(who);
+    const backLink = document.getElementById('viewAsBackLink');
+    if(backLink) backLink.textContent = isAdminUser ? 'zurück zur Admin-Ansicht' : 'zurück zur eigenen Ansicht';
   } else {
     hint.style.display = 'none';
   }
@@ -1090,7 +1097,7 @@ async function sendVerboseDiagnostic(){
 function jumpToToday(){
   currentDate = new Date();
   render();
-  if(currentView==='swipe') setTimeout(()=>scrollSwipeToToday(true), 60);
+  if(currentView==='swipe') setTimeout(()=>scrollSwipeToToday(true), 150);
 }
 function jumpToDate(y,m,day){ currentDate = new Date(y, m-1, day); render(); }
 function jumpYearsAhead(n){ currentDate.setFullYear(currentDate.getFullYear()+n); render(); }
@@ -1808,7 +1815,7 @@ function scrollSwipeToToday(smooth){
   const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
   if(!wrap || !todayCol) return;
   const target = todayCol.offsetLeft - 6;
-  const vTop = compactMode ? 0 : 6*40;
+  const vTop = compactMode ? 0 : (8+20/60)*40;
   wrap.scrollTo({left: target, top: vTop, behavior: smooth===false ? 'auto' : 'smooth'});
   // "Weck-Trick": manche Android-Browser aktivieren position:sticky erst
   // nach einer ECHTEN Scroll-Bewegung, nicht nach einer programmatisch
@@ -1896,9 +1903,12 @@ function fitCompactHeight(selectorOrId, isSelector){
   requestAnimationFrame(()=>{
     const el = isSelector ? document.querySelector(selectorOrId) : document.getElementById(selectorOrId);
     if(!el) return;
-    const top = el.getBoundingClientRect().top;
-    const available = Math.max(200, window.innerHeight - top - 8); // 8px Sicherheitsabstand unten
-    el.style.maxHeight = available + 'px';
+    // WICHTIG: exakt auf den tatsächlichen Inhalt zuschneiden (24 Stunden
+    // × dieselbe Zeilenhöhe wie beim Rendern), NICHT auf den gesamten
+    // theoretisch verfügbaren Platz – sonst bleibt unten Leerraum, wenn
+    // der Inhalt etwas kürzer ist als der Platz.
+    const px = getCompactPxH(9999); // Parameter wird ignoriert, da compactMode aktiv ist
+    el.style.maxHeight = (24*px + 4) + 'px';
   });
 }
 
@@ -1908,7 +1918,7 @@ function scrollHourGridTo6am(){
   const panel = document.querySelector('.cal-panel.hour-scroll');
   if(!panel) return;
   const px = currentView==='tag' ? 48 : 44; // Stundenhöhe: Tag=48px, Woche=44px
-  requestAnimationFrame(()=>{ panel.scrollTop = 6*px; });
+  requestAnimationFrame(()=>{ panel.scrollTop = (8+20/60)*px; });
   // Gleicher Weck-Trick wie bei Swipe (siehe scrollSwipeToToday) für die
   // horizontal sticky Zeitspalte in der Wochenansicht.
   setTimeout(()=>{
@@ -2010,7 +2020,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v37 · 26.09.2026';
+const APP_VERSION = 'v39 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2030,7 +2040,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=37').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=39').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2592,7 +2602,7 @@ function renderExistingEntryForm(entry){
   let statusLabel;
   if(ev.status==='info') statusLabel = 'Info (keine Freigabe nötig)';
   else if(ev.status==='bestaetigt') statusLabel = 'Bestätigt – fest eingetragen';
-  else if(ev.status==='abgelehnt') statusLabel = 'Abgelehnt';
+  else if(ev.status==='abgelehnt') statusLabel = 'Abgelehnt' + (ev.ablehnungsGrund ? (' – "' + ev.ablehnungsGrund + '"') : '');
   else {
     const namen = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
       const uid = bestaetiger[idx];
@@ -2604,12 +2614,38 @@ function renderExistingEntryForm(entry){
   if(mussIchBestaetigen){
     actionsHtml = `<button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">Bestätigen</button>`;
   }
+  // Beim normalen Bearbeiten (nicht wenn man selbst gerade bestätigen
+  // muss) auch hier Info/Anfrage anbieten – z.B. wenn Andi eine Zeit
+  // ändert, die in Janines Betreuungszeit liegt, soll das automatisch
+  // als Anfrage vorgeschlagen werden.
+  let modeToggleHtml = '';
+  if(!mussIchBestaetigen){
+    const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
+    const defaultMode = iAmCustodian ? 'info' : 'anfrage';
+    const confirmersHtml = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
+      `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
+        <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+        ${escapeHtml(u.username||'?')}
+      </label>`
+    ).join('');
+    modeToggleHtml = `
+      <div class="hi-toggle" id="hiModeToggle">
+        <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
+        <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
+      </div>
+      <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+      <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss die Änderung bestätigen?</div>
+        ${confirmersHtml}
+      </div>`;
+  }
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
     <div class="time-row">
       <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}"></div>
       <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}"></div>
     </div>
+    ${modeToggleHtml}
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button>
       ${darfLoeschen?`<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`:''}
@@ -2656,8 +2692,25 @@ window.hiCancelEvent = async function(key){
 window.hiSaveCustomEdit = async function(id){
   const von = document.getElementById('hiCustomVon').value;
   const bis = document.getElementById('hiCustomBis').value;
-  try{ await updateDoc(doc(db,'custom_events',id), {von, bis}); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
-  catch(e){ alert('Fehler: '+e.message); }
+  const modeBtn = document.querySelector('#hiModeToggle button.active');
+  const mode = modeBtn ? modeBtn.dataset.mode : 'info';
+  try{
+    if(mode==='anfrage'){
+      const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
+      if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
+      await updateDoc(doc(db,'custom_events',id), {
+        von, bis,
+        status: 'schwebend',
+        bestaetigerUids: checked.map(c=>c.value),
+        bestaetigerNamen: checked.map(c=>c.dataset.name),
+        bestaetigtVon: []
+      });
+    } else {
+      await updateDoc(doc(db,'custom_events',id), {von, bis, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
+    }
+    if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode});
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiAcceptCustom = async function(id){
   try{
@@ -2674,8 +2727,16 @@ window.hiAcceptCustom = async function(id){
   } catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiRejectCustom = async function(id){
-  try{ await updateDoc(doc(db,'custom_events',id), {status:'abgelehnt'}); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
-  catch(e){ alert('Fehler: '+e.message); }
+  const grund = prompt('Warum lehnst du diesen Termin ab? (wird der Person angezeigt, die ihn erstellt hat)', '');
+  if(grund === null) return; // Abgebrochen
+  try{
+    await updateDoc(doc(db,'custom_events',id), {
+      status:'abgelehnt',
+      ablehnungsGrund: grund.trim(),
+      ablehnungGesehen: false // löst beim Antragsteller ein Popup aus, bis er/sie es gesehen hat
+    });
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiDeleteCustom = async function(id){
   if(!confirm('Termin wirklich löschen?')) return;
@@ -2706,7 +2767,23 @@ function startCustomEventsListener(){
     if(typeof render === 'function') render();
     if(typeof renderAllEventsList === 'function') renderAllEventsList();
     if(typeof renderRequestsUI === 'function') renderRequestsUI();
+    checkForNewRejections();
   }, err=> console.error('Custom-Events Fehler:', err));
+}
+
+/* Zeigt automatisch ein Popup, wenn einer meiner eigenen Termine gerade
+   abgelehnt wurde und ich die Nachricht dazu noch nicht gesehen habe –
+   markiert ihn danach als "gesehen", damit er nur einmal aufpoppt. */
+let rejectionPopupShown = new Set();
+function checkForNewRejections(){
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.erstelltVonUid === window.myUid && ev.status === 'abgelehnt' && ev.ablehnungGesehen === false && !rejectionPopupShown.has(ev.id)){
+      rejectionPopupShown.add(ev.id); // verhindert Doppel-Popup während dieser Sitzung
+      const grundText = ev.ablehnungsGrund ? `\n\nBegründung: "${ev.ablehnungsGrund}"` : '\n\n(keine Begründung angegeben)';
+      alert(`❌ Dein Termin "${ev.titel||'?'}" (${ev.datum||'?'}, ${ev.von||''}–${ev.bis||''} Uhr) wurde abgelehnt.${grundText}`);
+      updateDoc(doc(db,'custom_events',ev.id), {ablehnungGesehen: true}).catch(()=>{});
+    }
+  });
 }
 
 /* Admin-Übersicht: ALLE frei eingetragenen Termine, unabhängig vom
@@ -2723,11 +2800,21 @@ function renderAllEventsList(){
   const sorted = [...evs].sort((a,b)=> (a.datum||'') < (b.datum||'') ? -1 : 1);
   let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Datum</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Titel</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Zeit</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Status</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Von</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
   sorted.forEach(ev=>{
+    let statusDisplay = escapeHtml(ev.status||'?');
+    if(ev.status==='schwebend'){
+      const bestaetiger = ev.bestaetigerUids || [];
+      const bestaetigt = ev.bestaetigtVon || [];
+      const namen = (ev.bestaetigerNamen || bestaetiger);
+      const offen = namen.filter((n,idx)=> !bestaetigt.includes(bestaetiger[idx]));
+      statusDisplay = `schwebend – wartet auf: ${offen.map(n=>escapeHtml(String(n))).join(', ') || '?'}`;
+    } else if(ev.status==='abgelehnt' && ev.ablehnungsGrund){
+      statusDisplay = `abgelehnt – "${escapeHtml(ev.ablehnungsGrund)}"`;
+    }
     html += `<tr>
       <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.datum||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.titel||'(ohne Titel)')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.von||'?')}–${escapeHtml(ev.bis||'?')}</td>
-      <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.status||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); max-width:220px;">${statusDisplay}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.erstelltVonName||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent('${ev.id}')">✕ Löschen</button></td>
     </tr>`;
