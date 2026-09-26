@@ -1,6 +1,9 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
+// REGEL-VERSION: rules-v4-2026-09-26 (muss mit "erwarteteRegelVersion"
+// im Admin-Protokoll übereinstimmen – falls nicht, sind diese Regeln
+// noch nicht die neuesten, die die App erwartet).
 // Stand: Paket 2 (Login & Registrierung).
 // Nur die "users"-Sammlung ist bereits freigeschaltet. Alle anderen
 // Sammlungen (Kalender, Nachrichten, Dokumente ...) werden gezielt in den

@@ -81,7 +81,7 @@
      Positionen). Passt zum gemeldeten Muster (Zeitspalte verschwindet
      nach ca. 2 Tagen zurückscrollen). */
   .swipe-row{display:flex;}
-  .swipe-timecol{position:sticky; left:0; z-index:8; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line);}
+  .swipe-timecol{position:relative; left:0; z-index:8; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line); will-change:transform;}
   .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:7; background:var(--panel);}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
@@ -1235,7 +1235,7 @@ function renderWeek(){
     const dow = d.getDay();
     const dowIdx1to7 = (dow===0)?7:dow;
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
-    body += `<div class="day-col" onclick="handleDayColClick(event,'${iso}',${startHour},${PXH})">`;
+    body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${PXH})" onpointerup="handleDayColPointerUp(event)">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, PXH);
 
@@ -1633,7 +1633,7 @@ function renderSwipeView(){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     const isToday = off===0;
 
-    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}" onclick="handleDayColClick(event,'${iso}',${startHour},${px})">`;
+    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
     daysHtml += `<div class="swipe-head" onclick="jumpToIso('${iso}'); setView('tag');"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
     if(hol) daysHtml += `<div class="swipe-holtag">${hol.length>12?hol.slice(0,11)+'…':hol}</div>`;
     daysHtml += `</div>`;
@@ -1766,10 +1766,26 @@ function initSwipeScroll(){
 let stickyAutoDetectorAttached = false;
 let stickyAutoLastReport = 0;
 function attachStickyAutoDetector(){
-  if(stickyAutoDetectorAttached) return;
-  stickyAutoDetectorAttached = true;
   const wrap = document.getElementById('swipeWrap');
   if(!wrap) return;
+
+  // WICHTIG: natives CSS position:sticky hat sich auf mindestens einem
+  // Android-Chrome-Gerät als unzuverlässig erwiesen (per Diagnose-Log
+  // belegt: sticky war korrekt gesetzt, wurde vom Browser aber trotzdem
+  // ignoriert). Deshalb wird die Zeitspalte jetzt manuell per
+  // transform:translateX() exakt an die Scroll-Position angeheftet –
+  // das funktioniert unabhängig von der nativen sticky-Umsetzung des
+  // Browsers, weil WIR die Position direkt setzen statt dem Browser zu
+  // vertrauen. WICHTIG: #swipeWrap wird bei JEDEM render() neu erzeugt
+  // (innerHTML-Austausch), darum hier KEIN "nur einmal"-Schutz – sonst
+  // hätte nur der allererste Aufbau einen funktionierenden Listener.
+  function pinTimeCol(){
+    const timeCol = wrap.querySelector('.swipe-timecol');
+    if(timeCol) timeCol.style.transform = `translateX(${wrap.scrollLeft}px)`;
+  }
+  pinTimeCol();
+  wrap.addEventListener('scroll', pinTimeCol, {passive:true});
+
   let scrollEndTimer = null;
   wrap.addEventListener('scroll', ()=>{
     clearTimeout(scrollEndTimer);
@@ -1974,7 +1990,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v34 · 26.09.2026';
+const APP_VERSION = 'v35 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1994,7 +2010,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=34').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=35').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2065,6 +2081,12 @@ function detectTextScaling(){
   } catch(e){ return { ratio:'?', fehler:String(e) }; }
 }
 
+// Erwartete Firestore-Regel-Version: wird bei jeder inhaltlichen Änderung
+// an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
+// der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
+// ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
+const EXPECTED_RULES_VERSION = 'rules-v4-2026-09-26';
+
 async function logEvent(type, details){
   try{
     const user = auth.currentUser;
@@ -2076,6 +2098,7 @@ async function logEvent(type, details){
     await addDoc(collection(db,'logs'), {
       uid: user.uid,
       typ: type,
+      erwarteteRegelVersion: EXPECTED_RULES_VERSION,
       username: window.__chaosUsername || '(unbekannt)',
       role: window.__chaosRole || '?',
       zeitpunkt: new Date().toISOString(),
@@ -2311,14 +2334,33 @@ function buildHourEntries(iso, hourDec){
   return entries;
 }
 
-window.handleDayColClick = function(event, iso, startHour, px){
+let dayColDragState = null;
+window.handleDayColPointerDown = function(event, iso, startHour, px){
   try{
-    if(event.target.closest('.event') || event.target.closest('.school-block') || event.target.closest('.swipe-head') || event.target.closest('.day-head-row')) return; // eigener Klick-Handler übernimmt
+    if(event.target.closest('.event') || event.target.closest('.school-block') || event.target.closest('.swipe-head') || event.target.closest('.day-head-row')) return;
     const rect = event.currentTarget.getBoundingClientRect();
-    const y = event.clientY - rect.top;
-    let hourDec = startHour + y/px;
-    hourDec = Math.max(0, Math.min(23.75, Math.round(hourDec*4)/4)); // auf Viertelstunden runden
-    openHourInspector(iso, hourDec);
+    dayColDragState = { iso, startHour, px, startY: event.clientY, startX: event.clientX, rect };
+  } catch(e){ /* Ziehen ist ein Zusatzkomfort, darf nie die App blockieren */ }
+};
+window.handleDayColPointerUp = function(event){
+  try{
+    const ds = dayColDragState;
+    dayColDragState = null;
+    if(!ds) return;
+    // Horizontale Bewegung = Wischen zum nächsten/vorherigen Tag (Swipe-
+    // Ansicht), keine bewusste Zeit-Auswahl -> ignorieren.
+    if(Math.abs(event.clientX - ds.startX) > 15) return;
+    const toHour = (clientY)=>{
+      let h = ds.startHour + (clientY - ds.rect.top)/ds.px;
+      return Math.max(0, Math.min(24, Math.round(h*4)/4));
+    };
+    let h1 = toHour(ds.startY);
+    let h2 = toHour(event.clientY);
+    let lo = Math.min(h1,h2), hi = Math.max(h1,h2);
+    // Kaum gezogen (< 15 Minuten Unterschied) = normaler Tipp/Klick auf
+    // eine Stunde, keine bewusste Ziehen-Geste -> Standard-Dauer 1h.
+    if(hi - lo < 0.26){ lo = Math.min(23.75, lo); hi = Math.min(24, lo+1); }
+    openHourInspector(ds.iso, lo, undefined, hi);
   } catch(e){
     console.error('Klick-Fehler:', e);
     if(window.logEvent) window.logEvent('klick_fehler', {nachricht:String(e.message||e)});
@@ -2326,7 +2368,7 @@ window.handleDayColClick = function(event, iso, startHour, px){
   }
 };
 
-window.openHourInspector = function(iso, hourDec, forcedTab){
+window.openHourInspector = function(iso, hourDec, forcedTab, endHourDec){
   try{
   const d = new Date(iso+'T00:00:00');
   const segs = getCustodySegments(d);
@@ -2335,7 +2377,7 @@ window.openHourInspector = function(iso, hourDec, forcedTab){
     return hourDec>=from && hourDec<to;
   }) || segs[0] || {who:'a'};
   const entries = buildHourEntries(iso, hourDec);
-  hiState = { iso, hourDec, custodySeg, entries };
+  hiState = { iso, hourDec, custodySeg, entries, endHourDec };
 
   const tabs = [{id:'new', label:'+ Neu'}, {id:'custody', label:'Betreuung'}];
   entries.forEach(e=> tabs.push({id:e.id, label:e.label}));
@@ -2373,7 +2415,7 @@ function renderNewEntryForm(){
   const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
   const defaultMode = iAmCustodian ? 'info' : 'anfrage';
   const vonStr = fmtH(hiState.hourDec);
-  const bisStr = fmtH(Math.min(24, hiState.hourDec+1));
+  const bisStr = fmtH(hiState.endHourDec!==undefined ? hiState.endHourDec : Math.min(24, hiState.hourDec+1));
   const others = (window.allActiveUsers||[]).filter(u=>u.uid !== window.myUid);
   const confirmersHtml = others.map(u=>
     `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
@@ -2798,7 +2840,15 @@ function renderRequestsUI(){
   const listEl = document.getElementById('requestsList');
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0){ listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>'; return; }
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0){
+    listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
+    // Automatisch schliessen, falls das Fenster gerade offen ist (z.B.
+    // weil man den letzten Eintrag soeben bestätigt hat) – so einfach
+    // wie möglich, kein manuelles Wegklicken nötig.
+    const overlay = document.getElementById('requestsOverlay');
+    if(overlay && overlay.classList.contains('show')) overlay.classList.remove('show');
+    return;
+  }
 
   let html = '';
   if(myPendingEvents.length){
@@ -3048,7 +3098,7 @@ function startLogListener(){
       <span id="copyLogStatus" style="font-size:10.5px; color:var(--a);"></span>
     </div>`;
     html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
+    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Regeln erwartet</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
     let rowErrors = 0;
     snap.forEach(docSnap=>{
       try{
@@ -3064,6 +3114,7 @@ function startLogListener(){
           <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
           <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
           <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(d.appVersion||'?')}</td>
+          <td style="padding:6px 8px; white-space:nowrap; font-size:10.5px;">${escapeHtml(d.erwarteteRegelVersion||'?')}</td>
           <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
           <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
           <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
@@ -3095,7 +3146,7 @@ function startLogListener(){
 window.copyLogToClipboard = async function(){
   const docs = window.__lastLogDocs || [];
   const text = docs.map(d=>{
-    return `[${d.zeitpunkt||'?'}] ${d.typ||'?'} | ${d.username||'?'} (${d.role||'?'}) | v${d.appVersion||'?'} | ${d.geraet||'?'} | Bildschirm ${d.bildschirmBreite||'?'}x${d.bildschirmHoehe||'?'} | Fenster ${d.fensterBreite||'?'}x${d.fensterHoehe||'?'} | Textskalierung ${d.textSkalierungsVerdacht||'?'} | ${d.details||''}`;
+    return `[${d.zeitpunkt||'?'}] ${d.typ||'?'} | ${d.username||'?'} (${d.role||'?'}) | v${d.appVersion||'?'} | Regeln erwartet: ${d.erwarteteRegelVersion||'?'} | ${d.geraet||'?'} | Bildschirm ${d.bildschirmBreite||'?'}x${d.bildschirmHoehe||'?'} | Fenster ${d.fensterBreite||'?'}x${d.fensterHoehe||'?'} | Textskalierung ${d.textSkalierungsVerdacht||'?'} | ${d.details||''}`;
   }).join('\n');
   try{
     await navigator.clipboard.writeText(text);
