@@ -536,11 +536,16 @@ function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<
    Geräten schnell nachzuvollziehen. */
 window.addEventListener('error', function(e){
   if(window.logEvent) window.logEvent('error', {
-    nachricht: e.message, datei: e.filename, zeile: e.lineno
+    nachricht: e.message, datei: e.filename, zeile: e.lineno,
+    stack: (e.error && e.error.stack) ? String(e.error.stack).slice(0,800) : '(kein Stack verfügbar)'
   });
 });
 window.addEventListener('unhandledrejection', function(e){
-  if(window.logEvent) window.logEvent('error', { nachricht: 'Promise-Fehler: ' + String(e.reason) });
+  const r = e.reason;
+  if(window.logEvent) window.logEvent('error', {
+    nachricht: 'Promise-Fehler: ' + String(r),
+    stack: (r && r.stack) ? String(r.stack).slice(0,800) : '(kein Stack verfügbar)'
+  });
 });
 
 /* ====================== ECHTE DATEN ======================
@@ -1349,6 +1354,7 @@ function renderKidWeek(kid){
   let head = '<div class="week-head"><div></div>';
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
+    const iso = isoDate(d);
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     const schoolFree = !isSchoolDay(d);
     let tag = '';
@@ -1968,7 +1974,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v33 · 25.09.2026';
+const APP_VERSION = 'v34 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -1988,7 +1994,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=33').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=34').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3027,6 +3033,7 @@ function startLogListener(){
   if(logUnsub) return; // schon aktiv, nicht doppelt registrieren
   const q = query(collection(db,'logs'), orderBy('zeitpunkt','desc'), limit(80));
   logUnsub = onSnapshot(q, (snap)=>{
+   try{
     const list = document.getElementById('logList');
     console.log('ChaosKalender Log-Snapshot:', snap.size, 'Einträge, fromCache:', snap.metadata.fromCache);
     if(snap.empty){
@@ -3042,28 +3049,41 @@ function startLogListener(){
     </div>`;
     html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
     html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:6px 8px;">Zeit</th><th style="padding:6px 8px;">Typ</th><th style="padding:6px 8px;">Wer</th><th style="padding:6px 8px;">Version</th><th style="padding:6px 8px;">Gerät</th><th style="padding:6px 8px;">Bildschirm</th><th style="padding:6px 8px;">Fenster</th><th style="padding:6px 8px;">Textskalierung?</th><th style="padding:6px 8px;">Details</th></tr>';
+    let rowErrors = 0;
     snap.forEach(docSnap=>{
-      const d = docSnap.data();
-      window.__lastLogDocs.push(d);
-      const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
-      const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
-      const isError = d.typ === 'error' || d.typ === 'sticky_problem' || d.typ === 'sticky_problem_auto';
-      const scaleRatio = d.textSkalierungsVerdacht;
-      const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
-      html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
-        <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
-        <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
-        <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
-        <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(d.appVersion||'?')}</td>
-        <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
-        <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
-        <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
-        <td style="padding:6px 8px; white-space:nowrap; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
-        <td style="padding:6px 8px; max-width:220px; font-size:10.5px; color:var(--ink-soft); word-break:break-word;">${escapeHtml(d.details||'')}</td>
-      </tr>`;
+      try{
+        const d = docSnap.data();
+        window.__lastLogDocs.push(d);
+        const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
+        const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
+        const isError = d.typ === 'error' || d.typ === 'sticky_problem' || d.typ === 'sticky_problem_auto';
+        const scaleRatio = d.textSkalierungsVerdacht;
+        const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
+        html += `<tr style="border-bottom:1px solid var(--line); ${isError?'background:var(--holiday-bg);':''}">
+          <td style="padding:6px 8px; white-space:nowrap;">${zeitStr}</td>
+          <td style="padding:6px 8px; white-space:nowrap;">${typLabel[d.typ]||d.typ||'?'}</td>
+          <td style="padding:6px 8px;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
+          <td style="padding:6px 8px; white-space:nowrap;">${escapeHtml(d.appVersion||'?')}</td>
+          <td style="padding:6px 8px;">${escapeHtml(d.geraet||'?')}</td>
+          <td style="padding:6px 8px; white-space:nowrap;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
+          <td style="padding:6px 8px; white-space:nowrap;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
+          <td style="padding:6px 8px; white-space:nowrap; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
+          <td style="padding:6px 8px; max-width:220px; font-size:10.5px; color:var(--ink-soft); word-break:break-word;">${escapeHtml(d.details||'')}</td>
+        </tr>`;
+      } catch(rowErr){
+        rowErrors++;
+        console.error('Log-Zeile fehlerhaft, übersprungen:', docSnap.id, rowErr);
+      }
     });
-    html += '</table>';
+    if(rowErrors>0) html = html.replace('</table>', '') + `<tr><td colspan="9" style="padding:6px 8px; color:var(--holiday-text); font-size:10.5px;">⚠️ ${rowErrors} Zeile(n) konnten nicht angezeigt werden (Fehler in Browser-Konsole).</td></tr></table>`;
+    html += rowErrors>0 ? '' : '</table>';
+    console.log('ChaosKalender Log-Rendering fertig:', snap.size, 'geladen,', snap.size-rowErrors, 'gerendert');
     list.innerHTML = html;
+   } catch(outerErr){
+    console.error('Log-Rendering komplett fehlgeschlagen:', outerErr);
+    document.getElementById('logList').innerHTML =
+      `<div class="empty-note" style="color:var(--holiday-text);">⚠️ Unerwarteter Fehler beim Anzeigen: ${escapeHtml(outerErr.message||String(outerErr))}<br>Details in der Browser-Konsole (F12).</div>`;
+   }
   }, (err)=>{
     // WICHTIG: ohne diesen Fehler-Callback bleibt "Lade..." für immer stehen,
     // wenn z.B. die Firestore-Regeln die "logs"-Sammlung noch nicht kennen.
