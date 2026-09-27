@@ -883,10 +883,16 @@ function getCompactPxH(normalPx){
   // nachdem schon gemessen wurde. Lieber die Zeilen etwas kleiner
   // rechnen (kleiner Rand unten), als dass am Ende doch gescrollt
   // werden muss.
+  // WICHTIG (gefunden via Diagnose-Log): die sticky Kopfzeile
+  // (.swipe-head bzw. .week-head, ca. 52px) zählt mit zur Gesamthöhe
+  // innerhalb desselben scrollbaren Containers, wurde bisher aber nie
+  // von der verfügbaren Höhe abgezogen – dadurch war der Container
+  // immer um genau die Kopfzeilenhöhe zu knapp bemessen.
+  const kopfzeileHoehe = 54;
   const container = document.getElementById('calContainer');
   const top = container ? container.getBoundingClientRect().top : 300;
   const androidToolbarPuffer = 60;
-  const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer);
+  const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer - kopfzeileHoehe);
   return Math.max(11, Math.floor(available / 24));
 }
 
@@ -1265,7 +1271,7 @@ function renderWeek(){
     const dowIdx1to7 = (dow===0)?7:dow;
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${PXH})" onpointerup="handleDayColPointerUp(event)">`;
-    for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
+    for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${PXH}px;"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, PXH);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
@@ -1408,7 +1414,7 @@ function renderKidWeek(kid){
     const dowIdx1to7 = (dow===0)?7:dow;
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},44)" onpointerup="handleDayColPointerUp(event)">`;
-    for(let h=startHour; h<endHour; h++) body += `<div class="hour-row"></div>`;
+    for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:44px;"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, kid), startHour, 44);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
@@ -1830,7 +1836,14 @@ function attachStickyAutoDetector(){
     }, 180);
   }, {passive:true});
 }
+// Zählt hoch bei jedem Aufruf von scrollSwipeToToday – damit ein alter,
+// noch laufender Versuchs-Loop erkennen kann, dass er durch einen
+// neueren Aufruf überholt wurde (z.B. weil zwischenzeitlich neu
+// gerendert wurde und #swipeWrap ein komplett neues Element ist).
+let scrollToTodayGeneration = 0;
+
 function scrollSwipeToToday(smooth){
+  const meineGeneration = ++scrollToTodayGeneration;
   const wrap = document.getElementById('swipeWrap');
   const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
   const echtesHeuteJetzt = new Date();
@@ -1848,6 +1861,7 @@ function scrollSwipeToToday(smooth){
   }
   const target = todayCol.offsetLeft - 6;
   const vTop = compactMode ? 0 : (8+20/60)*40;
+  const protokoll = []; // sammelt JEDEN einzelnen Versuch für die Diagnose
 
   // WICHTIG: Logs haben bewiesen, dass wrap.scrollTo({left:...}) auf
   // manchen Geräten schlicht NICHT wirkt (Ziel war korrekt berechnet,
@@ -1858,20 +1872,36 @@ function scrollSwipeToToday(smooth){
   let versuch = 0;
   const maxVersuche = 10;
   function versuchen(){
+    // Wurde inzwischen ein NEUERER Aufruf gestartet (z.B. durch
+    // zwischenzeitliches Neu-Rendern)? Dann diesen alten Versuch
+    // abbrechen statt gegen ein evtl. bereits ausgetauschtes Element
+    // weiterzuarbeiten.
+    if(meineGeneration !== scrollToTodayGeneration){
+      if(window.logEvent) window.logEvent('heute_sprung_ueberholt', {
+        meineGeneration, aktuelleGeneration: scrollToTodayGeneration, versuchBeiAbbruch: versuch, protokoll
+      });
+      return;
+    }
     versuch++;
+    const nochVerbunden = wrap.isConnected; // false = Element wurde aus dem DOM entfernt (z.B. durch Neu-Rendern)
     wrap.scrollLeft = target;
     wrap.scrollTop = vTop;
+    const sofortNachSetzenLinks = wrap.scrollLeft; // direkt danach, noch im selben Tick
+    protokoll.push({versuch, nochVerbunden, sofortNachSetzenLinks});
     setTimeout(()=>{
       const istLinks = wrap.scrollLeft;
       const istOben = wrap.scrollTop;
       const abweichung = Math.abs(istLinks - target);
       const abweichungVertikal = Math.abs(istOben - vTop);
       const stimmt = abweichung < 20 && abweichungVertikal < 20;
+      protokoll[protokoll.length-1].nachVerzoegerungLinks = istLinks;
+      protokoll[protokoll.length-1].nachVerzoegerungOben = istOben;
       if(!stimmt && versuch < maxVersuche){
         versuchen();
         return;
       }
-      // Fertig (erfolgreich oder Versuche aufgebraucht) – jetzt loggen.
+      // Fertig (erfolgreich oder Versuche aufgebraucht) – jetzt loggen,
+      // inklusive des kompletten Protokolls jedes einzelnen Versuchs.
       if(window.logEvent) window.logEvent('heute_sprung_ergebnis', {
         echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
         echtesHeuteLokal: isoDate(echtesHeuteJetzt),
@@ -1886,12 +1916,14 @@ function scrollSwipeToToday(smooth){
         abweichungVertikalPx: Math.round(abweichungVertikal),
         vertikalStimmtUeberein: abweichungVertikal < 20,
         benoetigteVersuche: versuch,
+        wrapNochVerbundenAmEnde: wrap.isConnected,
         compactMode: compactMode,
         scrollWidth: wrap.scrollWidth,
         clientWidth: wrap.clientWidth,
         scrollHeightGesamt: wrap.scrollHeight,
         clientHeight: wrap.clientHeight,
-        anzahlSpalten: alleSpalten.length
+        anzahlSpalten: alleSpalten.length,
+        protokoll: protokoll // jeder einzelne Versuch, um Muster zu erkennen
       });
       // "Weck-Trick" für die Zeitspalte, ganz am Ende, nach erfolgreicher
       // Positionierung.
@@ -1985,7 +2017,8 @@ function fitCompactHeight(selectorOrId, isSelector){
     const container = document.getElementById('calContainer');
     const topVorMessung = container ? container.getBoundingClientRect().top : null;
     const px = getCompactPxH(9999); // Parameter wird ignoriert, da compactMode aktiv ist
-    const gesetzteHoehe = 24*px + 4;
+    const kopfzeileHoehe = 54;
+    const gesetzteHoehe = 24*px + kopfzeileHoehe + 4;
     el.style.maxHeight = gesetzteHoehe + 'px';
     // Automatische, ausführliche Diagnose – läuft bei JEDEM Full-Day-
     // Aufbau, kein manueller Knopf nötig. Prüft nach kurzer Verzögerung,
@@ -1994,6 +2027,15 @@ function fitCompactHeight(selectorOrId, isSelector){
     // verändert hat (z.B. durch die Android-Adressleiste).
     setTimeout(()=>{
       const passtOhneScrollen = el.scrollHeight <= el.clientHeight + 2;
+      // Detailmessung: wie groß ist die Kopfzeile WIRKLICH, und wie groß
+      // ist eine einzelne Stundenzeile WIRKLICH (nicht nur, was wir
+      // gesetzt haben) – damit wir bei einer erneuten Abweichung sofort
+      // sehen, welches Element dafür verantwortlich ist.
+      const kopfEl = el.querySelector('.swipe-head, .week-head');
+      const ersteZeileEl = el.querySelector('.hour-row');
+      const kopfHoeheGemessen = kopfEl ? kopfEl.getBoundingClientRect().height : null;
+      const zeileHoeheGemessen = ersteZeileEl ? ersteZeileEl.getBoundingClientRect().height : null;
+      const anzahlZeilenImDom = el.querySelectorAll('.hour-row').length;
       if(window.logEvent) window.logEvent('full_day_diagnose', {
         px: px,
         gesetzteMaxHoehe: gesetzteHoehe,
@@ -2004,7 +2046,11 @@ function fitCompactHeight(selectorOrId, isSelector){
         windowInnerHeightJetzt: window.innerHeight,
         containerTopBeiMessung: topVorMessung,
         containerTopJetzt: container ? container.getBoundingClientRect().top : null,
-        currentView: currentView
+        currentView: currentView,
+        kopfHoeheGemessen: kopfHoeheGemessen,
+        zeileHoeheGemessen: zeileHoeheGemessen,
+        anzahlZeilenImDom: anzahlZeilenImDom,
+        erwarteteGesamtHoehe: (kopfHoeheGemessen||0) + (zeileHoeheGemessen||0)*anzahlZeilenImDom
       });
     }, 300);
   });
@@ -2031,6 +2077,27 @@ function scrollHourGridTo6am(){
     panel.scrollLeft = before + 1;
     requestAnimationFrame(()=>{ panel.scrollLeft = before; });
   }, 150);
+  // Automatische Diagnose: wie viele Stunden sind ab der Zielposition
+  // tatsächlich sichtbar, und stimmt die Scroll-Position überhaupt?
+  setTimeout(()=>{
+    const istOben = panel.scrollTop;
+    const sichtbareHoehe = panel.clientHeight;
+    const sichtbareStundenAnzahl = sichtbareHoehe / px;
+    const ersteSichtbareStunde = istOben / px;
+    const letzteSichtbareStunde = (istOben + sichtbareHoehe) / px;
+    if(window.logEvent) window.logEvent('details_sprung_diagnose', {
+      currentView, px,
+      zielScrollTop: targetTop,
+      tatsaechlicheScrollTop: istOben,
+      abweichungPx: Math.round(Math.abs(istOben - targetTop)),
+      panelClientHeight: sichtbareHoehe,
+      panelScrollHeight: panel.scrollHeight,
+      sichtbareStundenAnzahl: Math.round(sichtbareStundenAnzahl*10)/10,
+      ersteSichtbareStunde: Math.round(ersteSichtbareStunde*10)/10,
+      letzteSichtbareStunde: Math.round(letzteSichtbareStunde*10)/10,
+      windowInnerHeight: window.innerHeight
+    });
+  }, 300);
 }
 
 /* ====================== RENDER: ALLE SPALTEN (Admin, Desktop) ======
@@ -2125,7 +2192,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v46 · 27.09.2026';
+const APP_VERSION = 'v47 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2145,7 +2212,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=46').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=47').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
