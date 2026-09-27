@@ -77,7 +77,7 @@
   /* SWIPE-ANSICHT: horizontal scrollbares Tage-Band, Zeitspalte sticky links */
   .swipe-outer{position:relative;}
   .swipe-today-btn{position:absolute; top:6px; right:6px; z-index:10; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-family:inherit; font-size:13px; font-weight:600; padding:7px 12px; border-radius:20px; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer;}
-  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
+  .swipe-wrap{overflow-x:auto; overflow-y:auto; max-height:82vh; -webkit-overflow-scrolling:touch; border-radius:10px; border:1px solid var(--line); background:var(--panel);}
   /* scroll-snap-type wurde entfernt: mehrere dokumentierte Browser-Bugs
      zeigen Konflikte zwischen scroll-snap und sticky-positionierten
      Elementen (Element "springt"/verschwindet bei bestimmten Scroll-
@@ -2192,7 +2192,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v47 · 27.09.2026';
+const APP_VERSION = 'v48 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2212,7 +2212,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=47').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=48').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
