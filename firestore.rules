@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v5-2026-09-26 (muss mit "erwarteteRegelVersion"
+// REGEL-VERSION: rules-v6-2026-09-27 (muss mit "erwarteteRegelVersion"
 // im Admin-Protokoll übereinstimmen – falls nicht, sind diese Regeln
 // noch nicht die neuesten, die die App erwartet).
 // Stand: Paket 2 (Login & Registrierung).
@@ -129,6 +129,14 @@ service cloud.firestore {
     match /custody_rules/{ruleId} {
       allow read: if isSignedIn() && isActive();
       allow write: if isAdmin();
+    }
+    // Tagesgenaue Betreuungs-Ausnahmen (z.B. durch eine akzeptierte
+    // Betreuungs-Änderungsanfrage) – für alle aktiven Personen offen,
+    // da sie durch acceptRequest() beim Bestätigen gesetzt werden, nicht
+    // nur vom Admin.
+    match /custody_exceptions/{datum} {
+      allow read: if isSignedIn() && isActive();
+      allow write: if isSignedIn() && isActive();
     }
 
     // --- alles andere: vorerst komplett gesperrt ------------------------

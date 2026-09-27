@@ -788,6 +788,12 @@ function getCustodySegmentsHardcoded(d){
 function getCustodySegments(d){
   const exc = checkExceptions(d);
   if(exc) return [{who:exc.who, label:exc.label}];
+  // Tagesgenaue Ausnahme (z.B. akzeptierte Betreuungs-Anfrage) hat
+  // Vorrang vor dem allgemeinen Wochenmuster.
+  const iso = isoDate(d);
+  if(window.custodyExceptions && window.custodyExceptions[iso] && window.custodyExceptions[iso].segmente && window.custodyExceptions[iso].segmente.length){
+    return window.custodyExceptions[iso].segmente;
+  }
   // WICHTIG: try/catch – eine einzelne fehlerhafte/unvollständige Regel
   // (z.B. während des Speicherns im Admin-Bereich) darf niemals den
   // kompletten Kalender-Klick lahmlegen. Bei jedem Problem: Rückfall auf
@@ -2258,7 +2264,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v52 · 27.09.2026';
+const APP_VERSION = 'v53 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2278,7 +2284,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=52').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=53').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2353,7 +2359,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v5-2026-09-26';
+const EXPECTED_RULES_VERSION = 'rules-v6-2026-09-27';
 
 async function logEvent(type, details){
   try{
@@ -2413,7 +2419,7 @@ async function writeLoginLog(user, userData){
     await findPartnerInfo();
     startRequestListeners();
   }
-  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startAllActiveUsersListener(); }
+  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startCustodyExceptionsListener(); startAllActiveUsersListener(); }
 }
 
 /* Sucht die/den jeweils andere/n Elternteil (role=='janine' oder 'andi',
@@ -2777,15 +2783,21 @@ window.hiSaveNewEntry = async function(){
 
 function renderCustodyForm(){
   const seg = hiState.custodySeg;
-  const vonStr = fmtH(seg.from!==undefined?seg.from:0);
-  const bisStr = fmtH(seg.to!==undefined?seg.to:24);
+  // Für den ganzen Tag (nicht nur den angeklickten Abschnitt) alle
+  // aktuellen Segmente laden, damit man den kompletten Tag im Regler
+  // sieht und anpassen kann.
+  const d = new Date(hiState.iso+'T00:00:00');
+  let tagSegs = getCustodySegments(d).map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}));
+  if(!hiState.custodyDaySegs || hiState.custodyDaySegsFuerIso !== hiState.iso){
+    hiState.custodyDaySegs = tagSegs;
+    hiState.custodyDaySegsFuerIso = hiState.iso;
+  }
+  const trackId = 'hiCustodyDay';
+  window.__daySliderRegistry[trackId] = { getSegs: () => hiState.custodyDaySegs };
   return `
-    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">Aktuell: <strong>${whoLabel(seg.who)}</strong> (${vonStr}–${bisStr} Uhr). Die Anfrage geht immer an ${whoLabel(seg.who==='a'?'b':'a')} zur Bestätigung.</div>
-    <div class="time-row">
-      <div class="time-field"><label>Neuer Block von</label><input type="time" id="hiCustodyVon" value="${vonStr}"></div>
-      <div class="time-field"><label>bis</label><input type="time" id="hiCustodyBis" value="${bisStr}"></div>
-    </div>
-    <textarea id="hiCustodyGrund" placeholder="Grund (optional) …" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px; resize:vertical; min-height:56px; margin-bottom:14px;"></textarea>
+    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">Betreuung an diesem Tag (aktuell hier: <strong>${whoLabel(seg.who)}</strong>). Regler ziehen für neue Übergabezeiten, am Rand (0/24 Uhr) ziehen für eine zusätzliche Übergabe. Die Anfrage geht an ${whoLabel(seg.who==='a'?'b':'a')} zur Bestätigung – erst nach Bestätigung gilt sie im Kalender.</div>
+    ${renderDaySliderTrack(trackId, hiState.custodyDaySegs)}
+    <textarea id="hiCustodyGrund" placeholder="Grund (optional) …" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px; resize:vertical; min-height:56px; margin:18px 0 14px;"></textarea>
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
       <button class="btn" id="hiCustodySaveBtn" onclick="hiSaveCustodyRequest()">Anfragen</button>
@@ -2793,24 +2805,19 @@ function renderCustodyForm(){
 }
 window.hiSaveCustodyRequest = async function(){
   if(!window.partnerUid){ alert('Konnte die/den andere/n Elternteil nicht finden. Bitte später erneut versuchen.'); return; }
-  const neuVon = document.getElementById('hiCustodyVon').value;
-  const neuBis = document.getElementById('hiCustodyBis').value;
   const grund = document.getElementById('hiCustodyGrund').value.trim();
-  const seg = hiState.custodySeg;
+  const neueSegmente = hiState.custodyDaySegs;
   const btn = document.getElementById('hiCustodySaveBtn');
   btn.disabled = true; btn.textContent = 'Sende…';
   try{
     await addDoc(collection(db,'slot_changes'), {
       datum: hiState.iso,
-      altVon: fmtH(seg.from!==undefined?seg.from:0), altBis: fmtH(seg.to!==undefined?seg.to:24),
-      urspruenglichWer: seg.who,
-      nurStreichen: false,
-      neuVon, neuBis,
+      neueSegmente: neueSegmente, // ganzer Tag statt nur ein einzelner Block
       angefragtVonUid: window.myUid, angefragtVonName: window.myName,
       angefragtAnUid: window.partnerUid, angefragtAnName: window.partnerName,
       aktuellAmZugUid: window.partnerUid,
       status: 'offen',
-      verlauf: [{ aktion:'angefragt', vonUid:window.myUid, vonName:window.myName, neuVon, neuBis, nurStreichen:false, grund, zeitstempel:new Date().toISOString() }],
+      verlauf: [{ aktion:'angefragt', vonUid:window.myUid, vonName:window.myName, neueSegmente, grund, zeitstempel:new Date().toISOString() }],
       erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString()
     });
     if(window.logEvent) window.logEvent('anfrage_erstellt', {datum:hiState.iso});
@@ -3360,6 +3367,17 @@ function startCustodyRulesListener(){
     if(typeof renderCustodyRulesTable === 'function') renderCustodyRulesTable();
   }, err=> console.error('Custody-Rules Fehler:', err));
 }
+window.custodyExceptions = {}; // iso-Datum -> {segmente:[...], ...}
+let custodyExceptionsUnsub = null;
+function startCustodyExceptionsListener(){
+  if(custodyExceptionsUnsub) return;
+  custodyExceptionsUnsub = onSnapshot(collection(db,'custody_exceptions'), snap=>{
+    const map = {};
+    snap.forEach(d=> map[d.id] = d.data());
+    window.custodyExceptions = map;
+    if(typeof render === 'function') render();
+  }, err=> console.error('Custody-Exceptions Fehler:', err));
+}
 
 /* ====================== ADMIN: STANDARD-BETREUUNG (Tabelle) ======
    Zeigt/bearbeitet die wiederkehrenden Wochen-Regeln, die die farbige
@@ -3400,6 +3418,95 @@ window.retryCustodySeed = function(){
    Technik: mehrere gestapelte <input type="range">, deren native
    Daumen sichtbar bleiben, der Rest transparent ist. So funktioniert
    Ziehen mit Maus UND Touch zuverlässig, ohne eigene Drag-Logik. */
+/* ====================== BETREUUNGS-REGLER (generisch) ======================
+   Ein Regler-Track kann für den Wochenplan (7 Stück, globale Regel) ODER
+   für einen einzelnen Tag (Anfrage-Formular) genutzt werden. Die
+   Registry merkt sich pro Track-ID, WO die Segment-Daten liegen. */
+window.__daySliderRegistry = {}; // trackId -> {getSegs()}
+
+function renderDaySliderTrack(trackId, segs){
+  const nameOf = w => w==='a' ? 'Janine' : 'Andi';
+  const colorOf = w => w==='a' ? 'var(--a)' : 'var(--b)';
+  const segHtml = segs.map((s,idx) => {
+    const leftPct=(s.from/24)*100, widthPct=((s.to-s.from)/24)*100;
+    return `<div class="custody-seg" style="left:${leftPct}%; width:${widthPct}%; background:${colorOf(s.who)};" title="${nameOf(s.who)} ${fmtHM(s.from)}–${fmtHM(s.to)} – zum Farbwechsel antippen" onclick="toggleDaySliderColor('${trackId}',${idx})"></div>`;
+  }).join('');
+  let handlesHtml = '';
+  for(let i=0;i<segs.length-1;i++){
+    handlesHtml += `<input type="range" min="0" max="1440" step="15" value="${Math.round(segs[i].to*60)}" data-track="${trackId}" data-boundary="${i}" oninput="onDaySliderHandleDrag(this)">`;
+  }
+  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="0" data-track="${trackId}" data-edge="left" onchange="onDaySliderEdgeDrag(this)">`;
+  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="1440" data-track="${trackId}" data-edge="right" onchange="onDaySliderEdgeDrag(this)">`;
+  const zeitLabels = `<span class="custody-time-label" style="left:0%;">0:00</span>` +
+    segs.slice(0,-1).map(s=>`<span class="custody-time-label" style="left:${(s.to/24)*100}%;">${fmtHM(s.to)}</span>`).join('') +
+    `<span class="custody-time-label" style="left:100%; transform:translateX(-100%);">24:00</span>`;
+  return `<div class="custody-track" id="${trackId}">${zeitLabels}${segHtml}${handlesHtml}</div>`;
+}
+function rerenderDaySliderTrack(trackId){
+  const entry = window.__daySliderRegistry[trackId];
+  const el = document.getElementById(trackId);
+  if(!entry || !el) return;
+  el.outerHTML = renderDaySliderTrack(trackId, entry.getSegs());
+}
+window.onDaySliderHandleDrag = function(el){
+  const trackId = el.dataset.track;
+  const entry = window.__daySliderRegistry[trackId];
+  if(!entry) return;
+  const segs = entry.getSegs();
+  const boundaryIdx = parseInt(el.dataset.boundary,10);
+  let newHour = parseInt(el.value,10)/60;
+  const minAllowed = segs[boundaryIdx].from + 0.25;
+  const maxAllowed = segs[boundaryIdx+1].to - 0.25;
+  if(newHour < minAllowed){ newHour = minAllowed; el.value = Math.round(newHour*60); }
+  if(newHour > maxAllowed){ newHour = maxAllowed; el.value = Math.round(newHour*60); }
+  segs[boundaryIdx].to = newHour;
+  segs[boundaryIdx+1].from = newHour;
+  // Regler löschen: zieht man ihn bis (fast) auf die Breite 0 an einen
+  // Nachbarn heran, verschwindet das jeweilige Segment – so kann man
+  // Übergaben durch Hin-und-her-Ziehen an den Rand wieder entfernen.
+  const breiteLinks = segs[boundaryIdx].to - segs[boundaryIdx].from;
+  const breiteRechts = segs[boundaryIdx+1].to - segs[boundaryIdx+1].from;
+  if(breiteLinks < 0.26){ segs.splice(boundaryIdx,1); rerenderDaySliderTrack(trackId); return; }
+  if(breiteRechts < 0.26){ segs.splice(boundaryIdx+1,1); rerenderDaySliderTrack(trackId); return; }
+  // Live-Update direkt im DOM (kein Neuzeichnen), damit der gerade
+  // gezogene Regler nicht mitten in der Bewegung ersetzt wird.
+  const track = document.getElementById(trackId);
+  const segEls = track.querySelectorAll('.custody-seg');
+  if(segEls[boundaryIdx]) segEls[boundaryIdx].style.width = (breiteLinks/24*100)+'%';
+  if(segEls[boundaryIdx+1]){ segEls[boundaryIdx+1].style.left=(segs[boundaryIdx+1].from/24*100)+'%'; segEls[boundaryIdx+1].style.width=(breiteRechts/24*100)+'%'; }
+  const labelEls = track.querySelectorAll('.custody-time-label');
+  if(labelEls[boundaryIdx+1]){ labelEls[boundaryIdx+1].textContent = fmtHM(newHour); labelEls[boundaryIdx+1].style.left=(newHour/24*100)+'%'; }
+};
+window.onDaySliderEdgeDrag = function(el){
+  const trackId = el.dataset.track;
+  const entry = window.__daySliderRegistry[trackId];
+  if(!entry) return;
+  const segs = entry.getSegs();
+  const edge = el.dataset.edge;
+  const val = parseInt(el.value,10);
+  let veraendert=false;
+  if(edge==='left' && val>=15){
+    const newHour=val/60, firstSeg=segs[0];
+    if(newHour<firstSeg.to-0.24){
+      segs.unshift({from:0,to:newHour,who:(firstSeg.who==='a'?'b':'a')});
+      firstSeg.from=newHour; veraendert=true;
+    }
+  } else if(edge==='right' && val<=1425){
+    const newHour=val/60, lastSeg=segs[segs.length-1];
+    if(newHour>lastSeg.from+0.24){
+      segs.push({from:newHour,to:24,who:(lastSeg.who==='a'?'b':'a')});
+      lastSeg.to=newHour; veraendert=true;
+    }
+  }
+  if(veraendert) rerenderDaySliderTrack(trackId);
+};
+window.toggleDaySliderColor = function(trackId, idx){
+  const entry = window.__daySliderRegistry[trackId];
+  if(!entry) return;
+  entry.getSegs()[idx].who = entry.getSegs()[idx].who==='a'?'b':'a';
+  rerenderDaySliderTrack(trackId);
+};
+
 window.custodyEditState = null; // {1:[{from,to,who}], ..., 7:[...]}
 
 function buildCustodyEditStateFromRules(){
@@ -3433,86 +3540,14 @@ function renderCustodyRulesTable(){
   el.innerHTML = html;
 }
 function renderOneCustodyDaySlider(dow){
-  const segs = window.custodyEditState[dow];
-  const nameOf = w => w==='a' ? 'Janine' : 'Andi';
-  const colorOf = w => w==='a' ? 'var(--a)' : 'var(--b)';
-  const segHtml = segs.map((s,idx) => {
-    const leftPct = (s.from/24)*100, widthPct = ((s.to-s.from)/24)*100;
-    return `<div class="custody-seg" style="left:${leftPct}%; width:${widthPct}%; background:${colorOf(s.who)};" title="${nameOf(s.who)} ${fmtHM(s.from)}–${fmtHM(s.to)} – zum Farbwechsel antippen" onclick="toggleCustodySegColor(${dow},${idx})"></div>`;
-  }).join('');
-  let handlesHtml = '';
-  for(let i=0; i<segs.length-1; i++){
-    const boundaryMin = Math.round(segs[i].to*60);
-    handlesHtml += `<input type="range" min="0" max="1440" step="15" value="${boundaryMin}" data-dow="${dow}" data-boundary="${i}" oninput="onCustodyHandleDrag(this)">`;
-  }
-  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="0" data-dow="${dow}" data-edge="left" onchange="onCustodyEdgeDrag(this)" oninput="onCustodyEdgeDrag(this)">`;
-  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="1440" data-dow="${dow}" data-edge="right" onchange="onCustodyEdgeDrag(this)" oninput="onCustodyEdgeDrag(this)">`;
-  const zeitLabels = segs.slice(0,-1).map(s => `<span class="custody-time-label" style="left:${(s.to/24)*100}%;">${fmtHM(s.to)}</span>`).join('');
+  const trackId = 'custodyday_'+dow;
+  window.__daySliderRegistry[trackId] = { getSegs: () => window.custodyEditState[dow] };
   return `
     <div class="custody-day-row">
       <div class="custody-day-label">${DOW_NAMES[dow]}</div>
-      <div class="custody-track">
-        ${zeitLabels}
-        ${segHtml}
-        ${handlesHtml}
-      </div>
+      ${renderDaySliderTrack(trackId, window.custodyEditState[dow])}
     </div>`;
 }
-window.onCustodyHandleDrag = function(el){
-  const dow = parseInt(el.dataset.dow,10);
-  const boundaryIdx = parseInt(el.dataset.boundary,10);
-  const segs = window.custodyEditState[dow];
-  let newHour = parseInt(el.value,10)/60;
-  const minAllowed = segs[boundaryIdx].from + 0.25;
-  const maxAllowed = segs[boundaryIdx+1].to - 0.25;
-  if(newHour < minAllowed){ newHour = minAllowed; el.value = Math.round(newHour*60); }
-  if(newHour > maxAllowed){ newHour = maxAllowed; el.value = Math.round(newHour*60); }
-  segs[boundaryIdx].to = newHour;
-  segs[boundaryIdx+1].from = newHour;
-  // Direkt im DOM aktualisieren statt komplett neu zu zeichnen – sonst
-  // würde der gerade gezogene Regler mitten in der Bewegung ersetzt.
-  const track = el.closest('.custody-track');
-  const segEls = track.querySelectorAll('.custody-seg');
-  if(segEls[boundaryIdx]) segEls[boundaryIdx].style.width = ((segs[boundaryIdx].to-segs[boundaryIdx].from)/24*100)+'%';
-  if(segEls[boundaryIdx+1]){
-    segEls[boundaryIdx+1].style.left = (segs[boundaryIdx+1].from/24*100)+'%';
-    segEls[boundaryIdx+1].style.width = ((segs[boundaryIdx+1].to-segs[boundaryIdx+1].from)/24*100)+'%';
-  }
-  const labelEls = track.querySelectorAll('.custody-time-label');
-  if(labelEls[boundaryIdx]){ labelEls[boundaryIdx].textContent = fmtHM(newHour); labelEls[boundaryIdx].style.left = (newHour/24*100)+'%'; }
-};
-window.onCustodyEdgeDrag = function(el){
-  const dow = parseInt(el.dataset.dow,10);
-  const edge = el.dataset.edge;
-  const val = parseInt(el.value,10);
-  const segs = window.custodyEditState[dow];
-  let veraendert = false;
-  if(edge==='left' && val >= 15){
-    const newHour = val/60;
-    const firstSeg = segs[0];
-    if(newHour < firstSeg.to - 0.24){
-      const neueFarbe = firstSeg.who==='a' ? 'b' : 'a';
-      segs.unshift({from:0, to:newHour, who:neueFarbe});
-      firstSeg.from = newHour;
-      veraendert = true;
-    }
-  } else if(edge==='right' && val <= 1425){
-    const newHour = val/60;
-    const lastSeg = segs[segs.length-1];
-    if(newHour > lastSeg.from + 0.24){
-      const neueFarbe = lastSeg.who==='a' ? 'b' : 'a';
-      segs.push({from:newHour, to:24, who:neueFarbe});
-      lastSeg.to = newHour;
-      veraendert = true;
-    }
-  }
-  if(veraendert) renderCustodyRulesTable(); // strukturelle Änderung -> hier ist Neuzeichnen sicher (Ziehen ist beim onchange abgeschlossen)
-};
-window.toggleCustodySegColor = function(dow, idx){
-  const segs = window.custodyEditState[dow];
-  segs[idx].who = segs[idx].who==='a' ? 'b' : 'a';
-  renderCustodyRulesTable();
-};
 window.retryCustodySeed = function(){ custodySeedTried = false; seedCustodyRulesIfEmpty(); };
 window.saveCustodySliders = async function(){
   const btn = document.getElementById('custodySliderSaveBtn');
@@ -3532,8 +3567,12 @@ window.saveCustodySliders = async function(){
         });
       }
     }
+    // Das neue Wochenmuster gilt sofort für ALLE zukünftigen Tage dieser
+    // Wochentage (die Regel wird bei jedem Kalender-Aufbau live
+    // ausgewertet, keine Datumsbindung) – kein Refresh nötig, der
+    // Firestore-Live-Listener aktualisiert den Kalender automatisch.
     if(window.logEvent) window.logEvent('standardbetreuung_geaendert', {methode:'regler'});
-    alert('Betreuungszeiten gespeichert.');
+    alert('Betreuungszeiten gespeichert – gilt ab sofort für alle zukünftigen Tage.');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
   finally{ if(btn){ btn.disabled=false; btn.textContent='Speichern'; } }
 };
@@ -3644,7 +3683,15 @@ function renderRequestsUI(){
   all.forEach(r=>{
     const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
     const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
-    const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry && lastEntry.neuVon && lastEntry.neuBis) ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '(keine Zeit angegeben)';
+    const nameOf = w => w==='a' ? 'Janine' : 'Andi';
+    let zeitZeile;
+    if(lastEntry && lastEntry.neueSegmente && lastEntry.neueSegmente.length){
+      // Neues Format: kompletter Tages-Regler statt einzelner Block
+      zeitZeile = 'Neuer Tagesplan: ' + lastEntry.neueSegmente.map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(' · ');
+    } else {
+      const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry && lastEntry.neuVon && lastEntry.neuBis) ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '(keine Zeit angegeben)';
+      zeitZeile = `Ursprünglich: ${r.altVon||'?'}–${r.altBis||'?'} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${(vorschlagText!=='nur streichen' && vorschlagText!=='(keine Zeit angegeben)')?' Uhr':''}`;
+    }
     const dateStr = r.datum ? new Date(r.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
     const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
     html += `<div class="req-card ${isMyTurn?'mine-turn':''}">
@@ -3652,7 +3699,7 @@ function renderRequestsUI(){
         <div class="req-date">${dateStr}</div>
         <div class="req-status ${r.status}">${statusLabel}</div>
       </div>
-      <div class="req-times">Ursprünglich: ${r.altVon}–${r.altBis} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${(vorschlagText!=='nur streichen' && vorschlagText!=='(keine Zeit angegeben)')?' Uhr':''}</div>
+      <div class="req-times">${zeitZeile}</div>
       ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
       <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
       ${isMyTurn ? `
@@ -3686,11 +3733,26 @@ window.toggleCounterForm = function(id){
 };
 
 window.acceptRequest = async function(id){
-  await updateDoc(doc(db,'slot_changes',id), {
-    status: 'akzeptiert', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
-    verlauf: arrayUnion({ aktion:'akzeptiert', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
-  });
-  if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
+  try{
+    const r = (window.__reqReceived||[]).find(x=>x.id===id) || (window.__reqSent||[]).find(x=>x.id===id);
+    await updateDoc(doc(db,'slot_changes',id), {
+      status: 'akzeptiert', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
+      verlauf: arrayUnion({ aktion:'akzeptiert', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
+    });
+    // WICHTIG: erst hier wird die Änderung auch WIRKLICH im Kalender
+    // wirksam. Vorher wurde nur der Status gesetzt, ohne dass sich am
+    // Betreuungsplan für diesen Tag tatsächlich etwas änderte.
+    if(r && r.datum){
+      const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
+      const neueSegmente = lastEntry && lastEntry.neueSegmente;
+      if(neueSegmente && neueSegmente.length){
+        await setDoc(doc(db,'custody_exceptions', r.datum), {
+          segmente: neueSegmente, gesetztVon: window.myUid, gesetztAm: new Date().toISOString(), ausAnfrageId: id
+        });
+      }
+    }
+    if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
+  } catch(e){ alert('Fehler: '+e.message); }
 };
 window.rejectRequest = async function(id){
   await updateDoc(doc(db,'slot_changes',id), {
