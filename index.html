@@ -330,6 +330,7 @@
     <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
     <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
     <button data-admintab="events" onclick="switchAdminTab('events')">🗓️ Alle Termine</button>
+    <button data-admintab="chats" onclick="switchAdminTab('chats')">💬 Chats</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
 
@@ -377,6 +378,18 @@
       <h3>Alle eigenen Termine</h3>
       <div class="muted">Übersicht über alle frei eingetragenen Termine, unabhängig vom Datum – zum Aufräumen von Test- oder Fehleinträgen, die im Kalender selbst schwer zu treffen sind.</div>
       <div id="allEventsList"><div class="empty-note">Lade …</div></div>
+    </div>
+  </div>
+  <div id="adminChats" style="display:none;">
+    <div class="admin-card">
+      <h3>Alle Chats</h3>
+      <div class="muted">Jeder Chat hängt an einem Termin (frei erstellt oder Schule/Hort/Club/Bandprobe). Hier siehst du alle auf einen Blick, inklusive Speicherverbrauch – Firestore erlaubt maximal 1 MB pro einzelnem Termin (inkl. Chat-Verlauf).</div>
+      <div id="chatsStorageOverview"><div class="empty-note">Lade …</div></div>
+      <div style="display:flex; gap:8px; margin:10px 0;">
+        <button class="cr-save" onclick="exportAllChats()">📥 Alle Chats exportieren</button>
+        <button class="cr-del" onclick="adminClearAllChats()">🗑️ ALLE Chats auf einmal löschen</button>
+      </div>
+      <div id="chatsList" style="margin-top:14px;"><div class="empty-note">Lade …</div></div>
     </div>
   </div>
 </div>
@@ -449,6 +462,7 @@
   </div>
 
   <div id="desktopSiteWarning" style="display:none;"></div>
+  <div id="chatStorageWarningBanner" style="display:none; background:var(--holiday-bg); color:var(--holiday-text); border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:12px; font-weight:600;"></div>
 
   <div id="calContainer"></div>
 </div>
@@ -2112,7 +2126,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v42 · 26.09.2026';
+const APP_VERSION = 'v44 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2132,7 +2146,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=42').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=44').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2342,6 +2356,8 @@ function startEventOverrideListener(){
     snap.forEach(d=> map[d.id] = d.data());
     window.eventOverrides = map;
     if(typeof render === 'function') render();
+    if(typeof checkForChatConfirmations === 'function') checkForChatConfirmations();
+    if(typeof checkGlobalChatStorageWarning === 'function') checkGlobalChatStorageWarning();
   }, err=> console.error('Event-Overrides Fehler:', err));
 }
 window.getEventOverride = function(key){ return window.eventOverrides[key] || null; };
@@ -2569,6 +2585,10 @@ function renderNewEntryForm(){
       <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen? (Mehrfachauswahl möglich – erst wenn ALLE bestätigt haben, wird der Termin fest)</div>
       ${confirmersHtml}
     </div>
+    <div class="auth-field" style="margin-bottom:12px;">
+      <label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Erklärung / Notiz (optional – wird die erste Chat-Nachricht zu diesem Termin)</label>
+      <textarea id="hiNewNote" rows="2" placeholder="z.B. warum, oder was noch wichtig ist …" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+    </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
       <button class="btn" id="hiNewSaveBtn" onclick="hiSaveNewEntry()">Speichern</button>
@@ -2603,6 +2623,14 @@ window.hiSaveNewEntry = async function(){
       docData.bestaetigtVon = [];
     } else {
       docData.status = 'info';
+    }
+    const notiz = (document.getElementById('hiNewNote')||{}).value?.trim();
+    if(notiz){
+      docData.chat = [{
+        msgId: 'm'+Date.now()+Math.random().toString(36).slice(2,7),
+        vonUid: window.myUid, vonName: window.myName||'?',
+        text: notiz, zeitstempel: new Date().toISOString()
+      }];
     }
     await addDoc(collection(db,'custom_events'), docData);
     if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode});
@@ -2660,36 +2688,201 @@ window.hiSaveCustodyRequest = async function(){
    Schule/Hort/Club/Bandprobe-Blöcke – an das jeweilige Datum gebunden
    (Schlüssel enthält immer das Datum), bleibt unabhängig vom Status
    erhalten. */
-function renderChatSection(chatArray, sendFnCall){
+/* Grobe Byte-Grössenschätzung eines Objekts (für die Firestore-1MB-
+   Grenze pro Dokument). Blob ist nicht überall garantiert verfügbar,
+   daher Fallback auf String-Länge (in etwa gleichwertig für unsere
+   Zwecke, leicht ungenau bei Sonderzeichen, aber ausreichend als
+   Sicherheitsmarge). */
+function estimateDocSizeBytes(obj){
+  const str = JSON.stringify(obj);
+  try{ return new Blob([str]).size; } catch(e){ return str.length; }
+}
+const CHAT_SIZE_WARN_BYTES = 700*1024;   // ab hier: Warnung anzeigen
+const CHAT_SIZE_BLOCK_BYTES = 900*1024;  // ab hier: weitere Fotos blockieren (Firestore-Limit ist 1 MB)
+
+/* Chat-Baustein, wiederverwendbar für frei erstellte Termine UND für
+   Schule/Hort/Club/Bandprobe-Blöcke – an das jeweilige Datum gebunden
+   (Schlüssel enthält immer das Datum), bleibt unabhängig vom Status
+   erhalten. Unterstützt Text, ein optionales komprimiertes Foto, und
+   optionale "Bestätigung nötig von"-Markierung pro Nachricht.
+   coll: 'custom_events' oder 'event_overrides'. key: die jeweilige
+   Dokument-ID. */
+function renderChatSection(chatArray, coll, key){
   const msgs = chatArray || [];
-  const chatHtml = msgs.length
-    ? msgs.map(m => `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
-          <div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text||'')}</div>
-        </div>`).join('')
-    : '<div class="empty-note" style="padding:8px 0;">Noch keine Nachrichten.</div>';
+  const chatHtml = msgs.length ? msgs.map((m, idx) => {
+    const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
+    const bestaetigungsStatusHtml = (m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length)
+      ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${m.bestaetigungNoetigVon.map(p => (m.bestaetigtVon||[]).includes(p.uid) ? `✅ ${escapeHtml(p.name)}` : `⏳ ${escapeHtml(p.name)}`).join(' &nbsp;·&nbsp; ')}</div>`
+      : '';
+    const confirmBtnHtml = brauchtMeineBestaetigung
+      ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Bestätigen</button>`
+      : '';
+    const photoHtml = m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
+    const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg('${coll}','${key}','${m.msgId||('__idx'+idx)}')" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
+    return `
+      <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
+        <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
+        ${m.text ? `<div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text)}</div>` : ''}
+        ${photoHtml}
+        ${bestaetigungsStatusHtml}
+        ${confirmBtnHtml}
+        ${adminDelBtn}
+      </div>`;
+  }).join('') : '<div class="empty-note" style="padding:8px 0;">Noch keine Nachrichten.</div>';
+
+  const others = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid);
+  const confirmCbHtml = others.map(u=>
+    `<label style="display:inline-flex; align-items:center; gap:3px; margin-right:10px; font-size:11px; color:var(--ink-soft);">
+      <input type="checkbox" class="chat-confirm-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}"> ${escapeHtml(u.username||'?')}
+    </label>`).join('');
+
+  const groesseAktuell = estimateDocSizeBytes({chat: msgs});
+  const groessenWarnungHtml = groesseAktuell > CHAT_SIZE_WARN_BYTES
+    ? `<div style="font-size:10.5px; color:var(--holiday-text); margin-bottom:6px;">⚠️ Dieser Chat ist schon ${Math.round(groesseAktuell/1024)} KB groß (Grenze: 1024 KB). ${groesseAktuell > CHAT_SIZE_BLOCK_BYTES ? 'Fotos können gerade nicht mehr gesendet werden.' : 'Bald keine Fotos mehr möglich.'}</div>`
+    : '';
+
   return `
     <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:10px;">
       <div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:8px;">💬 Chat zu diesem Termin</div>
-      <div id="hiChatMessages" style="max-height:160px; overflow-y:auto; margin-bottom:8px;">${chatHtml}</div>
-      <div style="display:flex; gap:6px;">
-        <input type="text" id="hiChatInput" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){${sendFnCall}}">
-        <button class="btn" style="width:auto; padding:8px 14px;" onclick="${sendFnCall}">Senden</button>
+      <div id="hiChatMessages" style="max-height:220px; overflow-y:auto; margin-bottom:8px;">${chatHtml}</div>
+      ${groessenWarnungHtml}
+      <div id="hiChatPhotoPreview" style="display:none; margin-bottom:6px; align-items:center; gap:8px;">
+        <img id="hiChatPhotoImg" style="max-width:70px; max-height:70px; border-radius:6px; object-fit:cover;">
+        <button type="button" class="btn secondary" style="width:auto; padding:3px 10px; font-size:11px;" onclick="hiClearChatPhoto()">✕ entfernen</button>
+      </div>
+      <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">Bestätigung nötig von (optional):</div>
+      <div style="margin-bottom:6px;">${confirmCbHtml || '<span style="font-size:11px; color:var(--ink-soft);">(niemand sonst aktiv)</span>'}</div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <input type="text" id="hiChatInput" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){hiSendChatMsg('${coll}','${key}');}">
+        <label class="btn secondary" style="width:auto; padding:8px 10px; cursor:pointer; margin:0;" title="Foto anhängen">📷<input type="file" accept="image/*" style="display:none;" onchange="hiPickChatPhoto(event)"></label>
+        <button class="btn" style="width:auto; padding:8px 14px;" onclick="hiSendChatMsg('${coll}','${key}')">Senden</button>
       </div>
     </div>`;
 }
-window.hiSendEventChatMessage = async function(key){
+
+window.__pendingChatPhoto = null;
+window.hiPickChatPhoto = function(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      // Foto verkleinern und komprimieren – landet meist bei 50-150 KB
+      // statt mehreren MB eines rohen Handyfotos. Wichtig für die
+      // Firestore-1MB-Grenze pro Dokument.
+      const maxW = 700;
+      const scale = Math.min(1, maxW/img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width*scale));
+      canvas.height = Math.max(1, Math.round(img.height*scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+      window.__pendingChatPhoto = dataUrl;
+      const preview = document.getElementById('hiChatPhotoPreview');
+      const previewImg = document.getElementById('hiChatPhotoImg');
+      if(preview && previewImg){ previewImg.src = dataUrl; preview.style.display = 'flex'; }
+    };
+    img.onerror = function(){ alert('Dieses Bild konnte nicht gelesen werden.'); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function(){ alert('Datei konnte nicht gelesen werden.'); };
+  reader.readAsDataURL(file);
+  event.target.value = ''; // erlaubt erneutes Auswählen derselben Datei
+};
+window.hiClearChatPhoto = function(){
+  window.__pendingChatPhoto = null;
+  const preview = document.getElementById('hiChatPhotoPreview');
+  if(preview) preview.style.display = 'none';
+};
+
+window.hiSendChatMsg = async function(coll, key){
   const input = document.getElementById('hiChatInput');
   const text = input.value.trim();
-  if(!text) return;
+  const photo = window.__pendingChatPhoto;
+  if(!text && !photo) return;
+  const confirmCbs = Array.from(document.querySelectorAll('.chat-confirm-cb:checked'));
+  const bestaetigungNoetigVon = confirmCbs.map(c=>({uid:c.value, name:c.dataset.name}));
+  const msg = {
+    msgId: 'm'+Date.now()+Math.random().toString(36).slice(2,7),
+    vonUid: window.myUid, vonName: window.myName||'?',
+    text, zeitstempel: new Date().toISOString()
+  };
+  if(bestaetigungNoetigVon.length){ msg.bestaetigungNoetigVon = bestaetigungNoetigVon; msg.bestaetigtVon = []; }
+
+  // Grösse VOR dem Schreiben prüfen – Firestore erlaubt max. 1 MB pro
+  // Dokument. Lieber vorher verhindern als dass das Speichern mit einem
+  // kryptischen Fehler fehlschlägt.
+  const currentData = coll==='custom_events'
+    ? (window.customEvents||[]).find(e=>e.id===key) || {}
+    : (window.getEventOverride(key) || {});
+  if(photo){
+    if(estimateDocSizeBytes({...currentData, chat:[...(currentData.chat||[]), {...msg, photo}]}) > CHAT_SIZE_BLOCK_BYTES){
+      alert('⚠️ Dieser Chat ist schon sehr voll. Aus Sicherheitsgründen kann gerade kein Foto mehr gespeichert werden (Firestore-Grenze). Bitte den Admin bitten, alte Nachrichten zu löschen (Admin-Bereich → Chats), oder die Nachricht ohne Foto senden.');
+      return;
+    }
+    msg.photo = photo;
+  }
+
   try{
-    await setDoc(doc(db,'event_overrides',key), {
-      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString() })
-    }, {merge:true});
+    if(coll==='custom_events'){
+      await updateDoc(doc(db,'custom_events',key), { chat: arrayUnion(msg) });
+    } else {
+      await setDoc(doc(db,'event_overrides',key), { chat: arrayUnion(msg) }, {merge:true});
+    }
     input.value = '';
+    hiClearChatPhoto();
+    if(window.logEvent) window.logEvent('chat_nachricht_gesendet', {coll, key, mitFoto: !!photo, bestaetigungNoetig: bestaetigungNoetigVon.length});
   } catch(e){ alert('Nachricht konnte nicht gesendet werden: '+e.message); }
 };
+
+window.hiConfirmChatMsg = async function(coll, key, msgId){
+  try{
+    const currentData = coll==='custom_events'
+      ? (window.customEvents||[]).find(e=>e.id===key)
+      : window.getEventOverride(key);
+    if(!currentData || !currentData.chat) return;
+    const neueChat = currentData.chat.map(m=>{
+      if(m.msgId===msgId){
+        const bestaetigtVon = Array.from(new Set([...(m.bestaetigtVon||[]), window.myUid]));
+        return {...m, bestaetigtVon};
+      }
+      return m;
+    });
+    if(coll==='custom_events'){
+      await updateDoc(doc(db,'custom_events',key), { chat: neueChat });
+    } else {
+      await setDoc(doc(db,'event_overrides',key), { chat: neueChat }, {merge:true});
+    }
+    if(window.logEvent) window.logEvent('chat_nachricht_bestaetigt', {coll, key, msgId});
+  } catch(e){ alert('Fehler beim Bestätigen: '+e.message); }
+};
+
+/* Benachrichtigt automatisch, sobald eine eigene Chat-Nachricht von
+   ALLEN angefragten Personen bestätigt wurde – ähnlich wie beim
+   Ablehnen eines Termins. */
+let chatConfirmPopupShown = new Set();
+function checkForChatConfirmations(){
+  const pruefeListe = (coll, items, chatVon) => {
+    items.forEach(item=>{
+      const chat = chatVon(item);
+      if(!chat) return;
+      chat.forEach(m=>{
+        if(m.vonUid===window.myUid && m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length){
+          const alleBestaetigt = m.bestaetigungNoetigVon.every(p=>(m.bestaetigtVon||[]).includes(p.uid));
+          const popupKey = coll+':'+(item.id||item.__key)+':'+m.msgId;
+          if(alleBestaetigt && !chatConfirmPopupShown.has(popupKey)){
+            chatConfirmPopupShown.add(popupKey);
+            alert(`✅ Deine Nachricht wurde von allen bestätigt:\n"${m.text || '(Foto)'}"`);
+          }
+        }
+      });
+    });
+  };
+  pruefeListe('custom_events', window.customEvents||[], item=>item.chat);
+  pruefeListe('event_overrides', Object.entries(window.eventOverrides||{}).map(([k,v])=>({...v, __key:k})), item=>item.chat);
+}
 
 function renderExistingEntryForm(entry){
   if(entry.type==='event'){
@@ -2719,7 +2912,7 @@ function renderExistingEntryForm(entry){
         <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent('${entry.key}')">Absagen</button>
         <button class="btn" onclick="hiSaveEvent('${entry.key}')">Speichern</button>
       </div>
-      ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, "hiSendEventChatMessage('"+entry.key+"')")}`;
+      ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, 'event_overrides', entry.key)}`;
   }
   const ev = entry.data;
   const isMine = ev.erstelltVonUid === window.myUid;
@@ -2770,7 +2963,7 @@ function renderExistingEntryForm(entry){
   // Kleiner Chat, der fest am Termin hängt – bleibt erhalten, solange
   // der Termin existiert (wird nur gelöscht, wenn der ganze Termin
   // gelöscht wird).
-  const chatSectionHtml = renderChatSection(ev.chat, "hiSendChatMessage('"+ev.id+"')");
+  const chatSectionHtml = renderChatSection(ev.chat, 'custom_events', ev.id);
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
     <div class="time-row">
@@ -2787,24 +2980,14 @@ function renderExistingEntryForm(entry){
     </div>
     ${chatSectionHtml}`;
 }
-window.hiSendChatMessage = async function(id){
-  const input = document.getElementById('hiChatInput');
-  const text = input.value.trim();
-  if(!text) return;
-  try{
-    await updateDoc(doc(db,'custom_events',id), {
-      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString() })
-    });
-    input.value = '';
-  } catch(e){ alert('Nachricht konnte nicht gesendet werden: '+e.message); }
-};
+
 window.hiRequestDelete = async function(id){
   const grund = prompt('Warum soll dieser Termin gelöscht werden? (wird als Nachricht im Chat angezeigt, Ersteller/Admin müssen es bestätigen)', '');
   if(grund === null) return;
   try{
     const text = '🗑️ Löschanfrage: ' + (grund.trim() || '(kein Grund angegeben)');
     await updateDoc(doc(db,'custom_events',id), {
-      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString(), istLoeschanfrage: true })
+      chat: arrayUnion({ msgId: 'm'+Date.now()+Math.random().toString(36).slice(2,7), vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString(), istLoeschanfrage: true })
     });
     alert('Löschanfrage wurde als Nachricht im Chat des Termins hinterlegt. Nur ' + (window.myUid ? 'die erstellende Person oder Admin' : 'Admin') + ' kann den Termin tatsächlich löschen.');
   } catch(e){ alert('Fehler: '+e.message); }
@@ -2925,6 +3108,8 @@ function startCustomEventsListener(){
     if(typeof renderAllEventsList === 'function') renderAllEventsList();
     if(typeof renderRequestsUI === 'function') renderRequestsUI();
     checkForNewRejections();
+    checkForChatConfirmations();
+    checkGlobalChatStorageWarning();
     // Falls gerade ein Termin-Fenster mit Chat offen ist, live aktualisieren
     // (neue Nachrichten sofort sichtbar, ohne dass man das Fenster neu öffnen muss)
     const overlay = document.getElementById('hourInspectorOverlay');
@@ -3366,10 +3551,193 @@ window.switchAdminTab = function(tab){
   document.getElementById('adminLog').style.display = tab==='log' ? 'block' : 'none';
   document.getElementById('adminCustody').style.display = tab==='custody' ? 'block' : 'none';
   document.getElementById('adminEvents').style.display = tab==='events' ? 'block' : 'none';
+  document.getElementById('adminChats').style.display = tab==='chats' ? 'block' : 'none';
   if(tab==='qr') renderQrCode();
   if(tab==='log') startLogListener();
   if(tab==='custody') renderCustodyRulesTable();
   if(tab==='events') renderAllEventsList();
+  if(tab==='chats') renderChatsOverview();
+};
+
+window.exportAllChats = function(){
+  const items = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.chat && ev.chat.length) items.push({typ:'custom_events', id:ev.id, titel: ev.titel||'(ohne Titel)', datum: ev.datum||'?', chat: ev.chat});
+  });
+  Object.entries(window.eventOverrides||{}).forEach(([key,ov])=>{
+    if(ov.chat && ov.chat.length) items.push({typ:'event_overrides', id:key, titel: key.split('_').slice(0,-1).join(' '), datum: key.split('_').slice(-1)[0], chat: ov.chat});
+  });
+  const exportData = { exportiertAm: new Date().toISOString(), anzahlTermine: items.length, termine: items };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'chaoskalender-chats-export-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(window.logEvent) window.logEvent('admin_chats_exportiert', {anzahlTermine: items.length});
+};
+
+window.adminClearAllChats = async function(){
+  const items = [];
+  (window.customEvents||[]).forEach(ev=>{ if(ev.chat && ev.chat.length) items.push({coll:'custom_events', key:ev.id}); });
+  Object.entries(window.eventOverrides||{}).forEach(([key,ov])=>{ if(ov.chat && ov.chat.length) items.push({coll:'event_overrides', key}); });
+  if(!items.length){ alert('Keine Chats vorhanden.'); return; }
+  if(!confirm(`Wirklich ALLE ${items.length} Chat-Verläufe komplett löschen? Das kann nicht rückgängig gemacht werden. Tipp: vorher "Alle Chats exportieren" nutzen, um eine Sicherung zu haben.`)) return;
+  if(!confirm('Ganz sicher? Dies löscht wirklich JEDEN Chat-Verlauf in der ganzen App, unwiderruflich.')) return;
+  try{
+    for(const it of items){
+      if(it.coll==='custom_events') await updateDoc(doc(db,'custom_events',it.key), {chat: []});
+      else await setDoc(doc(db,'event_overrides',it.key), {chat: []}, {merge:true});
+    }
+    if(window.logEvent) window.logEvent('admin_alle_chats_geloescht', {anzahl: items.length});
+    alert(`${items.length} Chat-Verläufe wurden geleert.`);
+    renderChatsOverview();
+  } catch(e){ alert('Fehler beim Löschen: '+e.message); }
+};
+
+/* Grobe, aber ehrliche Abschätzung: schaut sich für den größten Chat an,
+   wie schnell er seit seiner ersten Nachricht gewachsen ist, und
+   rechnet linear hoch, wann er die Firestore-Grenze erreichen würde.
+   Keine Wissenschaft, aber ein nützlicher Anhaltspunkt. */
+function estimateChatFullDate(chatArray){
+  if(!chatArray || chatArray.length < 2) return null;
+  const sorted = [...chatArray].sort((a,b)=> new Date(a.zeitstempel||0) - new Date(b.zeitstempel||0));
+  const erstesDatum = new Date(sorted[0].zeitstempel||Date.now());
+  const jetzt = new Date();
+  const tageVergangen = Math.max(1, (jetzt - erstesDatum) / (1000*60*60*24));
+  const aktuelleGroesse = estimateDocSizeBytes({chat: chatArray});
+  const bytesProTag = aktuelleGroesse / tageVergangen;
+  if(bytesProTag <= 0) return null;
+  const uebrigeBytes = CHAT_SIZE_BLOCK_BYTES - aktuelleGroesse;
+  if(uebrigeBytes <= 0) return {voll:true};
+  const tageBis = Math.round(uebrigeBytes / bytesProTag);
+  const datumVoll = new Date(jetzt.getTime() + tageBis*24*60*60*1000);
+  return {voll:false, tageBis, datumVoll};
+}
+
+/* Warnbanner für ALLE Nutzer (nicht nur Admin) sichtbar, sobald
+   irgendein einzelner Chat sich der Firestore-1MB-Grenze nähert. */
+function checkGlobalChatStorageWarning(){
+  const banner = document.getElementById('chatStorageWarningBanner');
+  if(!banner) return;
+  const items = [];
+  (window.customEvents||[]).forEach(ev=>{ if(ev.chat && ev.chat.length) items.push({titel: ev.titel||'Termin', chat: ev.chat}); });
+  Object.entries(window.eventOverrides||{}).forEach(([key,ov])=>{ if(ov.chat && ov.chat.length) items.push({titel: key.split('_').slice(0,-1).join(' '), chat: ov.chat}); });
+  let schlimmster = null, schlimmsteGroesse = 0;
+  items.forEach(it=>{
+    const g = estimateDocSizeBytes({chat: it.chat});
+    if(g > schlimmsteGroesse){ schlimmsteGroesse = g; schlimmster = it; }
+  });
+  if(schlimmster && schlimmsteGroesse > CHAT_SIZE_WARN_BYTES){
+    const projektion = estimateChatFullDate(schlimmster.chat);
+    let text = `⚠️ Chat "${schlimmster.titel}" ist ${(schlimmsteGroesse/1024).toFixed(0)} von 1024 KB voll.`;
+    if(projektion){
+      text += projektion.voll ? ' Die Grenze ist bereits erreicht!' : ` Bei diesem Tempo in ca. ${projektion.tageBis} Tagen voll (~${projektion.datumVoll.toLocaleDateString('de-CH')}).`;
+    }
+    text += window.isAdminUser ? ' Bitte im Admin-Bereich → Chats aufräumen.' : ' Bitte den Admin informieren, damit er aufräumt.';
+    banner.textContent = text;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+window.renderChatsOverview = function(){
+  const box = document.getElementById('chatsStorageOverview');
+  const list = document.getElementById('chatsList');
+  if(!box || !list) return;
+
+  const items = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.chat && ev.chat.length) items.push({coll:'custom_events', key:ev.id, titel: ev.titel||'(ohne Titel)', datum: ev.datum||'?', chat: ev.chat});
+  });
+  Object.entries(window.eventOverrides||{}).forEach(([key,ov])=>{
+    if(ov.chat && ov.chat.length){
+      // Titel/Datum aus dem Schlüssel ableiten (z.B. "schule_janosch_2026-11-12")
+      const teile = key.split('_');
+      const datum = teile[teile.length-1];
+      const titel = teile.slice(0,-1).join(' ');
+      items.push({coll:'event_overrides', key, titel, datum, chat: ov.chat});
+    }
+  });
+
+  const gesamtBytes = items.reduce((sum,it)=> sum + estimateDocSizeBytes({chat: it.chat}), 0);
+  const anzahlNachrichten = items.reduce((sum,it)=> sum + it.chat.length, 0);
+  const anzahlFotos = items.reduce((sum,it)=> sum + it.chat.filter(m=>m.photo).length, 0);
+  let schlimmster = null, schlimmsteGroesse = 0;
+  items.forEach(it=>{ const g = estimateDocSizeBytes({chat:it.chat}); if(g>schlimmsteGroesse){schlimmsteGroesse=g; schlimmster=it;} });
+  let projektionHtml = '';
+  if(schlimmster && schlimmsteGroesse > CHAT_SIZE_WARN_BYTES){
+    const p = estimateChatFullDate(schlimmster.chat);
+    if(p) projektionHtml = `<div style="font-size:11.5px; color:var(--holiday-text); font-weight:600; margin-top:6px;">⚠️ "${escapeHtml(schlimmster.titel)}" ist am vollsten (${(schlimmsteGroesse/1024).toFixed(0)} KB). ${p.voll ? 'Grenze bereits erreicht!' : `Bei aktuellem Tempo in ca. ${p.tageBis} Tagen voll (~${p.datumVoll.toLocaleDateString('de-CH')}).`}</div>`;
+  }
+
+  box.innerHTML = `
+    <div style="display:flex; gap:24px; flex-wrap:wrap; padding:10px 0;">
+      <div><div style="font-size:22px; font-weight:700;">${(gesamtBytes/1024).toFixed(0)} KB</div><div style="font-size:11px; color:var(--ink-soft);">Gesamt (alle Chats zusammen)</div></div>
+      <div><div style="font-size:22px; font-weight:700;">${items.length}</div><div style="font-size:11px; color:var(--ink-soft);">Termine mit Chat</div></div>
+      <div><div style="font-size:22px; font-weight:700;">${anzahlNachrichten}</div><div style="font-size:11px; color:var(--ink-soft);">Nachrichten insgesamt</div></div>
+      <div><div style="font-size:22px; font-weight:700;">${anzahlFotos}</div><div style="font-size:11px; color:var(--ink-soft);">davon mit Foto</div></div>
+    </div>
+    ${projektionHtml}
+    <div style="font-size:10.5px; color:var(--ink-soft);">Wichtig: die 1-MB-Grenze von Firestore gilt PRO Termin, nicht für die Summe oben – die Liste unten zeigt jeden Termin einzeln mit seiner eigenen Größe.</div>`;
+
+  if(!items.length){ list.innerHTML = '<div class="empty-note">Noch keine Chats vorhanden.</div>'; return; }
+
+  items.sort((a,b)=> estimateDocSizeBytes({chat:b.chat}) - estimateDocSizeBytes({chat:a.chat}));
+
+  list.innerHTML = items.map(it=>{
+    const groesse = estimateDocSizeBytes({chat: it.chat});
+    const warnstufe = groesse > CHAT_SIZE_BLOCK_BYTES ? 'kritisch' : groesse > CHAT_SIZE_WARN_BYTES ? 'warnung' : 'ok';
+    const farbe = warnstufe==='kritisch' ? 'var(--holiday-text)' : warnstufe==='warnung' ? 'var(--pending)' : 'var(--ink-soft)';
+    const nachrichtenHtml = it.chat.map((m,idx)=>`
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid var(--line);">
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:11px; font-weight:700;">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft);">${m.zeitstempel?new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</span></div>
+          <div style="font-size:12.5px; white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text||'')}${m.photo?' 📷 (Foto)':''}</div>
+        </div>
+        <button class="cr-del" style="flex-shrink:0;" onclick="adminDeleteChatMsg('${it.coll}','${it.key}','${m.msgId||('__idx'+idx)}')">✕</button>
+      </div>`).join('');
+    return `
+      <details style="border:1px solid var(--line); border-radius:8px; margin-bottom:8px; padding:8px 12px;">
+        <summary style="cursor:pointer; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span><strong>${escapeHtml(it.titel)}</strong> · ${escapeHtml(it.datum)} · ${it.chat.length} Nachricht${it.chat.length===1?'':'en'}</span>
+          <span style="color:${farbe}; font-size:12px; font-weight:${warnstufe!=='ok'?'700':'400'};">${(groesse/1024).toFixed(0)} KB${warnstufe==='kritisch'?' ⚠️ kritisch':warnstufe==='warnung'?' ⚠️':''}</span>
+        </summary>
+        <div style="margin-top:8px;">${nachrichtenHtml}</div>
+        <button class="cr-del" style="margin-top:8px;" onclick="adminClearWholeChat('${it.coll}','${it.key}')">🗑️ Ganzen Chat leeren</button>
+      </details>`;
+  }).join('');
+};
+
+window.adminDeleteChatMsg = async function(coll, key, msgId){
+  if(!confirm('Diese Nachricht wirklich löschen?')) return;
+  try{
+    const currentData = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : window.getEventOverride(key);
+    if(!currentData || !currentData.chat) return;
+    let neueChat;
+    if(String(msgId).startsWith('__idx')){
+      // Fallback für ältere Nachrichten ohne msgId (vor diesem Update erstellt)
+      const idx = parseInt(String(msgId).slice(5), 10);
+      neueChat = currentData.chat.filter((_,i)=>i!==idx);
+    } else {
+      neueChat = currentData.chat.filter(m=>m.msgId!==msgId);
+    }
+    if(coll==='custom_events') await updateDoc(doc(db,'custom_events',key), {chat: neueChat});
+    else await setDoc(doc(db,'event_overrides',key), {chat: neueChat}, {merge:true});
+    if(window.logEvent) window.logEvent('admin_chat_nachricht_geloescht', {coll,key,msgId});
+    if(typeof renderChatsOverview === 'function' && document.getElementById('adminChats') && document.getElementById('adminChats').style.display !== 'none') renderChatsOverview();
+  } catch(e){ alert('Fehler: '+e.message); }
+};
+window.adminClearWholeChat = async function(coll, key){
+  if(!confirm('Den GESAMTEN Chat-Verlauf für diesen Termin löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  try{
+    if(coll==='custom_events') await updateDoc(doc(db,'custom_events',key), {chat: []});
+    else await setDoc(doc(db,'event_overrides',key), {chat: []}, {merge:true});
+    if(window.logEvent) window.logEvent('admin_chat_komplett_geloescht', {coll,key});
+    renderChatsOverview();
+  } catch(e){ alert('Fehler: '+e.message); }
 };
 
 function renderQrCode(){
