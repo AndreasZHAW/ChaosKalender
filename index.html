@@ -642,6 +642,21 @@ function isSchoolDay(d){
   if(getSchoolHolidayName(d)) return false;
   return true;
 }
+/* Grobe Tages-Prüfung: gibt es an diesem Tag schon feste Blöcke
+   (Schule, Hort, Bandprobe, Volleyball)? Wird genutzt, damit frei
+   erstellte Termine bei Überschneidung ausweichen (rechte Spaltenhälfte)
+   statt die festen Blöcke komplett zu verdecken. */
+function hatDieserTagFixeBloecke(d, iso){
+  const dow = d.getDay();
+  const dowIdx1to7 = (dow===0)?7:dow;
+  const janoschSchule = isSchoolDayForKid(d,'janosch') && SCHOOL_TIMES['janosch'][dowIdx1to7];
+  const mischaSchule = isSchoolDayForKid(d,'mischa') && SCHOOL_TIMES['mischa'][dowIdx1to7];
+  const hort = dow===4; // Donnerstag
+  const volleyball = dow===3;
+  const bandprobeM = BAND_DATES_MISCHA.includes(iso);
+  return !!(janoschSchule || mischaSchule || hort || volleyball || bandprobeM);
+}
+
 function isSchoolDayForKid(d, kid){
   if(!isSchoolDay(d)) return false;
   const special = SPECIAL_SCHOOL_DAYS[isoDate(d)];
@@ -891,7 +906,7 @@ function getCompactPxH(normalPx){
   const kopfzeileHoehe = 54;
   const container = document.getElementById('calContainer');
   const top = container ? container.getBoundingClientRect().top : 300;
-  const androidToolbarPuffer = 60;
+  const androidToolbarPuffer = 25;
   const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer - kopfzeileHoehe);
   return Math.max(11, Math.floor(available / 24));
 }
@@ -1362,16 +1377,16 @@ function renderWeek(){
         body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
+    const tagHatFixeBloecke = hatDieserTagFixeBloecke(d, iso);
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;left:2px;right:2px;font-size:9.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
-    });
-
-    body += `</div>`;
+      const spaltenStil = tagHatFixeBloecke ? 'left:52%;right:1px;' : 'left:2px;right:2px;';
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;${spaltenStil}font-size:9.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+    });    body += `</div>`;
   }
   body += '</div>';
   return head+body;
@@ -1625,13 +1640,15 @@ function renderDay(){
     if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--omami-bg)','var(--omami)',false,3);
     if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--a-bg)','var(--a)',false,3);
     if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--omami-bg)','var(--omami)',false,3);
+    const tagHatFixeBloecke2 = hatDieserTagFixeBloecke(d, iso);
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*px, height=(e-s)*px-2;
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
-      body += `<div class="event" style="top:${top}px;height:${height}px;left:6px;right:6px;z-index:3;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      const spaltenStil2 = tagHatFixeBloecke2 ? 'left:54%;right:4px;' : 'left:6px;right:6px;';
+      body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
     });
   }
   SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
@@ -1768,12 +1785,14 @@ function renderSwipeView(){
         daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
+    const tagHatFixeBloecke3 = hatDieserTagFixeBloecke(d, iso);
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
-      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      const spaltenStil3 = tagHatFixeBloecke3 ? 'left:54%;right:2px;' : 'left:2px;right:2px;';
+      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;${spaltenStil3}z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
     });
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -2013,7 +2032,7 @@ function fitNonCompactHeight(selectorOrId, isSelector){
   requestAnimationFrame(()=>{
     const el = isSelector ? document.querySelector(selectorOrId) : document.getElementById(selectorOrId);
     if(!el) return;
-    const androidToolbarPuffer = 60;
+    const androidToolbarPuffer = 25;
     const top = el.getBoundingClientRect().top;
     const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer);
     el.style.maxHeight = available + 'px';
@@ -2212,7 +2231,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v49 · 27.09.2026';
+const APP_VERSION = 'v50 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2232,7 +2251,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=49').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=50').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
