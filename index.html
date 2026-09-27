@@ -396,7 +396,10 @@
       <h3>Standard-Betreuungsmuster</h3>
       <div class="muted">Ein Regler pro Wochentag. Rot = Janine, Blau = Andi. Zum Hinzufügen einer neuen Übergabe: den Regler ganz links (0 Uhr) oder ganz rechts (24 Uhr) nach innen ziehen – sofort erscheint dort ein neuer Regler zum weiteren Ziehen. Zum Entfernen: Regler bis zum Nachbarn ziehen. Auf ein Segment tippen wechselt die Farbe.</div>
       <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
-      <button class="btn" id="custodySliderSaveBtn" style="margin-top:16px; width:auto; padding:9px 20px;" onclick="saveCustodySliders()">Speichern</button>
+      <div style="display:flex; gap:8px; margin-top:16px;">
+        <button class="btn" id="custodySliderSaveBtn" style="width:auto; padding:9px 20px;" onclick="saveCustodySliders()">Speichern</button>
+        <button class="cr-del" onclick="cleanupDuplicateCustodyRules()">🧹 Doppelte Regeln bereinigen</button>
+      </div>
     </div>
   </div>
 
@@ -684,6 +687,17 @@ function hatDieserTagFixeBloecke(d, iso){
   return !!(janoschSchule || mischaSchule || hort || volleyball || bandprobeM);
 }
 
+function getMehrtaegigeTermineFuerTag(iso){
+  return (window.customEvents||[]).filter(ev=>
+    ev.mehrtaegig && ev.startDatum && ev.endDatum && iso>=ev.startDatum && iso<=ev.endDatum &&
+    (ev.status==='info' || ev.status==='bestaetigt' || ev.status==='schwebend')
+  );
+}
+function renderMehrtaegigBannerHtml(iso){
+  return getMehrtaegigeTermineFuerTag(iso).map(ev=>
+    `<span class="day-event-tag" style="background:var(--pending-bg); color:#7A5A00; padding:1px 5px; border-radius:5px; font-size:9px; cursor:pointer; display:inline-block; margin-top:2px;" onclick="event.stopPropagation(); openHourInspector('${iso}', 12, 'custom_${ev.id}')" title="${escapeHtml(ev.titel||'')}">📅 ${escapeHtml(ev.titel||'')}${ev.status==='schwebend'?' ⏳':''}</span>`
+  ).join(' ');
+}
 function isSchoolDayForKid(d, kid){
   if(!isSchoolDay(d)) return false;
   const special = SPECIAL_SCHOOL_DAYS[isoDate(d)];
@@ -869,10 +883,11 @@ function renderColorBarHtml(segments, startHour, px){
    Zusätzlich zwei befristete Ausnahmen (Andi-Auszeit / Andi mit Kindern
    in Bissingen), die die normale Regel für diesen Zeitraum überschreiben. */
 const CARE_EXCEPTIONS = [
-  // Andi auf der Hütte, OHNE Kinder -> Janine übernimmt durchgehend
-  {start:'2026-10-08T00:00', end:'2026-10-12T23:59', who:'a', ort:'oben', label:'Andi auf der Hütte – Janine übernimmt'},
-  // Andi mit den Kindern in Bissingen -> Andi durchgehend, unabhängig vom normalen Muster
-  {start:'2026-10-14T00:00', end:'2026-10-18T23:59', who:'b', ort:'unten', label:'Andi mit Kindern in Bissingen'},
+  // Absichtlich leer: Sonderfälle (z.B. "Andi auf der Hütte") laufen ab
+  // jetzt über das Regler-/Anfrage-System (custody_exceptions), nicht
+  // mehr über fest einprogrammierte Daten – so entstehen keine
+  // Überschneidungen mit den Ferien mehr, und jede Person kann es selbst
+  // über die App anpassen statt eine Code-Änderung zu brauchen.
 ];
 
 function toDecimalHour(d){ return d.getHours() + d.getMinutes()/60; }
@@ -1242,6 +1257,17 @@ function findNextCareGap(){
 let ortState = 'oben';
 var modalCtx = null; // {iso, altVon, altBis, who} – var statt let, damit das Firebase-Modul-Script darauf zugreifen kann
 function openModal(title, sub, ort, iso, altVon, altBis, who){
+  const isRealSlot = !!(iso && altVon && altBis);
+  if(isRealSlot){
+    // WICHTIG: nicht mehr das alte, separate Änderungsanfrage-Modal
+    // zeigen (führte zu zwei parallelen, uneinheitlichen Systemen) –
+    // stattdessen direkt zum neuen Regler-basierten "Betreuung"-Formular
+    // im Stunden-Inspektor springen, das denselben Tag zeigt.
+    const vonH = parseFloat(altVon.split(':')[0]) + parseFloat(altVon.split(':')[1])/60;
+    const bisH = parseFloat(altBis.split(':')[0]) + parseFloat(altBis.split(':')[1])/60;
+    openHourInspector(iso, (vonH+bisH)/2, 'custody');
+    return;
+  }
   document.getElementById('modalTitle').textContent = title;
   document.getElementById('modalSub').textContent = sub;
   ortState = ort || 'oben';
@@ -1250,20 +1276,14 @@ function openModal(title, sub, ort, iso, altVon, altBis, who){
   document.getElementById('modalReasonInput').value = '';
   document.getElementById('skipTime').checked = false;
   toggleTimeFields();
-  const isRealSlot = !!(iso && altVon && altBis);
-  modalCtx = isRealSlot ? {iso, altVon, altBis, who} : null;
-  document.getElementById('newFrom').value = isRealSlot ? altVon : '15:00';
-  document.getElementById('newTo').value = isRealSlot ? altBis : '19:00';
+  modalCtx = null;
+  document.getElementById('newFrom').value = '15:00';
+  document.getElementById('newTo').value = '19:00';
   const actionBtn = document.getElementById('modalActionBtn');
   const infoNote = document.getElementById('modalNoRequestNote');
-  if(isRealSlot){
-    actionBtn.style.display = 'inline-block';
-    infoNote.style.display = 'none';
-  } else {
-    // Info-/Schulblöcke etc.: keine Änderungsanfrage möglich, nur Infofenster
-    actionBtn.style.display = 'none';
-    infoNote.style.display = 'block';
-  }
+  // Info-/Schulblöcke etc.: keine Änderungsanfrage möglich, nur Infofenster
+  actionBtn.style.display = 'none';
+  infoNote.style.display = 'block';
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); }
 function toggleOrt(){
@@ -1304,7 +1324,8 @@ function renderWeek(){
     }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
     const evTag = specialEv ? `<span class="day-event-tag" onclick="event.stopPropagation(); alert('${String(specialEv.title).replace(/'/g,"\\'")}')" style="cursor:pointer;">★</span>` : '';
-    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
+    const mehrtaegigBanner = renderMehrtaegigBannerHtml(iso);
+    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div>${mehrtaegigBanner}</div>`;
   }
   head += '</div>';
 
@@ -1592,6 +1613,7 @@ function renderDay(){
       head += `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
     });
   }
+  head += renderMehrtaegigBannerHtml(iso);
   head += `</div></div>`;
 
   // Stundenraster: eine breite Spalte, ALLE 24 Stunden des Tages
@@ -2264,7 +2286,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v53 · 27.09.2026';
+const APP_VERSION = 'v55 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2284,7 +2306,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=53').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=55').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2691,6 +2713,63 @@ window.hiSwitchTab = function(tabId){
   }
 };
 
+/* Wiederverwendbarer Baustein: "Mehrtägig" + "Beeinflusst Betreuung"
+   Häkchen, nutzbar sowohl beim Neu-Anlegen als auch beim Bearbeiten
+   bestehender frei erstellter Termine. */
+function renderMehrtaegigUndBetreuungHtml(prefix, ev){
+  const mehrtaegig = !!(ev && ev.mehrtaegig);
+  const beeinflusst = !!(ev && ev.beeinflusstBetreuung);
+  const wer = (ev && ev.betreuungWer) || 'a';
+  const startD = (ev && ev.startDatum) || hiState.iso;
+  const endD = (ev && ev.endDatum) || hiState.iso;
+  return `
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:8px; cursor:pointer;">
+      <input type="checkbox" id="${prefix}Mehrtaegig" ${mehrtaegig?'checked':''} onchange="toggleMehrtaegigFields('${prefix}')"> 📅 Mehrtägig
+    </label>
+    <div id="${prefix}MehrtaegigFields" style="${mehrtaegig?'':'display:none;'} margin-bottom:10px;">
+      <div class="time-row">
+        <div class="time-field"><label>Von (Datum)</label><input type="date" id="${prefix}StartDatum" value="${startD}"></div>
+        <div class="time-field"><label>Bis (Datum)</label><input type="date" id="${prefix}EndDatum" value="${endD}"></div>
+      </div>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:8px; cursor:pointer;">
+      <input type="checkbox" id="${prefix}BeeinflusstBetreuung" ${beeinflusst?'checked':''} onchange="toggleBetreuungFields('${prefix}')"> 👪 Beeinflusst Betreuung
+    </label>
+    <div id="${prefix}BetreuungFields" style="${beeinflusst?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+      <div style="font-size:11px; color:var(--ink-soft); margin-bottom:4px;">Wer betreut in diesem Zeitraum?</div>
+      <label style="margin-right:16px; font-size:13px;"><input type="radio" name="${prefix}BetreuungWer" value="a" ${wer==='a'?'checked':''}> Janine</label>
+      <label style="font-size:13px;"><input type="radio" name="${prefix}BetreuungWer" value="b" ${wer==='b'?'checked':''}> Andi</label>
+    </div>`;
+}
+window.toggleMehrtaegigFields = function(prefix){
+  const checked = document.getElementById(prefix+'Mehrtaegig').checked;
+  const fields = document.getElementById(prefix+'MehrtaegigFields');
+  if(fields) fields.style.display = checked ? 'block' : 'none';
+  // Bei mehrtägigen Terminen sind Uhrzeiten (nur EIN Tag) nicht sinnvoll
+  // – stattdessen gilt der ganze Tag, daher die Von/Bis-Uhrzeit-Felder
+  // ausblenden, falls vorhanden.
+  const timeRow = document.getElementById(prefix+'TimeRow');
+  if(timeRow) timeRow.style.display = checked ? 'none' : 'flex';
+};
+window.toggleBetreuungFields = function(prefix){
+  const checked = document.getElementById(prefix+'BeeinflusstBetreuung').checked;
+  const fields = document.getElementById(prefix+'BetreuungFields');
+  if(fields) fields.style.display = checked ? 'block' : 'none';
+};
+/* Schreibt (bzw. entfernt) Betreuungs-Ausnahmen für jeden Tag im
+   angegebenen Datumsbereich – wird nach dem Bestätigen eines Termins
+   aufgerufen, der "beeinflusst Betreuung" gesetzt hat. */
+async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer){
+  const start = new Date(startDatum+'T00:00:00');
+  const end = new Date(endDatum+'T00:00:00');
+  for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
+    const iso = isoDate(d);
+    await setDoc(doc(db,'custody_exceptions', iso), {
+      segmente: [{who: wer}], gesetztVon: window.myUid, gesetztAm: new Date().toISOString(), quelle: 'termin'
+    });
+  }
+}
+
 function renderNewEntryForm(){
   const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
   const defaultMode = iAmCustodian ? 'info' : 'anfrage';
@@ -2714,10 +2793,11 @@ function renderNewEntryForm(){
   return `
     <div class="auth-field" style="margin-bottom:12px;"><label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Titel</label>
       <input type="text" id="hiNewTitel" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
-    <div class="time-row">
+    <div class="time-row" id="hiNewTimeRow">
       <div class="time-field"><label>Von</label><input type="time" id="hiNewVon" value="${vonStr}"></div>
       <div class="time-field"><label>Bis</label><input type="time" id="hiNewBis" value="${bisStr}"></div>
     </div>
+    ${renderMehrtaegigUndBetreuungHtml('hiNew', null)}
     <div class="hi-toggle" id="hiModeToggle">
       <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
       <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
@@ -2744,15 +2824,25 @@ window.hiSetMode = function(m){
 window.hiSaveNewEntry = async function(){
   const titel = document.getElementById('hiNewTitel').value.trim();
   if(!titel){ alert('Bitte einen Titel eingeben.'); return; }
-  const von = document.getElementById('hiNewVon').value;
-  const bis = document.getElementById('hiNewBis').value;
+  const mehrtaegig = document.getElementById('hiNewMehrtaegig').checked;
+  const von = mehrtaegig ? null : document.getElementById('hiNewVon').value;
+  const bis = mehrtaegig ? null : document.getElementById('hiNewBis').value;
+  const startDatum = mehrtaegig ? document.getElementById('hiNewStartDatum').value : hiState.iso;
+  const endDatum = mehrtaegig ? document.getElementById('hiNewEndDatum').value : hiState.iso;
+  if(mehrtaegig && (!startDatum || !endDatum || endDatum < startDatum)){
+    alert('Bitte ein gültiges Start- und Enddatum wählen (Ende darf nicht vor Anfang liegen).'); return;
+  }
+  const beeinflusstBetreuung = document.getElementById('hiNewBeeinflusstBetreuung').checked;
+  const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiNewBetreuungWer"]:checked')||{}).value : null;
   const modeBtn = document.querySelector('#hiModeToggle button.active');
   const mode = modeBtn ? modeBtn.dataset.mode : 'info';
   const btn = document.getElementById('hiNewSaveBtn');
   btn.disabled = true; btn.textContent = 'Speichere…';
   try{
     const docData = {
-      datum: hiState.iso, von, bis, titel,
+      datum: mehrtaegig ? startDatum : hiState.iso, von, bis, titel,
+      mehrtaegig, startDatum, endDatum,
+      beeinflusstBetreuung, betreuungWer,
       erstelltVonUid: window.myUid||'?', erstelltVonName: window.myName||'?',
       erstelltAm: new Date().toISOString()
     };
@@ -2775,7 +2865,12 @@ window.hiSaveNewEntry = async function(){
       }];
     }
     await addDoc(collection(db,'custom_events'), docData);
-    if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode});
+    // "Nur Info" braucht keine Bestätigung -> Betreuungs-Ausnahme gilt
+    // sofort. Bei "Anfrage" erst nach dem Bestätigen (siehe hiAcceptCustom).
+    if(mode==='info' && beeinflusstBetreuung && betreuungWer){
+      await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer);
+    }
+    if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
   finally{ btn.disabled=false; btn.textContent='Speichern'; }
@@ -3139,12 +3234,14 @@ function renderExistingEntryForm(entry){
   // der Termin existiert (wird nur gelöscht, wenn der ganze Termin
   // gelöscht wird).
   const chatSectionHtml = renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen);
+  const mehrtaegigBlockHtml = darfZeitAendern ? renderMehrtaegigUndBetreuungHtml('hiEdit', ev) : '';
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
-    <div class="time-row">
+    <div class="time-row" id="hiEditTimeRow" style="${ev.mehrtaegig?'display:none;':''}">
       <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
       <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
     </div>
+    ${mehrtaegigBlockHtml}
     ${modeToggleHtml}
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button>
@@ -3205,8 +3302,19 @@ window.hiCancelEvent = async function(key){
   } catch(e){ alert('Fehler: '+e.message); }
 };
 window.hiSaveCustomEdit = async function(id){
-  const von = document.getElementById('hiCustomVon').value;
-  const bis = document.getElementById('hiCustomBis').value;
+  const mehrtaegigEl = document.getElementById('hiEditMehrtaegig');
+  const mehrtaegig = mehrtaegigEl ? mehrtaegigEl.checked : false;
+  const von = mehrtaegig ? null : document.getElementById('hiCustomVon').value;
+  const bis = mehrtaegig ? null : document.getElementById('hiCustomBis').value;
+  const startDatum = mehrtaegig ? document.getElementById('hiEditStartDatum').value : hiState.iso;
+  const endDatum = mehrtaegig ? document.getElementById('hiEditEndDatum').value : hiState.iso;
+  if(mehrtaegig && (!startDatum || !endDatum || endDatum < startDatum)){
+    alert('Bitte ein gültiges Start- und Enddatum wählen.'); return;
+  }
+  const beeinflusstEl = document.getElementById('hiEditBeeinflusstBetreuung');
+  const beeinflusstBetreuung = beeinflusstEl ? beeinflusstEl.checked : false;
+  const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiEditBetreuungWer"]:checked')||{}).value : null;
+  const zusatzFelder = { mehrtaegig, startDatum, endDatum, beeinflusstBetreuung, betreuungWer };
   const modeBtn = document.querySelector('#hiModeToggle button.active');
   const mode = modeBtn ? modeBtn.dataset.mode : 'info';
   try{
@@ -3214,16 +3322,20 @@ window.hiSaveCustomEdit = async function(id){
       const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
       if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
       await updateDoc(doc(db,'custom_events',id), {
-        von, bis,
+        von, bis, ...zusatzFelder,
         status: 'schwebend',
         bestaetigerUids: checked.map(c=>c.value),
         bestaetigerNamen: checked.map(c=>c.dataset.name),
         bestaetigtVon: []
       });
     } else {
-      await updateDoc(doc(db,'custom_events',id), {von, bis, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
+      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
+      // "Nur Info" gilt sofort, keine Bestätigung nötig.
+      if(beeinflusstBetreuung && betreuungWer){
+        await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer);
+      }
     }
-    if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode});
+    if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
@@ -3238,6 +3350,11 @@ window.hiAcceptCustom = async function(id){
       bestaetigtVon: already,
       status: alleDa ? 'bestaetigt' : 'schwebend'
     });
+    // Erst wenn WIRKLICH alle bestätigt haben, gilt eine evtl. gesetzte
+    // "Beeinflusst Betreuung"-Angabe auch tatsächlich im Kalender.
+    if(alleDa && ev.beeinflusstBetreuung && ev.betreuungWer){
+      await setzeBetreuungsAusnahmeFuerZeitraum(ev.startDatum||ev.datum, ev.endDatum||ev.datum, ev.betreuungWer);
+    }
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
@@ -3549,12 +3666,38 @@ function renderOneCustodyDaySlider(dow){
     </div>`;
 }
 window.retryCustodySeed = function(){ custodySeedTried = false; seedCustodyRulesIfEmpty(); };
+window.cleanupDuplicateCustodyRules = async function(){
+  if(!confirm('Doppelte/identische Betreuungs-Regeln jetzt entfernen? Nur exakte Duplikate werden gelöscht.')) return;
+  try{
+    const snap = await getDocs(collection(db,'custody_rules'));
+    const gesehen = new Set();
+    let geloescht = 0;
+    for(const d of snap.docs){
+      const r = d.data();
+      const schluessel = [r.vonTag, r.vonZeit, r.bisTag, r.bisZeit, r.wer].join('|');
+      if(gesehen.has(schluessel)){
+        await deleteDoc(doc(db,'custody_rules', d.id));
+        geloescht++;
+      } else {
+        gesehen.add(schluessel);
+      }
+    }
+    window.custodyEditState = null; // neu aus den bereinigten Daten aufbauen
+    alert(geloescht > 0 ? `${geloescht} doppelte Regel(n) entfernt.` : 'Keine Duplikate gefunden.');
+  } catch(e){ alert('Fehler: '+e.message); }
+};
 window.saveCustodySliders = async function(){
   const btn = document.getElementById('custodySliderSaveBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'Speichere…'; }
   try{
-    for(const r of (window.custodyRules||[])){
-      await deleteDoc(doc(db,'custody_rules',r.id));
+    // WICHTIG: frisch aus Firestore abfragen statt dem lokalen
+    // Zwischenspeicher zu vertrauen – der könnte veraltet sein (z.B.
+    // wenn kurz hintereinander mehrfach gespeichert wird, bevor der
+    // Live-Listener nachgezogen ist), was sonst zu Karteileichen und
+    // doppelten Regeln führen kann.
+    const frischeSnap = await getDocs(collection(db,'custody_rules'));
+    for(const d of frischeSnap.docs){
+      await deleteDoc(doc(db,'custody_rules',d.id));
     }
     for(let dow=1; dow<=7; dow++){
       for(const seg of window.custodyEditState[dow]){
