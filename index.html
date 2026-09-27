@@ -1987,6 +1987,7 @@ function render(){
     container.innerHTML = renderSwipeView();
     initSwipeScroll();
     if(compactMode) fitCompactHeight('swipeWrap');
+    else fitNonCompactHeight('swipeWrap');
     return;
   }
   let panelHtml;
@@ -1998,6 +1999,25 @@ function render(){
   container.innerHTML = `<div class="cal-panel ${isHourGrid?'hour-scroll':''}">${panelHtml}</div>`;
   if(isHourGrid) scrollHourGridTo6am();
   if(isHourGrid && compactMode) fitCompactHeight('.cal-panel.hour-scroll', true);
+  if(isHourGrid && !compactMode) fitNonCompactHeight('.cal-panel.hour-scroll', true);
+}
+
+/* Auch in "Details" (nicht-kompakt) galt bisher nur die starre CSS-Regel
+   "max-height:82vh" – unabhängig davon, wie viel Platz oberhalb (Kopf,
+   Knöpfe, Menü) tatsächlich schon verbraucht ist. Das liess auf manchen
+   Bildschirmen unten Leerraum stehen UND begrenzte gleichzeitig, wie
+   viele Stunden sichtbar sind. Jetzt: echte Messung wie bei Full Day,
+   nur ohne die Begrenzung auf exakt 24 Stunden (Details darf weiterhin
+   scrollen, soll aber den WIRKLICH verfügbaren Platz nutzen). */
+function fitNonCompactHeight(selectorOrId, isSelector){
+  requestAnimationFrame(()=>{
+    const el = isSelector ? document.querySelector(selectorOrId) : document.getElementById(selectorOrId);
+    if(!el) return;
+    const androidToolbarPuffer = 60;
+    const top = el.getBoundingClientRect().top;
+    const available = Math.max(280, window.innerHeight - top - 10 - androidToolbarPuffer);
+    el.style.maxHeight = available + 'px';
+  });
 }
 
 /* Im "Full Day"-Modus soll wirklich der GANZE Tag ohne Scrollen passen.
@@ -2192,7 +2212,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v48 · 27.09.2026';
+const APP_VERSION = 'v49 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2212,7 +2232,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=48').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=49').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
