@@ -222,6 +222,33 @@
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
   #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   #custodyRulesTable{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  .custody-track{position:relative; height:40px; background:var(--line); border-radius:8px; margin:20px 0 4px;}
+  .custody-seg{position:absolute; top:0; height:100%; cursor:pointer;}
+  .custody-seg:first-child{border-radius:8px 0 0 8px;}
+  .custody-seg:last-child{border-radius:0 8px 8px 0;}
+  .custody-track input[type=range]{
+    position:absolute; top:0; left:0; width:100%; height:100%; margin:0; z-index:2;
+    -webkit-appearance:none; appearance:none; background:transparent; pointer-events:none;
+  }
+  .custody-track input[type=range]::-webkit-slider-runnable-track{background:transparent;}
+  .custody-track input[type=range]::-moz-range-track{background:transparent;}
+  .custody-track input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; pointer-events:auto; width:14px; height:40px; border-radius:4px;
+    background:#fff; border:2px solid var(--ink); cursor:ew-resize; box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .custody-track input[type=range]::-moz-range-thumb{
+    pointer-events:auto; width:14px; height:40px; border-radius:4px; border:2px solid var(--ink);
+    background:#fff; cursor:ew-resize; box-shadow:0 1px 3px rgba(0,0,0,0.25);
+  }
+  .custody-track input[type=range].edge-handle::-webkit-slider-thumb{
+    background:var(--pending-bg); border-color:var(--pending); width:10px;
+  }
+  .custody-track input[type=range].edge-handle::-moz-range-thumb{
+    background:var(--pending-bg); border-color:var(--pending); width:10px;
+  }
+  .custody-time-label{position:absolute; top:-18px; transform:translateX(-50%); font-size:10px; font-weight:700; color:var(--ink-soft); white-space:nowrap;}
+  .custody-day-row{margin-bottom:20px;}
+  .custody-day-label{font-weight:700; font-size:13.5px;}
   .cr-rows{display:flex; flex-direction:column; gap:10px;}
   .cr-row{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--panel);}
   .cr-sentence{font-size:13.5px; margin-bottom:8px;}
@@ -367,9 +394,9 @@
   <div id="adminCustody" style="display:none;">
     <div class="admin-card">
       <h3>Standard-Betreuungsmuster</h3>
-      <div class="muted">Das wiederkehrende Wochen-Grundmuster (die farbige Linie im Kalender). Jede Regel gilt "von Tag+Uhrzeit bis Tag+Uhrzeit", z.B. "Mo 00:00 bis Do 17:00 → Janine". Die Zeilen müssen lückenlos die ganze Woche abdecken.</div>
+      <div class="muted">Ein Regler pro Wochentag. Rot = Janine, Blau = Andi. Zum Hinzufügen einer neuen Übergabe: den Regler ganz links (0 Uhr) oder ganz rechts (24 Uhr) nach innen ziehen – sofort erscheint dort ein neuer Regler zum weiteren Ziehen. Zum Entfernen: Regler bis zum Nachbarn ziehen. Auf ein Segment tippen wechselt die Farbe.</div>
       <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
-      <button class="btn" style="margin-top:12px; width:auto; padding:9px 16px;" onclick="addCustodyRuleRow()">+ Neue Regel</button>
+      <button class="btn" id="custodySliderSaveBtn" style="margin-top:16px; width:auto; padding:9px 20px;" onclick="saveCustodySliders()">Speichern</button>
     </div>
   </div>
 
@@ -2231,7 +2258,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v51 · 27.09.2026';
+const APP_VERSION = 'v52 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2251,7 +2278,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=51').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=52').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3367,6 +3394,31 @@ window.retryCustodySeed = function(){
   seedCustodyRulesIfEmpty();
 };
 
+/* ====================== BETREUUNGS-REGLER ======================
+   Pro Wochentag ein horizontaler Regler (0-24 Uhr), durchgehend farbig
+   (rot=Janine, blau=Andi) – nie eine Lücke, da immer jemand betreut.
+   Technik: mehrere gestapelte <input type="range">, deren native
+   Daumen sichtbar bleiben, der Rest transparent ist. So funktioniert
+   Ziehen mit Maus UND Touch zuverlässig, ohne eigene Drag-Logik. */
+window.custodyEditState = null; // {1:[{from,to,who}], ..., 7:[...]}
+
+function buildCustodyEditStateFromRules(){
+  const state = {};
+  const monday = startOfWeek(new Date());
+  const rules = (window.custodyRules && window.custodyRules.length) ? window.custodyRules : DEFAULT_CUSTODY_RULES;
+  for(let dow=1; dow<=7; dow++){
+    const d = new Date(monday); d.setDate(monday.getDate() + (dow-1));
+    let segs = getCustodySegmentsFromRules(d, rules);
+    if(!segs || !segs.length) segs = getCustodySegmentsHardcoded(d);
+    segs = segs.map(s => ({ from: s.from||0, to: (s.to!==undefined?s.to:24), who: s.who }));
+    state[dow] = segs;
+  }
+  return state;
+}
+function fmtHM(hourDec){
+  const h = Math.floor(hourDec+1e-6), m = Math.round((hourDec-h)*60);
+  return h.toString().padStart(2,'0')+':'+(m>=60?0:m).toString().padStart(2,'0');
+}
 function renderCustodyRulesTable(){
   const el = document.getElementById('custodyRulesTable');
   if(!el) return;
@@ -3375,67 +3427,115 @@ function renderCustodyRulesTable(){
     el.innerHTML = '<div class="empty-note">Lade / befülle mit bisherigem Muster … <button class="cr-save" style="margin-left:8px;" onclick="retryCustodySeed()">🔄 Erneut versuchen</button></div>';
     return;
   }
+  if(!window.custodyEditState) window.custodyEditState = buildCustodyEditStateFromRules();
+  let html = '';
+  for(let dow=1; dow<=7; dow++) html += renderOneCustodyDaySlider(dow);
+  el.innerHTML = html;
+}
+function renderOneCustodyDaySlider(dow){
+  const segs = window.custodyEditState[dow];
   const nameOf = w => w==='a' ? 'Janine' : 'Andi';
   const colorOf = w => w==='a' ? 'var(--a)' : 'var(--b)';
-  let html = '<div class="cr-rows">';
-  window.custodyRules.forEach(r=>{
-    html += `<div class="cr-row">
-      <div class="cr-sentence"><span class="cr-name" style="color:${colorOf(r.wer)};">● ${nameOf(r.wer)}</span> hat die Kinder von <strong>${DOW_NAMES[r.vonTag]} ${r.vonZeit}</strong> bis <strong>${DOW_NAMES[r.bisTag]} ${r.bisZeit}</strong> Uhr.</div>
-      <div class="cr-edit">
-        <span>Von:</span> ${daySelect('vt_'+r.id, r.vonTag)} <input type="time" id="vz_${r.id}" value="${r.vonZeit}">
-        <span>Bis:</span> ${daySelect('bt_'+r.id, r.bisTag)} <input type="time" id="bz_${r.id}" value="${r.bisZeit}">
-        <span>Wer:</span> ${whoSelect('w_'+r.id, r.wer)}
-        <button class="cr-save" onclick="saveCustodyRule('${r.id}')">Speichern</button>
-        <button class="cr-del" onclick="deleteCustodyRule('${r.id}')">✕ Löschen</button>
+  const segHtml = segs.map((s,idx) => {
+    const leftPct = (s.from/24)*100, widthPct = ((s.to-s.from)/24)*100;
+    return `<div class="custody-seg" style="left:${leftPct}%; width:${widthPct}%; background:${colorOf(s.who)};" title="${nameOf(s.who)} ${fmtHM(s.from)}–${fmtHM(s.to)} – zum Farbwechsel antippen" onclick="toggleCustodySegColor(${dow},${idx})"></div>`;
+  }).join('');
+  let handlesHtml = '';
+  for(let i=0; i<segs.length-1; i++){
+    const boundaryMin = Math.round(segs[i].to*60);
+    handlesHtml += `<input type="range" min="0" max="1440" step="15" value="${boundaryMin}" data-dow="${dow}" data-boundary="${i}" oninput="onCustodyHandleDrag(this)">`;
+  }
+  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="0" data-dow="${dow}" data-edge="left" onchange="onCustodyEdgeDrag(this)" oninput="onCustodyEdgeDrag(this)">`;
+  handlesHtml += `<input type="range" class="edge-handle" min="0" max="1440" step="15" value="1440" data-dow="${dow}" data-edge="right" onchange="onCustodyEdgeDrag(this)" oninput="onCustodyEdgeDrag(this)">`;
+  const zeitLabels = segs.slice(0,-1).map(s => `<span class="custody-time-label" style="left:${(s.to/24)*100}%;">${fmtHM(s.to)}</span>`).join('');
+  return `
+    <div class="custody-day-row">
+      <div class="custody-day-label">${DOW_NAMES[dow]}</div>
+      <div class="custody-track">
+        ${zeitLabels}
+        ${segHtml}
+        ${handlesHtml}
       </div>
     </div>`;
-  });
-  html += '</div>';
-  el.innerHTML = html;
-
-  // Grobe Lückenprüfung: Summe aller Regel-Dauern sollte 10080 Minuten
-  // (eine volle Woche) ergeben – warnt bei offensichtlichen Lücken.
-  let totalMin = 0;
-  window.custodyRules.forEach(r=>{
-    let von=(r.vonTag-1)*1440+timeToMin(r.vonZeit), bis=(r.bisTag-1)*1440+timeToMin(r.bisZeit);
-    if(bis<=von) bis+=10080;
-    totalMin += (bis-von);
-  });
-  if(Math.abs(totalMin-10080) > 1){
-    el.innerHTML += `<div class="cr-coverage-warn">⚠️ Die Regeln decken aktuell ${Math.round(totalMin/1440*10)/10} von 7 Tagen ab – prüfe auf Lücken oder Überschneidungen.</div>`;
+}
+window.onCustodyHandleDrag = function(el){
+  const dow = parseInt(el.dataset.dow,10);
+  const boundaryIdx = parseInt(el.dataset.boundary,10);
+  const segs = window.custodyEditState[dow];
+  let newHour = parseInt(el.value,10)/60;
+  const minAllowed = segs[boundaryIdx].from + 0.25;
+  const maxAllowed = segs[boundaryIdx+1].to - 0.25;
+  if(newHour < minAllowed){ newHour = minAllowed; el.value = Math.round(newHour*60); }
+  if(newHour > maxAllowed){ newHour = maxAllowed; el.value = Math.round(newHour*60); }
+  segs[boundaryIdx].to = newHour;
+  segs[boundaryIdx+1].from = newHour;
+  // Direkt im DOM aktualisieren statt komplett neu zu zeichnen – sonst
+  // würde der gerade gezogene Regler mitten in der Bewegung ersetzt.
+  const track = el.closest('.custody-track');
+  const segEls = track.querySelectorAll('.custody-seg');
+  if(segEls[boundaryIdx]) segEls[boundaryIdx].style.width = ((segs[boundaryIdx].to-segs[boundaryIdx].from)/24*100)+'%';
+  if(segEls[boundaryIdx+1]){
+    segEls[boundaryIdx+1].style.left = (segs[boundaryIdx+1].from/24*100)+'%';
+    segEls[boundaryIdx+1].style.width = ((segs[boundaryIdx+1].to-segs[boundaryIdx+1].from)/24*100)+'%';
   }
-}
-function daySelect(id, selected){
-  let html = `<select id="${id}">`;
-  for(let i=1;i<=7;i++) html += `<option value="${i}" ${i===selected?'selected':''}>${DOW_NAMES[i]}</option>`;
-  html += `</select>`;
-  return html;
-}
-function whoSelect(id, selected){
-  return `<select id="${id}">
-    <option value="a" ${selected==='a'?'selected':''}>Janine</option>
-    <option value="b" ${selected==='b'?'selected':''}>Andi</option>
-  </select>`;
-}
-window.addCustodyRuleRow = async function(){
-  try{
-    await addDoc(collection(db,'custody_rules'), {vonTag:1, vonZeit:'00:00', bisTag:1, bisZeit:'00:00', wer:'a'});
-  } catch(e){ alert('Fehler: '+e.message); }
+  const labelEls = track.querySelectorAll('.custody-time-label');
+  if(labelEls[boundaryIdx]){ labelEls[boundaryIdx].textContent = fmtHM(newHour); labelEls[boundaryIdx].style.left = (newHour/24*100)+'%'; }
 };
-window.saveCustodyRule = async function(id){
-  const vonTag = parseInt(document.getElementById('vt_'+id).value,10);
-  const vonZeit = document.getElementById('vz_'+id).value;
-  const bisTag = parseInt(document.getElementById('bt_'+id).value,10);
-  const bisZeit = document.getElementById('bz_'+id).value;
-  const wer = document.getElementById('w_'+id).value;
-  try{
-    await setDoc(doc(db,'custody_rules',id), {vonTag, vonZeit, bisTag, bisZeit, wer});
-    if(window.logEvent) window.logEvent('standardbetreuung_geaendert', {id});
-  } catch(e){ alert('Fehler: '+e.message); }
+window.onCustodyEdgeDrag = function(el){
+  const dow = parseInt(el.dataset.dow,10);
+  const edge = el.dataset.edge;
+  const val = parseInt(el.value,10);
+  const segs = window.custodyEditState[dow];
+  let veraendert = false;
+  if(edge==='left' && val >= 15){
+    const newHour = val/60;
+    const firstSeg = segs[0];
+    if(newHour < firstSeg.to - 0.24){
+      const neueFarbe = firstSeg.who==='a' ? 'b' : 'a';
+      segs.unshift({from:0, to:newHour, who:neueFarbe});
+      firstSeg.from = newHour;
+      veraendert = true;
+    }
+  } else if(edge==='right' && val <= 1425){
+    const newHour = val/60;
+    const lastSeg = segs[segs.length-1];
+    if(newHour > lastSeg.from + 0.24){
+      const neueFarbe = lastSeg.who==='a' ? 'b' : 'a';
+      segs.push({from:newHour, to:24, who:neueFarbe});
+      lastSeg.to = newHour;
+      veraendert = true;
+    }
+  }
+  if(veraendert) renderCustodyRulesTable(); // strukturelle Änderung -> hier ist Neuzeichnen sicher (Ziehen ist beim onchange abgeschlossen)
 };
-window.deleteCustodyRule = async function(id){
-  if(!confirm('Diese Regel wirklich löschen?')) return;
-  try{ await deleteDoc(doc(db,'custody_rules',id)); } catch(e){ alert('Fehler: '+e.message); }
+window.toggleCustodySegColor = function(dow, idx){
+  const segs = window.custodyEditState[dow];
+  segs[idx].who = segs[idx].who==='a' ? 'b' : 'a';
+  renderCustodyRulesTable();
+};
+window.retryCustodySeed = function(){ custodySeedTried = false; seedCustodyRulesIfEmpty(); };
+window.saveCustodySliders = async function(){
+  const btn = document.getElementById('custodySliderSaveBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Speichere…'; }
+  try{
+    for(const r of (window.custodyRules||[])){
+      await deleteDoc(doc(db,'custody_rules',r.id));
+    }
+    for(let dow=1; dow<=7; dow++){
+      for(const seg of window.custodyEditState[dow]){
+        const bisRicht = seg.to>=24;
+        await addDoc(collection(db,'custody_rules'), {
+          vonTag: dow, vonZeit: fmtHM(seg.from),
+          bisTag: bisRicht ? (dow===7?1:dow+1) : dow,
+          bisZeit: bisRicht ? '00:00' : fmtHM(seg.to),
+          wer: seg.who
+        });
+      }
+    }
+    if(window.logEvent) window.logEvent('standardbetreuung_geaendert', {methode:'regler'});
+    alert('Betreuungszeiten gespeichert.');
+  } catch(e){ alert('Fehler beim Speichern: '+e.message); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Speichern'; } }
 };
 
 /* ====================== ANFRAGEN-LISTE (live) ====================== */
@@ -3695,7 +3795,7 @@ window.switchAdminTab = function(tab){
   document.getElementById('adminChats').style.display = tab==='chats' ? 'block' : 'none';
   if(tab==='qr') renderQrCode();
   if(tab==='log') startLogListener();
-  if(tab==='custody') renderCustodyRulesTable();
+  if(tab==='custody'){ window.custodyEditState = null; renderCustodyRulesTable(); }
   if(tab==='events') renderAllEventsList();
   if(tab==='chats') renderChatsOverview();
 };
