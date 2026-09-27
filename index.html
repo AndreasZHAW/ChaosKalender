@@ -2231,7 +2231,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v50 · 27.09.2026';
+const APP_VERSION = 'v51 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2251,7 +2251,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=50').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=51').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2409,7 +2409,7 @@ async function findPartnerInfo(){
 }
 
 /* Erstellt eine echte Änderungsanfrage aus dem "Slot ändern"-Formular. */
-async function submitSlotChangeRequest(){
+window.submitSlotChangeRequest = async function(){
   if(!modalCtx){ closeModal(); return; }
   if(!window.partnerUid){
     alert('Konnte die/den andere/n Elternteil nicht finden. Bitte später erneut versuchen.');
@@ -2418,6 +2418,10 @@ async function submitSlotChangeRequest(){
   const skip = document.getElementById('skipTime').checked;
   const neuVon = skip ? null : document.getElementById('newFrom').value;
   const neuBis = skip ? null : document.getElementById('newTo').value;
+  if(!skip && (!neuVon || !neuBis)){
+    alert('Bitte eine neue Von- und Bis-Zeit eintragen (oder "nur streichen" auswählen).');
+    return;
+  }
   const grund = document.getElementById('modalReasonInput').value.trim();
   const btn = document.getElementById('modalActionBtn');
   btn.disabled = true; btn.textContent = 'Sende…';
@@ -3540,7 +3544,7 @@ function renderRequestsUI(){
   all.forEach(r=>{
     const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
     const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
-    const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '?');
+    const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry && lastEntry.neuVon && lastEntry.neuBis) ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '(keine Zeit angegeben)';
     const dateStr = r.datum ? new Date(r.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
     const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
     html += `<div class="req-card ${isMyTurn?'mine-turn':''}">
@@ -3548,7 +3552,7 @@ function renderRequestsUI(){
         <div class="req-date">${dateStr}</div>
         <div class="req-status ${r.status}">${statusLabel}</div>
       </div>
-      <div class="req-times">Ursprünglich: ${r.altVon}–${r.altBis} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${vorschlagText!=='nur streichen'?' Uhr':''}</div>
+      <div class="req-times">Ursprünglich: ${r.altVon}–${r.altBis} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${(vorschlagText!=='nur streichen' && vorschlagText!=='(keine Zeit angegeben)')?' Uhr':''}</div>
       ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
       <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
       ${isMyTurn ? `
