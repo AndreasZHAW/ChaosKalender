@@ -1265,14 +1265,14 @@ function renderWeek(){
         const key = 'schule_'+kid+'_'+iso;
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(ov && ov.geloescht) return;
-        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+        const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
         const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
         const top = (s-startHour)*PXH, height = (e-s)*PXH-3;
         const leftPct = idx===0 ? '1px' : '50%';
         const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
         const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${ov?'✎':''}</div>`;
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${(ov&&ov.von)?'✎':''}</div>`;
       }
     });
     if(dow===4){
@@ -1282,12 +1282,12 @@ function renderWeek(){
           const key = 'hort_'+kid+'_'+iso;
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
-          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+          const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
           const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top = (s-startHour)*PXH, height=(e-s)*PXH-3;
           const leftPct = idx===0 ? '1px' : '50%';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${ov?' ✎':''}</div>`;
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${(ov&&ov.von)?' ✎':''}</div>`;
         }
       });
     }
@@ -1303,11 +1303,11 @@ function renderWeek(){
           const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
-          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
+          const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
           const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
           const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, '${key}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       });
     }
@@ -1315,31 +1315,31 @@ function renderWeek(){
       const key = 'bandprobe_janine_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
-        const s = ov?parseFloat(ov.von.split(':')[0]):20, e = ov?parseFloat(ov.bis.split(':')[0]):24;
+        const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
         const top=(s-startHour)*PXH, height=(Math.min(24,endHour)-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
+        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     if(dow===3 && !hol && showFullDetailFor('b')){
       const key = 'volleyball_andi_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
-        const s = ov?parseFloat(ov.von.split(':')[0]):19, e = ov?parseFloat(ov.bis.split(':')[0]):21;
+        const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 19, '${key}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 19, '${key}')"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
       }
     }
     if(BAND_DATES_MISCHA.includes(iso)){
       const key = 'bandprobe_mischa_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
-        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
+        const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
@@ -1675,14 +1675,14 @@ function renderSwipeView(){
           const key = 'schule_'+kid+'_'+iso;
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
-          const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+          const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
           const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top=(s-startHour)*px, height=(e-s)*px-2;
           const leftPct = idx===0?'1px':'50%';
           const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
           const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${ov?'✎':''}</div>`;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${(ov&&ov.von)?'✎':''}</div>`;
         }
       });
       if(dow===4){
@@ -1692,12 +1692,12 @@ function renderSwipeView(){
             const key = 'hort_'+kid+'_'+iso;
             const ov = window.getEventOverride ? window.getEventOverride(key) : null;
             if(ov && ov.geloescht) return;
-            const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
+            const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
             const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
             const top=(s-startHour)*px, height=(e-s)*px-2;
             const leftPct = idx===0?'1px':'50%';
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${ov?' ✎':''}</div>`;
+            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${(ov&&ov.von)?' ✎':''}</div>`;
           }
         });
       }
@@ -1712,10 +1712,10 @@ function renderSwipeView(){
             const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
             const ov = window.getEventOverride ? window.getEventOverride(key) : null;
             if(ov && ov.geloescht) return;
-            const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
+            const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
             const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, '${key}')"><strong>${c.label}${ov?' ✎':''}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
           }
         });
       }
@@ -1723,18 +1723,18 @@ function renderSwipeView(){
         const key = 'bandprobe_janine_'+iso;
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(!(ov && ov.geloescht)){
-          const s = ov?parseFloat(ov.von.split(':')[0]):20, e = ov?parseFloat(ov.bis.split(':')[0]):24;
+          const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, '${key}')"><strong>Bandprobe${ov?' ✎':''}</strong></div>`;
+          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, '${key}')"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       }
       if(dow===3 && !hol && showFullDetailFor('b')){
         const key = 'volleyball_andi_'+iso;
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(!(ov && ov.geloescht)){
-          const s = ov?parseFloat(ov.von.split(':')[0]):19, e = ov?parseFloat(ov.bis.split(':')[0]):21;
+          const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Volleyball${ov?' ✎':'?'}</strong></div>`;
+          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
         }
       }
     }
@@ -1742,10 +1742,10 @@ function renderSwipeView(){
       const key = 'bandprobe_mischa_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(BAND_DATES_MISCHA.includes(iso) && !(ov && ov.geloescht)){
-        const s = ov?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
+        const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${ov?' ✎':''}</strong></div>`;
+        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
@@ -2112,7 +2112,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v41 · 26.09.2026';
+const APP_VERSION = 'v42 · 26.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2132,7 +2132,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=41').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=42').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2207,7 +2207,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v4-2026-09-26';
+const EXPECTED_RULES_VERSION = 'rules-v5-2026-09-26';
 
 async function logEvent(type, details){
   try{
@@ -2656,6 +2656,41 @@ window.hiSaveCustodyRequest = async function(){
   finally { btn.disabled = false; btn.textContent = 'Anfragen'; }
 };
 
+/* Chat-Baustein, wiederverwendbar für frei erstellte Termine UND für
+   Schule/Hort/Club/Bandprobe-Blöcke – an das jeweilige Datum gebunden
+   (Schlüssel enthält immer das Datum), bleibt unabhängig vom Status
+   erhalten. */
+function renderChatSection(chatArray, sendFnCall){
+  const msgs = chatArray || [];
+  const chatHtml = msgs.length
+    ? msgs.map(m => `
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
+          <div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text||'')}</div>
+        </div>`).join('')
+    : '<div class="empty-note" style="padding:8px 0;">Noch keine Nachrichten.</div>';
+  return `
+    <div style="border-top:1px solid var(--line); margin-top:14px; padding-top:10px;">
+      <div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin-bottom:8px;">💬 Chat zu diesem Termin</div>
+      <div id="hiChatMessages" style="max-height:160px; overflow-y:auto; margin-bottom:8px;">${chatHtml}</div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="hiChatInput" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){${sendFnCall}}">
+        <button class="btn" style="width:auto; padding:8px 14px;" onclick="${sendFnCall}">Senden</button>
+      </div>
+    </div>`;
+}
+window.hiSendEventChatMessage = async function(key){
+  const input = document.getElementById('hiChatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  try{
+    await setDoc(doc(db,'event_overrides',key), {
+      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString() })
+    }, {merge:true});
+    input.value = '';
+  } catch(e){ alert('Nachricht konnte nicht gesendet werden: '+e.message); }
+};
+
 function renderExistingEntryForm(entry){
   if(entry.type==='event'){
     const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
@@ -2683,14 +2718,15 @@ function renderExistingEntryForm(entry){
         <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
         <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent('${entry.key}')">Absagen</button>
         <button class="btn" onclick="hiSaveEvent('${entry.key}')">Speichern</button>
-      </div>`;
+      </div>
+      ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, "hiSendEventChatMessage('"+entry.key+"')")}`;
   }
   const ev = entry.data;
   const isMine = ev.erstelltVonUid === window.myUid;
   const bestaetiger = ev.bestaetigerUids || [];
   const bestaetigt = ev.bestaetigtVon || [];
   const mussIchBestaetigen = ev.status==='schwebend' && bestaetiger.includes(window.myUid) && !bestaetigt.includes(window.myUid);
-  const darfLoeschen = isMine || bestaetiger.includes(window.myUid);
+  const darfLoeschen = isMine || isAdminUser; // nur Ersteller oder Admin dürfen wirklich löschen
   let statusLabel;
   if(ev.status==='info') statusLabel = 'Info (keine Freigabe nötig)';
   else if(ev.status==='bestaetigt') statusLabel = 'Bestätigt – fest eingetragen';
@@ -2731,6 +2767,10 @@ function renderExistingEntryForm(entry){
         ${confirmersHtml}
       </div>`;
   }
+  // Kleiner Chat, der fest am Termin hängt – bleibt erhalten, solange
+  // der Termin existiert (wird nur gelöscht, wenn der ganze Termin
+  // gelöscht wird).
+  const chatSectionHtml = renderChatSection(ev.chat, "hiSendChatMessage('"+ev.id+"')");
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
     <div class="time-row">
@@ -2740,10 +2780,35 @@ function renderExistingEntryForm(entry){
     ${modeToggleHtml}
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button>
-      ${darfLoeschen?`<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`:''}
+      ${darfLoeschen
+        ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`
+        : `<button class="btn secondary" onclick="hiRequestDelete('${ev.id}')">🗑️ Löschanfrage stellen</button>`}
       ${actionsHtml}
-    </div>`;
+    </div>
+    ${chatSectionHtml}`;
 }
+window.hiSendChatMessage = async function(id){
+  const input = document.getElementById('hiChatInput');
+  const text = input.value.trim();
+  if(!text) return;
+  try{
+    await updateDoc(doc(db,'custom_events',id), {
+      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString() })
+    });
+    input.value = '';
+  } catch(e){ alert('Nachricht konnte nicht gesendet werden: '+e.message); }
+};
+window.hiRequestDelete = async function(id){
+  const grund = prompt('Warum soll dieser Termin gelöscht werden? (wird als Nachricht im Chat angezeigt, Ersteller/Admin müssen es bestätigen)', '');
+  if(grund === null) return;
+  try{
+    const text = '🗑️ Löschanfrage: ' + (grund.trim() || '(kein Grund angegeben)');
+    await updateDoc(doc(db,'custom_events',id), {
+      chat: arrayUnion({ vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString(), istLoeschanfrage: true })
+    });
+    alert('Löschanfrage wurde als Nachricht im Chat des Termins hinterlegt. Nur ' + (window.myUid ? 'die erstellende Person oder Admin' : 'Admin') + ' kann den Termin tatsächlich löschen.');
+  } catch(e){ alert('Fehler: '+e.message); }
+};
 window.hiSaveEvent = async function(key){
   const von = document.getElementById('hiEvVon').value;
   const bis = document.getElementById('hiEvBis').value;
@@ -2860,6 +2925,13 @@ function startCustomEventsListener(){
     if(typeof renderAllEventsList === 'function') renderAllEventsList();
     if(typeof renderRequestsUI === 'function') renderRequestsUI();
     checkForNewRejections();
+    // Falls gerade ein Termin-Fenster mit Chat offen ist, live aktualisieren
+    // (neue Nachrichten sofort sichtbar, ohne dass man das Fenster neu öffnen muss)
+    const overlay = document.getElementById('hourInspectorOverlay');
+    const activeTab = document.querySelector('#hiTabs .hi-tab.active');
+    if(overlay && overlay.classList.contains('show') && activeTab && activeTab.dataset.tab.startsWith('custom_')){
+      hiSwitchTab(activeTab.dataset.tab);
+    }
   }, err=> console.error('Custom-Events Fehler:', err));
 }
 

@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v4-2026-09-26 (muss mit "erwarteteRegelVersion"
+// REGEL-VERSION: rules-v5-2026-09-26 (muss mit "erwarteteRegelVersion"
 // im Admin-Protokoll übereinstimmen – falls nicht, sind diese Regeln
 // noch nicht die neuesten, die die App erwartet).
 // Stand: Paket 2 (Login & Registrierung).
@@ -101,8 +101,10 @@ service cloud.firestore {
     // Volleyball, Clubs, Hort) -------------------------------------
     match /event_overrides/{key} {
       allow read: if isSignedIn() && isActive();
-      allow write: if isSignedIn() && isActive() &&
-                     (myRole() == 'janine' || myRole() == 'andi' || isAdmin());
+      // Für alle aktiven Personen geöffnet (nicht nur Eltern/Admin) –
+      // jede Person soll bei Schule/Hort/Club/Bandprobe mitchatten
+      // können, auch wenn sie die Uhrzeit nicht selbst ändern soll.
+      allow write: if isSignedIn() && isActive();
     }
 
     // --- custom_events: frei eintragbare Termine (z.B. "Zahnarzt
@@ -111,12 +113,13 @@ service cloud.firestore {
       allow read: if isSignedIn() && isActive();
       allow create: if isSignedIn() && isActive() &&
                      request.resource.data.erstelltVonUid == request.auth.uid;
-      allow update: if isSignedIn() && isActive() && (
-                       resource.data.erstelltVonUid == request.auth.uid ||
-                       resource.data.betroffenUid == request.auth.uid ||
-                       (('bestaetigerUids' in resource.data) && request.auth.uid in resource.data.bestaetigerUids) ||
-                       isAdmin()
-                     );
+      // Update darf jede aktive Person (u.a. für den Chat, der an jedem
+      // Termin hängt, und um eine Löschanfrage zu markieren) – NUR das
+      // Löschen selbst bleibt strenger (siehe unten).
+      allow update: if isSignedIn() && isActive();
+      // Löschen: ausschliesslich Admin oder die Person, die den Termin
+      // ursprünglich erstellt hat. Alle anderen können nur über den Chat
+      // eine Löschanfrage stellen.
       allow delete: if isSignedIn() && isActive() &&
                      (resource.data.erstelltVonUid == request.auth.uid || isAdmin());
     }
