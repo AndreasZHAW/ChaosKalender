@@ -1280,7 +1280,7 @@ function renderWeek(){
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(ov && ov.geloescht) return;
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
-        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
+        const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
         const top = (s-startHour)*PXH, height = (e-s)*PXH-3;
         const leftPct = idx===0 ? '1px' : '50%';
         const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
@@ -1297,7 +1297,7 @@ function renderWeek(){
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
-          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
+          const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top = (s-startHour)*PXH, height=(e-s)*PXH-3;
           const leftPct = idx===0 ? '1px' : '50%';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
@@ -1318,7 +1318,7 @@ function renderWeek(){
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
-          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
+          const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
           const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
           body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
@@ -1350,7 +1350,7 @@ function renderWeek(){
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
-        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
+        const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
         body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
@@ -1690,7 +1690,7 @@ function renderSwipeView(){
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
-          const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
+          const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
           const top=(s-startHour)*px, height=(e-s)*px-2;
           const leftPct = idx===0?'1px':'50%';
           const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
@@ -1707,7 +1707,7 @@ function renderSwipeView(){
             const ov = window.getEventOverride ? window.getEventOverride(key) : null;
             if(ov && ov.geloescht) return;
             const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:defS;
-            const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
+            const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:defE;
             const top=(s-startHour)*px, height=(e-s)*px-2;
             const leftPct = idx===0?'1px':'50%';
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
@@ -1727,7 +1727,7 @@ function renderSwipeView(){
             const ov = window.getEventOverride ? window.getEventOverride(key) : null;
             if(ov && ov.geloescht) return;
             const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
-            const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
+            const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
             daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
           }
@@ -1757,7 +1757,7 @@ function renderSwipeView(){
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(BAND_DATES_MISCHA.includes(iso) && !(ov && ov.geloescht)){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
-        const e = ov?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
+        const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
         daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
@@ -2125,7 +2125,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v45 · 27.09.2026';
+const APP_VERSION = 'v46 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2145,7 +2145,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=45').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=46').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2405,7 +2405,7 @@ var hiState = { iso:null, hourDec:null, custodySeg:null, entries:[] };
 function getOverrideRange(key, defS, defE){
   const ov = window.getEventOverride ? window.getEventOverride(key) : null;
   if(ov && ov.geloescht) return null;
-  if(ov) return [parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60, parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60];
+  if(ov && ov.von && ov.bis) return [parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60, parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60];
   return [defS, defE];
 }
 function getCustomEventsForIsoHour(iso, hourDec){
