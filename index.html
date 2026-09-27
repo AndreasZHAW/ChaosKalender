@@ -398,7 +398,7 @@
       <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
       <div style="display:flex; gap:8px; margin-top:16px;">
         <button class="btn" id="custodySliderSaveBtn" style="width:auto; padding:9px 20px;" onclick="saveCustodySliders()">Speichern</button>
-        <button class="cr-del" onclick="cleanupDuplicateCustodyRules()">🧹 Doppelte Regeln bereinigen</button>
+        <button class="cr-del" onclick="cleanupDuplicateCustodyRules()">🧹 Neu berechnen & bereinigen</button>
       </div>
     </div>
   </div>
@@ -1862,8 +1862,12 @@ function swipeBlock(label, s, e, startHour, px, who){
   return `<div class="event ${who}" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;font-size:10.5px;"><strong>${label}</strong></div>`;
 }
 function initSwipeScroll(){
-  // Beim ersten Öffnen automatisch so scrollen, dass "Heute" sichtbar ist
-  requestAnimationFrame(()=> scrollSwipeToToday(false));
+  // Beim (Neu-)Rendern zu der Spalte scrollen, die currentDate entspricht
+  // – das ist meist "heute", aber nach einem Sprung (z.B. "Herbstferien →")
+  // eben genau dieses Zieldatum. Vorher wurde hier immer stur das echte
+  // Heute erzwungen, wodurch ein Sprung zu einem anderen Datum sofort
+  // wieder rückgängig gemacht wurde.
+  requestAnimationFrame(()=> scrollSwipeToToday(false, isoDate(currentDate)));
   attachStickyAutoDetector();
 }
 
@@ -1916,10 +1920,13 @@ function attachStickyAutoDetector(){
 // gerendert wurde und #swipeWrap ein komplett neues Element ist).
 let scrollToTodayGeneration = 0;
 
-function scrollSwipeToToday(smooth){
+function scrollSwipeToToday(smooth, zielIso){
   const meineGeneration = ++scrollToTodayGeneration;
   const wrap = document.getElementById('swipeWrap');
-  const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
+  // Ohne explizites Ziel: wie bisher die echte heutige Spalte (is-today).
+  // Mit explizitem Ziel (z.B. currentDate beim automatischen Rendern,
+  // oder ein Ferien-Sprungziel): genau diese Spalte anhand data-iso.
+  const todayCol = wrap && (zielIso ? wrap.querySelector(`.swipe-daycol[data-iso="${zielIso}"]`) : wrap.querySelector('.swipe-daycol.is-today'));
   const echtesHeuteJetzt = new Date();
   const alleSpalten = wrap ? Array.from(wrap.querySelectorAll('.swipe-daycol')).map(el=>({
     iso: el.dataset.iso, istHeuteMarkiert: el.classList.contains('is-today'), offsetLeft: el.offsetLeft
@@ -2286,7 +2293,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v55 · 27.09.2026';
+const APP_VERSION = 'v56 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2306,7 +2313,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=55').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=56').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2770,6 +2777,15 @@ async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer){
   }
 }
 
+/* Robuster als nur window.partnerUid (das hängt von einer asynchronen
+   Suche ab, die evtl. noch nicht fertig ist, wenn das Formular zum
+   ersten Mal gezeichnet wird): erkennt den anderen Kern-Elternteil
+   (Janine/Andi, nie Omami/Oma/Opa/Kinder) direkt über die Rolle. */
+function istAndererKernElternteil(u){
+  if(u.uid === window.partnerUid) return true;
+  if(u.uid === window.myUid) return false;
+  return u.role === 'janine' || u.role === 'andi';
+}
 function renderNewEntryForm(){
   const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
   const defaultMode = iAmCustodian ? 'info' : 'anfrage';
@@ -2786,7 +2802,7 @@ function renderNewEntryForm(){
   const others = (window.allActiveUsers||[]).filter(u=>u.uid !== window.myUid);
   const confirmersHtml = others.map(u=>
     `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-      <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+      <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
       ${escapeHtml(u.username||'?')}
     </label>`
   ).join('') || '<div style="font-size:11.5px; color:var(--ink-soft);">Keine anderen aktiven Personen gefunden.</div>';
@@ -3160,7 +3176,7 @@ function renderExistingEntryForm(entry){
         <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen?</div>
         ${(window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
           `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-            <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+            <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
             ${escapeHtml(u.username||'?')}
           </label>`
         ).join('')}
@@ -3213,7 +3229,7 @@ function renderExistingEntryForm(entry){
     const defaultMode = iAmCustodian ? 'info' : 'anfrage';
     const confirmersHtml = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
       `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-        <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${u.uid===window.partnerUid?'checked':''}>
+        <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
         ${escapeHtml(u.username||'?')}
       </label>`
     ).join('');
@@ -3352,8 +3368,19 @@ window.hiAcceptCustom = async function(id){
     });
     // Erst wenn WIRKLICH alle bestätigt haben, gilt eine evtl. gesetzte
     // "Beeinflusst Betreuung"-Angabe auch tatsächlich im Kalender.
+    // Eigener try/catch: falls DAS schiefgeht, soll die Bestätigung
+    // selbst trotzdem als erfolgreich gelten (nicht alles blockieren).
     if(alleDa && ev.beeinflusstBetreuung && ev.betreuungWer){
-      await setzeBetreuungsAusnahmeFuerZeitraum(ev.startDatum||ev.datum, ev.endDatum||ev.datum, ev.betreuungWer);
+      const start = ev.startDatum || ev.datum, end = ev.endDatum || ev.datum;
+      if(start && end){
+        try{
+          await setzeBetreuungsAusnahmeFuerZeitraum(start, end, ev.betreuungWer);
+        } catch(e2){
+          console.error('Betreuungs-Ausnahme setzen fehlgeschlagen:', e2);
+          if(window.logEvent) window.logEvent('betreuungsausnahme_fehlgeschlagen', {id, fehler:String(e2&&e2.message||e2)});
+          alert('Termin wurde bestätigt, aber die Betreuungs-Änderung konnte nicht gespeichert werden: ' + (e2&&e2.message||e2));
+        }
+      }
     }
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
@@ -3666,24 +3693,57 @@ function renderOneCustodyDaySlider(dow){
     </div>`;
 }
 window.retryCustodySeed = function(){ custodySeedTried = false; seedCustodyRulesIfEmpty(); };
-window.cleanupDuplicateCustodyRules = async function(){
-  if(!confirm('Doppelte/identische Betreuungs-Regeln jetzt entfernen? Nur exakte Duplikate werden gelöscht.')) return;
-  try{
-    const snap = await getDocs(collection(db,'custody_rules'));
-    const gesehen = new Set();
-    let geloescht = 0;
-    for(const d of snap.docs){
-      const r = d.data();
-      const schluessel = [r.vonTag, r.vonZeit, r.bisTag, r.bisZeit, r.wer].join('|');
-      if(gesehen.has(schluessel)){
-        await deleteDoc(doc(db,'custody_rules', d.id));
-        geloescht++;
-      } else {
-        gesehen.add(schluessel);
+/* Räumt eine Tages-Segmentliste auf: winzige Restsegmente (<0.26h,
+   z.B. von früheren Zieh-Ungenauigkeiten übrig geblieben) werden ins
+   Nachbarsegment eingeschmolzen, benachbarte Segmente derselben Person
+   werden zusammengeführt. */
+function bereinigeTagesSegmente(segs){
+  let out = segs.map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}));
+  let changed = true;
+  while(changed && out.length>1){
+    changed = false;
+    for(let i=0;i<out.length;i++){
+      if((out[i].to-out[i].from) < 0.26){
+        if(i===0){ out[1].from = out[0].from; } else { out[i-1].to = out[i].to; }
+        out.splice(i,1); changed = true; break;
       }
     }
-    window.custodyEditState = null; // neu aus den bereinigten Daten aufbauen
-    alert(geloescht > 0 ? `${geloescht} doppelte Regel(n) entfernt.` : 'Keine Duplikate gefunden.');
+  }
+  changed = true;
+  while(changed){
+    changed = false;
+    for(let i=0;i<out.length-1;i++){
+      if(out[i].who === out[i+1].who){ out[i].to = out[i+1].to; out.splice(i+1,1); changed = true; break; }
+    }
+  }
+  return out;
+}
+window.cleanupDuplicateCustodyRules = async function(){
+  if(!confirm('Betreuungs-Regeln komplett neu berechnen und bereinigen? Winzige Restsegmente und doppelte/überschneidende Regeln werden dabei entfernt, die Betreuungszeiten selbst bleiben unverändert.')) return;
+  try{
+    const monday = startOfWeek(new Date());
+    const frischeSnap = await getDocs(collection(db,'custody_rules'));
+    const aktuelleRegeln = frischeSnap.docs.map(d=>({id:d.id, ...d.data()}));
+    const neueRegeln = [];
+    for(let dow=1; dow<=7; dow++){
+      const d = new Date(monday); d.setDate(monday.getDate()+(dow-1));
+      let segs = getCustodySegmentsFromRules(d, aktuelleRegeln);
+      if(!segs || !segs.length) segs = getCustodySegmentsHardcoded(d);
+      segs = bereinigeTagesSegmente(segs);
+      segs.forEach(seg=>{
+        const bisRicht = seg.to>=24;
+        neueRegeln.push({
+          vonTag: dow, vonZeit: fmtHM(seg.from),
+          bisTag: bisRicht ? (dow===7?1:dow+1) : dow,
+          bisZeit: bisRicht ? '00:00' : fmtHM(seg.to),
+          wer: seg.who
+        });
+      });
+    }
+    for(const r of aktuelleRegeln) await deleteDoc(doc(db,'custody_rules', r.id));
+    for(const r of neueRegeln) await addDoc(collection(db,'custody_rules'), r);
+    window.custodyEditState = null;
+    alert('Betreuungs-Regeln neu berechnet und bereinigt.');
   } catch(e){ alert('Fehler: '+e.message); }
 };
 window.saveCustodySliders = async function(){
@@ -3700,7 +3760,8 @@ window.saveCustodySliders = async function(){
       await deleteDoc(doc(db,'custody_rules',d.id));
     }
     for(let dow=1; dow<=7; dow++){
-      for(const seg of window.custodyEditState[dow]){
+      const bereinigt = bereinigeTagesSegmente(window.custodyEditState[dow]);
+      for(const seg of bereinigt){
         const bisRicht = seg.to>=24;
         await addDoc(collection(db,'custody_rules'), {
           vonTag: dow, vonZeit: fmtHM(seg.from),
