@@ -167,7 +167,7 @@
 
   .overlay{position:fixed; inset:0; background:rgba(28,43,42,0.35); display:none; align-items:flex-end; justify-content:center; z-index:50;}
   .overlay.show{display:flex;}
-  .modal{background:#fff; border-radius:14px 14px 0 0; max-width:480px; width:100%; padding:22px;}
+  .modal{background:#fff; border-radius:14px 14px 0 0; max-width:480px; width:100%; padding:22px; max-height:90vh; max-height:90dvh; overflow-y:auto;}
   @media (min-width:600px){.overlay{align-items:center; padding:20px;} .modal{border-radius:12px;}}
   .modal h3{font-weight:700; margin:0 0 3px; font-size:16.5px;}
   .modal .sub{color:var(--ink-soft); font-size:12.5px; margin-bottom:14px;}
@@ -1833,11 +1833,6 @@ function attachStickyAutoDetector(){
 function scrollSwipeToToday(smooth){
   const wrap = document.getElementById('swipeWrap');
   const todayCol = wrap && wrap.querySelector('.swipe-daycol.is-today');
-  // Automatisches, ausführliches Logging – läuft bei JEDEM Aufruf, ohne
-  // dass jemand manuell etwas anklicken muss. Erfasst alles, was zur
-  // Diagnose nötig ist: welches Datum die App gerade als "heute" ansieht,
-  // welche Spalte als "is-today" markiert wurde, und was am Ende
-  // tatsächlich passiert ist.
   const echtesHeuteJetzt = new Date();
   const alleSpalten = wrap ? Array.from(wrap.querySelectorAll('.swipe-daycol')).map(el=>({
     iso: el.dataset.iso, istHeuteMarkiert: el.classList.contains('is-today'), offsetLeft: el.offsetLeft
@@ -1847,61 +1842,65 @@ function scrollSwipeToToday(smooth){
       grund: !wrap ? 'swipeWrap nicht im DOM gefunden' : 'keine Spalte mit is-today-Klasse gefunden',
       echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
       echtesHeuteLokal: isoDate(echtesHeuteJetzt),
-      anzahlSpalten: alleSpalten.length,
-      ersteSpalten: alleSpalten.slice(0,5),
-      letzteSpalten: alleSpalten.slice(-5)
+      anzahlSpalten: alleSpalten.length
     });
     return;
   }
   const target = todayCol.offsetLeft - 6;
   const vTop = compactMode ? 0 : (8+20/60)*40;
-  // WICHTIG: immer sofort (kein "smooth"), nie animiert. Eine laufende
-  // Scroll-Animation konnte vom "Weck-Trick" unten mitten in der
-  // Bewegung unterbrochen werden, wodurch eine falsche Zwischenposition
-  // "eingefroren" wurde – das war der Grund, warum "Heute" manchmal auf
-  // dem falschen Tag landete.
-  wrap.scrollTo({left: target, top: vTop, behavior: 'auto'});
-  // "Weck-Trick": manche Android-Browser aktivieren position:sticky erst
-  // nach einer ECHTEN Scroll-Bewegung, nicht nach einer programmatisch
-  // gesetzten Position. Eine winzige Hin-und-her-Bewegung erzwingt die
-  // Neuberechnung, damit die Zeitspalte von Anfang an sichtbar ist.
-  // Läuft jetzt erst NACH der (sofortigen) Positionierung, kein
-  // Animations-Konflikt mehr möglich.
-  setTimeout(()=>{
-    wrap.scrollTo({left: target, top: vTop, behavior: 'auto'}); // nochmal sicherstellen
-    const before = wrap.scrollLeft;
-    wrap.scrollLeft = before + 1;
-    requestAnimationFrame(()=>{ wrap.scrollLeft = before; });
-  }, 80);
-  // Nach ausreichend Zeit prüfen, was WIRKLICH am Ende zu sehen ist, und
-  // automatisch loggen – auch wenn alles gut ging (damit wir Normalfälle
-  // von Fehlerfällen unterscheiden können).
-  setTimeout(()=>{
-    const tatsaechlicheScrollLeft = wrap.scrollLeft;
-    const tatsaechlicheScrollTop = wrap.scrollTop;
-    const abweichung = Math.abs(tatsaechlicheScrollLeft - target);
-    const abweichungVertikal = Math.abs(tatsaechlicheScrollTop - vTop);
-    if(window.logEvent) window.logEvent('heute_sprung_ergebnis', {
-      echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
-      echtesHeuteLokal: isoDate(echtesHeuteJetzt),
-      todayColIso: todayCol.dataset.iso,
-      todayColOffsetLeft: todayCol.offsetLeft,
-      zielScrollLeft: target,
-      tatsaechlicheScrollLeft: tatsaechlicheScrollLeft,
-      abweichungPx: Math.round(abweichung),
-      stimmtUeberein: abweichung < 20,
-      zielScrollTop: vTop,
-      tatsaechlicheScrollTop: tatsaechlicheScrollTop,
-      abweichungVertikalPx: Math.round(abweichungVertikal),
-      vertikalStimmtUeberein: abweichungVertikal < 20,
-      compactMode: compactMode,
-      scrollWidth: wrap.scrollWidth,
-      clientWidth: wrap.clientWidth,
-      scrollHeightGesamt: wrap.scrollHeight,
-      clientHeight: wrap.clientHeight,
-      anzahlSpalten: alleSpalten.length
-    });
-  }, 400);
+
+  // WICHTIG: Logs haben bewiesen, dass wrap.scrollTo({left:...}) auf
+  // manchen Geräten schlicht NICHT wirkt (Ziel war korrekt berechnet,
+  // tatsächliche Position blieb bei ~0 hängen). Deshalb jetzt: direkt
+  // scrollLeft/scrollTop setzen (primitiver, zuverlässiger) UND so
+  // lange wiederholt nachfassen, bis es wirklich stimmt, statt nur
+  // einmal zu versuchen und zu hoffen.
+  let versuch = 0;
+  const maxVersuche = 10;
+  function versuchen(){
+    versuch++;
+    wrap.scrollLeft = target;
+    wrap.scrollTop = vTop;
+    setTimeout(()=>{
+      const istLinks = wrap.scrollLeft;
+      const istOben = wrap.scrollTop;
+      const abweichung = Math.abs(istLinks - target);
+      const abweichungVertikal = Math.abs(istOben - vTop);
+      const stimmt = abweichung < 20 && abweichungVertikal < 20;
+      if(!stimmt && versuch < maxVersuche){
+        versuchen();
+        return;
+      }
+      // Fertig (erfolgreich oder Versuche aufgebraucht) – jetzt loggen.
+      if(window.logEvent) window.logEvent('heute_sprung_ergebnis', {
+        echtesHeuteJetzt: echtesHeuteJetzt.toISOString(),
+        echtesHeuteLokal: isoDate(echtesHeuteJetzt),
+        todayColIso: todayCol.dataset.iso,
+        todayColOffsetLeft: todayCol.offsetLeft,
+        zielScrollLeft: target,
+        tatsaechlicheScrollLeft: istLinks,
+        abweichungPx: Math.round(abweichung),
+        stimmtUeberein: abweichung < 20,
+        zielScrollTop: vTop,
+        tatsaechlicheScrollTop: istOben,
+        abweichungVertikalPx: Math.round(abweichungVertikal),
+        vertikalStimmtUeberein: abweichungVertikal < 20,
+        benoetigteVersuche: versuch,
+        compactMode: compactMode,
+        scrollWidth: wrap.scrollWidth,
+        clientWidth: wrap.clientWidth,
+        scrollHeightGesamt: wrap.scrollHeight,
+        clientHeight: wrap.clientHeight,
+        anzahlSpalten: alleSpalten.length
+      });
+      // "Weck-Trick" für die Zeitspalte, ganz am Ende, nach erfolgreicher
+      // Positionierung.
+      const before = wrap.scrollLeft;
+      wrap.scrollLeft = before + 1;
+      requestAnimationFrame(()=>{ wrap.scrollLeft = before; });
+    }, versuch <= 3 ? 40 : 120);
+  }
+  versuchen();
 }
 
 
@@ -2126,7 +2125,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v44 · 27.09.2026';
+const APP_VERSION = 'v45 · 27.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2146,7 +2145,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=44').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=45').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2707,28 +2706,29 @@ const CHAT_SIZE_BLOCK_BYTES = 900*1024;  // ab hier: weitere Fotos blockieren (F
    optionale "Bestätigung nötig von"-Markierung pro Nachricht.
    coll: 'custom_events' oder 'event_overrides'. key: die jeweilige
    Dokument-ID. */
-function renderChatSection(chatArray, coll, key){
+function renderSingleChatMsgHtml(m, coll, key, idx){
+  const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
+  const bestaetigungsStatusHtml = (m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length)
+    ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${m.bestaetigungNoetigVon.map(p => (m.bestaetigtVon||[]).includes(p.uid) ? `✅ ${escapeHtml(p.name)}` : `⏳ ${escapeHtml(p.name)}`).join(' &nbsp;·&nbsp; ')}</div>`
+    : '';
+  const confirmBtnHtml = brauchtMeineBestaetigung
+    ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Bestätigen</button>`
+    : '';
+  const photoHtml = m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
+  const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg('${coll}','${key}','${m.msgId||('__idx'+idx)}')" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
+  return `
+    <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
+      <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
+      ${m.text ? `<div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text)}</div>` : ''}
+      ${photoHtml}
+      ${bestaetigungsStatusHtml}
+      ${confirmBtnHtml}
+      ${adminDelBtn}
+    </div>`;
+}
+function renderChatSection(chatArray, coll, key, einfachMode){
   const msgs = chatArray || [];
-  const chatHtml = msgs.length ? msgs.map((m, idx) => {
-    const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
-    const bestaetigungsStatusHtml = (m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length)
-      ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${m.bestaetigungNoetigVon.map(p => (m.bestaetigtVon||[]).includes(p.uid) ? `✅ ${escapeHtml(p.name)}` : `⏳ ${escapeHtml(p.name)}`).join(' &nbsp;·&nbsp; ')}</div>`
-      : '';
-    const confirmBtnHtml = brauchtMeineBestaetigung
-      ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Bestätigen</button>`
-      : '';
-    const photoHtml = m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
-    const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg('${coll}','${key}','${m.msgId||('__idx'+idx)}')" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
-    return `
-      <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
-        <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
-        ${m.text ? `<div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text)}</div>` : ''}
-        ${photoHtml}
-        ${bestaetigungsStatusHtml}
-        ${confirmBtnHtml}
-        ${adminDelBtn}
-      </div>`;
-  }).join('') : '<div class="empty-note" style="padding:8px 0;">Noch keine Nachrichten.</div>';
+  const chatHtml = msgs.length ? msgs.map((m, idx) => renderSingleChatMsgHtml(m, coll, key, idx)).join('') : '<div class="empty-note" style="padding:8px 0;">Noch keine Nachrichten.</div>';
 
   const others = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid);
   const confirmCbHtml = others.map(u=>
@@ -2750,8 +2750,9 @@ function renderChatSection(chatArray, coll, key){
         <img id="hiChatPhotoImg" style="max-width:70px; max-height:70px; border-radius:6px; object-fit:cover;">
         <button type="button" class="btn secondary" style="width:auto; padding:3px 10px; font-size:11px;" onclick="hiClearChatPhoto()">✕ entfernen</button>
       </div>
+      ${einfachMode ? '' : `
       <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">Bestätigung nötig von (optional):</div>
-      <div style="margin-bottom:6px;">${confirmCbHtml || '<span style="font-size:11px; color:var(--ink-soft);">(niemand sonst aktiv)</span>'}</div>
+      <div style="margin-bottom:6px;">${confirmCbHtml || '<span style="font-size:11px; color:var(--ink-soft);">(niemand sonst aktiv)</span>'}</div>`}
       <div style="display:flex; gap:6px; align-items:center;">
         <input type="text" id="hiChatInput" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){hiSendChatMsg('${coll}','${key}');}">
         <label class="btn secondary" style="width:auto; padding:8px 10px; cursor:pointer; margin:0;" title="Foto anhängen">📷<input type="file" accept="image/*" style="display:none;" onchange="hiPickChatPhoto(event)"></label>
@@ -2830,6 +2831,24 @@ window.hiSendChatMsg = async function(coll, key){
       await updateDoc(doc(db,'custom_events',key), { chat: arrayUnion(msg) });
     } else {
       await setDoc(doc(db,'event_overrides',key), { chat: arrayUnion(msg) }, {merge:true});
+    }
+    // Sofort anzeigen, statt auf die Firestore-Live-Aktualisierung zu
+    // warten (die kann spürbar Zeit brauchen) – gleichzeitig auch den
+    // lokalen Zwischenspeicher aktualisieren, damit ein erneutes Öffnen
+    // des Chats nicht "flackert".
+    const msgsBox = document.getElementById('hiChatMessages');
+    if(msgsBox){
+      const emptyNote = msgsBox.querySelector('.empty-note');
+      if(emptyNote) emptyNote.remove();
+      msgsBox.insertAdjacentHTML('beforeend', renderSingleChatMsgHtml(msg, coll, key, 999999));
+      msgsBox.scrollTop = msgsBox.scrollHeight;
+    }
+    if(coll==='custom_events'){
+      const ev = (window.customEvents||[]).find(e=>e.id===key);
+      if(ev) ev.chat = [...(ev.chat||[]), msg];
+    } else {
+      if(!window.eventOverrides[key]) window.eventOverrides[key] = {};
+      window.eventOverrides[key].chat = [...(window.eventOverrides[key].chat||[]), msg];
     }
     input.value = '';
     hiClearChatPhoto();
@@ -2920,6 +2939,13 @@ function renderExistingEntryForm(entry){
   const bestaetigt = ev.bestaetigtVon || [];
   const mussIchBestaetigen = ev.status==='schwebend' && bestaetiger.includes(window.myUid) && !bestaetigt.includes(window.myUid);
   const darfLoeschen = isMine || isAdminUser; // nur Ersteller oder Admin dürfen wirklich löschen
+  // Nur die Person, die den Termin ursprünglich erstellt hat (oder
+  // Admin), darf die Uhrzeit direkt ändern. Alle anderen – auch wer
+  // gerade bestätigen soll – können nur im Chat einen anderen
+  // Zeitwunsch schreiben. Das hält die Bestätigungs-Logik einfach:
+  // wer bestätigt, bestätigt genau das, was der Ersteller vorgeschlagen
+  // hat, nicht eine heimlich selbst geänderte Zeit.
+  const darfZeitAendern = isMine || isAdminUser;
   let statusLabel;
   if(ev.status==='info') statusLabel = 'Info (keine Freigabe nötig)';
   else if(ev.status==='bestaetigt') statusLabel = 'Bestätigt – fest eingetragen';
@@ -2931,16 +2957,19 @@ function renderExistingEntryForm(entry){
     });
     statusLabel = 'Wartet auf Bestätigung: ' + namen.join(', ');
   }
-  let actionsHtml = `<button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>`;
+  let actionsHtml = darfZeitAendern
+    ? `<button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>`
+    : '';
   if(mussIchBestaetigen){
     actionsHtml = `<button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">Bestätigen</button>`;
   }
   // Beim normalen Bearbeiten (nicht wenn man selbst gerade bestätigen
   // muss) auch hier Info/Anfrage anbieten – z.B. wenn Andi eine Zeit
   // ändert, die in Janines Betreuungszeit liegt, soll das automatisch
-  // als Anfrage vorgeschlagen werden.
+  // als Anfrage vorgeschlagen werden. Nur sichtbar, wenn man die Zeit
+  // überhaupt ändern darf.
   let modeToggleHtml = '';
-  if(!mussIchBestaetigen){
+  if(!mussIchBestaetigen && darfZeitAendern){
     const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
     const defaultMode = iAmCustodian ? 'info' : 'anfrage';
     const confirmersHtml = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
@@ -2959,16 +2988,18 @@ function renderExistingEntryForm(entry){
         <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss die Änderung bestätigen?</div>
         ${confirmersHtml}
       </div>`;
+  } else if(!darfZeitAendern){
+    modeToggleHtml = `<div style="font-size:11px; color:var(--ink-soft); margin:-4px 0 12px;">Nur ${escapeHtml(ev.erstelltVonName||'die erstellende Person')} kann die Uhrzeit ändern. Wünschst du eine andere Zeit, schreib es unten in den Chat.</div>`;
   }
   // Kleiner Chat, der fest am Termin hängt – bleibt erhalten, solange
   // der Termin existiert (wird nur gelöscht, wenn der ganze Termin
   // gelöscht wird).
-  const chatSectionHtml = renderChatSection(ev.chat, 'custom_events', ev.id);
+  const chatSectionHtml = renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen);
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
     <div class="time-row">
-      <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}"></div>
-      <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}"></div>
+      <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
+      <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
     </div>
     ${modeToggleHtml}
     <div class="modal-actions">
