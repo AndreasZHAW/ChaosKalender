@@ -62,6 +62,10 @@
   .legend.admin-mode .legend-item.viewas{cursor:pointer;}
   .legend.admin-mode .legend-item.viewas:hover{background:var(--line);}
   .legend-item.viewas.active-view{background:var(--ink); color:#fff; font-weight:600;}
+  .ansicht-head{font-size:10.5px; font-weight:700; color:var(--ink-soft); margin:12px 0 5px;}
+  .legend-details .legend{margin-bottom:6px; gap:8px;}
+  .kids-legend .legend-item.viewas{cursor:pointer; border:1px solid var(--line); background:var(--panel); padding:5px 10px;}
+  .ansicht-hint{font-size:10.5px; color:var(--ink-soft); line-height:1.5; margin:2px 0 4px;}
   .allcols-table{width:100%; border-collapse:collapse; font-size:13px; min-width:760px;}
   .allcols-table th{text-align:left; padding:10px 12px; border-bottom:2px solid var(--line); font-size:12px; color:var(--ink-soft); white-space:nowrap;}
   .allcols-table td{padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top;}
@@ -96,6 +100,8 @@
   .swipe-daynum{font-size:16px; font-weight:700;}
   .swipe-holtag{font-size:10px; color:var(--holiday-text); font-weight:700;}
   .swipe-body{position:relative;}
+  .multi-line{position:absolute; width:4px; z-index:4; border-radius:2px; cursor:pointer;}
+  .multi-line::before{content:''; position:absolute; left:-5px; right:-5px; top:0; bottom:0;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
@@ -394,6 +400,17 @@
 
   <div id="adminCustody" style="display:none;">
     <div class="admin-card">
+      <h3>Lücken-Check</h3>
+      <div class="muted">Sucht in den nächsten 12 Monaten nach Tagen, an denen niemand für die Betreuung zuständig ist.</div>
+      <button class="btn" style="margin-top:10px; width:auto; padding:9px 16px;" onclick="adminLueckenCheck()">🔔 Jetzt prüfen</button>
+      <div id="lueckenErgebnis" style="margin-top:10px; font-size:13px;"></div>
+    </div>
+    <div class="admin-card">
+      <h3>Betreuungs-Ausnahmen aus Terminen</h3>
+      <div class="muted">Setzt die Betreuung für alle bestätigten Termine mit "Beeinflusst Betreuung" (und akzeptierte Tagesplan-Anfragen) ab heute neu. Nützlich, wenn eine Betreuungs-Änderung vorher nicht gespeichert werden konnte.</div>
+      <button class="btn" style="margin-top:10px; width:auto; padding:9px 16px;" onclick="adminAusnahmenNeuSetzen()">↻ Ausnahmen neu setzen</button>
+    </div>
+    <div class="admin-card">
       <h3>Standard-Betreuungsmuster</h3>
       <div class="muted">Ein Regler pro Wochentag. Rot = Janine, Blau = Andi. Zum Hinzufügen einer neuen Übergabe: den Regler ganz links (0 Uhr) oder ganz rechts (24 Uhr) nach innen ziehen – sofort erscheint dort ein neuer Regler zum weiteren Ziehen. Zum Entfernen: Regler bis zum Nachbarn ziehen. Auf ein Segment tippen wechselt die Farbe.</div>
       <div id="custodyRulesTable"><div class="empty-note">Lade …</div></div>
@@ -464,28 +481,24 @@
 
   <details class="legend-details">
     <summary>☰ Ansicht</summary>
-    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0;">
-      <div class="role-switch">
-        <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
-        <button data-role="partner" onclick="setRole('partner')">Partner</button>
-      </div>
-      <button class="test-btn" title="Zeigt an, wenn niemand (Elternteil/Omami/Schule) zuständig ist" onclick="findNextCareGap()">🔔 Lücken-Check</button>
-      <button class="test-btn" onclick="viewAsPerson('janosch')">👦 Janosch</button>
-      <button class="test-btn" onclick="viewAsPerson('mischa')">👦 Mischa</button>
-    </div>
+    <div class="ansicht-head">Farbige Linie am Tagesrand</div>
     <div class="legend" id="legendRow">
-      <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:var(--a)"></span>Janine (Mutter)</div>
-      <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:var(--b)"></span>Andi (Vater)</div>
+      <div class="legend-item viewas" data-person="a" onclick="viewAsPerson('a')"><span class="dot" style="background:var(--a)"></span>Janine</div>
+      <div class="legend-item viewas" data-person="b" onclick="viewAsPerson('b')"><span class="dot" style="background:var(--b)"></span>Andi</div>
       <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
+      <div class="legend-item"><span class="dot" style="background:#9AA0A6"></span>Schule</div>
       <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
     </div>
-    <div class="legend" id="kidsLegendRow" style="margin-top:-8px;">
-      <span style="font-size:10.5px; color:var(--ink-soft); margin-right:4px;">Kinder-Kalender:</span>
+    <div class="ansicht-head">Kinder-Kalender ansehen (Punktfarbe = Farbe im Tag)</div>
+    <div class="legend kids-legend" id="kidsLegendRow">
       <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:var(--janosch)"></span>Janosch (9)</div>
       <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:var(--mischa)"></span>Mischa (11)</div>
     </div>
-    <div style="font-size:10.5px; color:var(--ink-soft); margin:6px 0 4px; line-height:1.5;">
-      Farbige Linie links am Tag: <span style="background:var(--b-bg); color:var(--b); padding:1px 5px; border-radius:4px;">blau = Andi</span> <span style="background:var(--a-bg); color:var(--a); padding:1px 5px; border-radius:4px;">rot = Janine</span> <span style="background:var(--janosch-bg); color:var(--janosch); padding:1px 5px; border-radius:4px;">gelb = Janosch</span> <span style="background:var(--mischa-bg); color:var(--mischa); padding:1px 5px; border-radius:4px;">grün = Mischa</span> <span style="background:#EFEFE9; padding:1px 5px; border-radius:4px;">grau = Schule allgemein</span>. Hintergrundfarbe = zusätzlicher Termin (Schule/Hort/Club/Bandprobe) – antippen für Details.
+    <div class="ansicht-hint">Hintergrundfarbe im Tag = zusätzlicher Termin (Schule, Hort, Club, Bandprobe) – antippen für Details.</div>
+    <div class="ansicht-head">Darstellung</div>
+    <div class="role-switch">
+      <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
+      <button data-role="partner" onclick="setRole('partner')">Partner</button>
     </div>
   </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
@@ -697,16 +710,38 @@ function terminZeitText(ev){
   }
   return (ev.von && ev.bis) ? `${ev.von}–${ev.bis} Uhr` : '';
 }
+/* Zeitfenster [von,bis] (Stunden), das ein mehrtägiger Termin an einem
+   bestimmten Tag belegt: Starttag ab "von", Endtag bis "bis", dazwischen
+   der ganze Tag. Gibt null zurück, wenn der Tag nicht betroffen ist. */
+function mehrtaegigTagesbereich(ev, iso){
+  if(!ev.mehrtaegig || !ev.startDatum || !ev.endDatum) return null;
+  if(iso < ev.startDatum || iso > ev.endDatum) return null;
+  const von = zeitZuStunden(ev.von), bis = zeitZuStunden(ev.bis);
+  const a = (iso===ev.startDatum && von!==null) ? von : 0;
+  const b = (iso===ev.endDatum && bis!==null) ? bis : 24;
+  return b > a ? [a,b] : null;
+}
+/* Mehrtägige Termine als senkrechte Linie im Tagesraster – direkt rechts
+   neben der Betreuungs-Linie (mit kleinem Abstand), über die belegte Zeit. */
+function renderMehrtaegigLinienHtml(iso, startHour, px){
+  let html = '', i = 0;
+  getMehrtaegigeTermineFuerTag(iso).forEach(ev=>{
+    const r = mehrtaegigTagesbereich(ev, iso);
+    if(!r) return;
+    const top = (r[0]-startHour)*px, height = (r[1]-r[0])*px;
+    if(height <= 0) return;
+    const pending = ev.status === 'schwebend';
+    const bg = pending ? 'repeating-linear-gradient(to bottom, #C9A54B 0 6px, transparent 6px 10px)' : '#B58900';
+    html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${7+i*6}px;background:${bg};" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')" title="${escapeHtml((ev.titel||'Termin')+(pending?' (wartet auf Bestätigung)':''))}"></div>`;
+    i++;
+  });
+  return html;
+}
 function getMehrtaegigeTermineFuerTag(iso){
   return (window.customEvents||[]).filter(ev=>
     ev.mehrtaegig && ev.startDatum && ev.endDatum && iso>=ev.startDatum && iso<=ev.endDatum &&
     (ev.status==='info' || ev.status==='bestaetigt' || ev.status==='schwebend')
   );
-}
-function renderMehrtaegigBannerHtml(iso){
-  return getMehrtaegigeTermineFuerTag(iso).map(ev=>
-    `<span class="day-event-tag" style="background:var(--pending-bg); color:#7A5A00; padding:1px 5px; border-radius:5px; font-size:9px; cursor:pointer; display:inline-block; margin-top:2px;" onclick="event.stopPropagation(); openHourInspector('${iso}', 12, 'custom_${ev.id}')" title="${escapeHtml(ev.titel||'')}">📅 ${escapeHtml(ev.titel||'')}${(iso===ev.startDatum && ev.von)?' ab '+ev.von:''}${(iso===ev.endDatum && ev.bis)?' bis '+ev.bis:''}${ev.status==='schwebend'?' ⏳':''}</span>`
-  ).join(' ');
 }
 function isSchoolDayForKid(d, kid){
   if(!isSchoolDay(d)) return false;
@@ -771,6 +806,25 @@ window.SCHOOL_SUBJECTS = SCHOOL_SUBJECTS;
 function timeToMin(t){ if(!t) return 0; const parts = String(t).split(':'); const h = Number(parts[0])||0, m = Number(parts[1])||0; return h*60+m; }
 function minToTime(m){ m=((m%1440)+1440)%1440; const h=Math.floor(m/60), mi=m%60; return h+(mi?mi/60:0); }
 
+/* Legt für ein Zeitfenster [a,b) (Stunden) eine Person über eine
+   bestehende Tages-Verteilung und liefert die bereinigte Verteilung. */
+function ueberlagereBetreuung(base, a, b, wer){
+  const out = [];
+  base.forEach(s=>{
+    if(s.to<=a || s.from>=b){ out.push({from:s.from,to:s.to,who:s.who}); return; }
+    if(s.from<a) out.push({from:s.from,to:a,who:s.who});
+    if(s.to>b) out.push({from:b,to:s.to,who:s.who});
+  });
+  out.push({from:a,to:b,who:wer});
+  out.sort((x,y)=>x.from-y.from);
+  return bereinigeTagesSegmente(out);
+}
+function zeitZuStunden(t){
+  if(!t) return null;
+  const p = String(t).split(':');
+  const h = parseFloat(p[0]), m = parseFloat(p[1]||'0');
+  return isNaN(h) ? null : h + (isNaN(m)?0:m)/60;
+}
 function getCustodySegmentsFromRules(d, rules){
   const dow = d.getDay()===0 ? 7 : d.getDay(); // 1=Mo..7=So
   const dayAbsStart = (dow-1)*1440;
@@ -863,14 +917,27 @@ function getCustodySegmentsHardcoded(d){
   return [{who:'a', to:16}, {who:'b', from:16}]; // So: Janine bis 16, dann Andi
 }
 
+/* Tagesgenaue Betreuungs-Ausnahme (Termin mit "Beeinflusst Betreuung" oder
+   akzeptierte Tagesplan-Anfrage). Gespeichert wird sie in der Sammlung
+   event_overrides (Schlüssel "betreuung_<Datum>"), weil deren Schreibrechte
+   in Firebase bereits für alle aktiven Personen offen sind – so braucht es
+   keine neue Regel-Veröffentlichung. Ältere Einträge aus der Sammlung
+   custody_exceptions werden weiter gelesen. */
+function getBetreuungsAusnahme(iso){
+  const ov = window.eventOverrides && window.eventOverrides['betreuung_'+iso];
+  if(ov && ov.segmente && ov.segmente.length) return ov.segmente;
+  const ex = window.custodyExceptions && window.custodyExceptions[iso];
+  if(ex && ex.segmente && ex.segmente.length) return ex.segmente;
+  return null;
+}
 function getCustodySegments(d){
   const exc = checkExceptions(d);
   if(exc) return [{who:exc.who, label:exc.label}];
   // Tagesgenaue Ausnahme (z.B. akzeptierte Betreuungs-Anfrage) hat
   // Vorrang vor dem allgemeinen Wochenmuster.
   const iso = isoDate(d);
-  if(window.custodyExceptions && window.custodyExceptions[iso] && window.custodyExceptions[iso].segmente && window.custodyExceptions[iso].segmente.length){
-    const exSegs = window.custodyExceptions[iso].segmente;
+  const exSegs = getBetreuungsAusnahme(iso);
+  if(exSegs){
     const sauber = bereinigeTagesSegmente(exSegs);
     return sauber.length ? segmenteKompakt(sauber) : exSegs;
   }
@@ -1255,7 +1322,7 @@ async function sendVerboseDiagnostic(){
           const d = new Date(s); d.setDate(s.getDate()+i); const iso = isoDate(d);
           out.push({
             iso,
-            ausnahmeDoc: !!(window.custodyExceptions && window.custodyExceptions[iso]),
+            ausnahmeDoc: !!getBetreuungsAusnahme(iso),
             roh: JSON.stringify(getCustodySegmentsFromRules(d, window.custodyRules||[])),
             final: JSON.stringify(getCustodySegments(d)),
             balken: JSON.stringify(buildColorBarSegments(d,null).map(b=>[b.start,b.end,String(b.color).replace('var(--bar-','').replace(')','')]))
@@ -1307,36 +1374,25 @@ function jumpToIso(iso){
   render();
 }
 
-/* Betreuungslücken-Check (Konzept 3.9): sucht ab heute den nächsten
-   Zeitpunkt, an dem NIEMAND (weder Elternteil noch Omami noch Schule)
-   zuständig ist, und springt automatisch dorthin. Mo-Do sind laut
-   Grundregel standardmässig Janine zugeordnet, daher normalerweise
-   keine Lücke zu erwarten – die Prüfung läuft trotzdem vollständig,
-   auch für zukünftige, individuell abweichende Slots. */
-function findNextCareGap(){
-  let d = new Date();
-  for(let dayOffset=0; dayOffset<366; dayOffset++){
-    const check = new Date(d); check.setDate(d.getDate()+dayOffset);
-    const segs = getCustodySegments(check);
-    // Deckt das Segment-Set lückenlos 0–24 Uhr ab?
-    const sorted = segs.slice().sort((a,b)=>(a.from||0)-(b.from||0));
-    let covered = 0;
-    let gapFound = false;
+/* Betreuungslücken-Check: liefert die nächsten Tage (ab heute, 12 Monate), an denen
+   niemand zuständig ist. Wird nur noch im Admin-Bereich genutzt. */
+function findCareGaps(limit){
+  const gaps = [];
+  const start = new Date(); start.setHours(0,0,0,0);
+  for(let dayOffset=0; dayOffset<366 && gaps.length<limit; dayOffset++){
+    const check = new Date(start); check.setDate(start.getDate()+dayOffset);
+    const sorted = getCustodySegments(check).slice().sort((a,b)=>(a.from||0)-(b.from||0));
+    let covered = 0, gapFound = false;
     for(const seg of sorted){
       const from = seg.from!==undefined ? seg.from : 0;
       const to = seg.to!==undefined ? seg.to : 24;
-      if(from > covered) { gapFound = true; break; }
+      if(from > covered){ gapFound = true; break; }
       covered = Math.max(covered, to);
     }
     if(covered < 24) gapFound = true;
-    if(gapFound){
-      currentDate = check;
-      setView('tag');
-      alert('Lücke gefunden am ' + check.toLocaleDateString('de-CH',{weekday:'long',day:'2-digit',month:'long'}) + ' – niemand eingetragen. Bitte im Admin-Bereich prüfen.');
-      return;
-    }
+    if(gapFound) gaps.push(isoDate(check));
   }
-  alert('✓ Keine Betreuungslücke in den nächsten 12 Monaten gefunden. Montag–Donnerstag ist standardmässig durchgehend Janine zugeordnet, alle anderen Zeiten sind ebenfalls lückenlos verteilt.');
+  return gaps;
 }
 
 /* ====================== MODAL ====================== */
@@ -1410,8 +1466,7 @@ function renderWeek(){
     }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
     const evTag = specialEv ? `<span class="day-event-tag" onclick="event.stopPropagation(); alert('${String(specialEv.title).replace(/'/g,"\\'")}')" style="cursor:pointer;">★</span>` : '';
-    const mehrtaegigBanner = renderMehrtaegigBannerHtml(iso);
-    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div>${mehrtaegigBanner}</div>`;
+    head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}${evTag}</div></div>`;
   }
   head += '</div>';
 
@@ -1428,6 +1483,7 @@ function renderWeek(){
     body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${PXH})" onpointerup="handleDayColPointerUp(event)">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${PXH}px;"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, PXH);
+    body += renderMehrtaegigLinienHtml(iso, startHour, PXH);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
@@ -1571,6 +1627,7 @@ function renderKidWeek(kid){
     body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},44)" onpointerup="handleDayColPointerUp(event)">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:44px;"></div>`;
     body += renderColorBarHtml(buildColorBarSegments(d, kid), startHour, 44);
+    body += renderMehrtaegigLinienHtml(iso, startHour, 44);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
     // nur die Schule fällt aus (siehe isSchoolDayForKid weiter unten).
@@ -1699,7 +1756,6 @@ function renderDay(){
       head += `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
     });
   }
-  head += renderMehrtaegigBannerHtml(iso);
   head += `</div></div>`;
 
   // Stundenraster: eine breite Spalte, ALLE 24 Stunden des Tages
@@ -1708,6 +1764,7 @@ function renderDay(){
   body += `</div><div class="day-col" style="position:relative;" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
   for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
   body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
+  body += renderMehrtaegigLinienHtml(iso, startHour, px);
 
   function block(s,e,label,bgVar,colorVar,clickable,z){
     const top=(s-startHour)*px, height=(e-s)*px-2;
@@ -1833,6 +1890,7 @@ function renderSwipeView(){
     daysHtml += `<div class="swipe-body">`;
     for(let h=startHour; h<endHour; h++) daysHtml += `<div class="hour-row" style="height:${px}px;"></div>`;
     daysHtml += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
+    daysHtml += renderMehrtaegigLinienHtml(iso, startHour, px);
 
     if(currentPerson==='janosch' || currentPerson==='mischa'){
       const kid = currentPerson;
@@ -2379,7 +2437,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v57 · 28.09.2026';
+const APP_VERSION = 'v59 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2399,7 +2457,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=57').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=59').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2674,6 +2732,12 @@ function getOverrideRange(key, defS, defE){
 }
 function getCustomEventsForIsoHour(iso, hourDec){
   return (window.customEvents||[]).filter(ev=>{
+    // Mehrtägige Termine: an JEDEM betroffenen Tag auffindbar (nicht nur
+    // am Starttag) – sonst konnte man sie ab dem 2. Tag nicht mehr öffnen.
+    if(ev.mehrtaegig){
+      const r = mehrtaegigTagesbereich(ev, iso);
+      return !!r && hourDec >= r[0] && hourDec < r[1];
+    }
     if(ev.datum!==iso || !ev.von || !ev.bis) return false;
     const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
     const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
@@ -2855,14 +2919,30 @@ window.toggleBetreuungFields = function(prefix){
 /* Schreibt (bzw. entfernt) Betreuungs-Ausnahmen für jeden Tag im
    angegebenen Datumsbereich – wird nach dem Bestätigen eines Termins
    aufgerufen, der "beeinflusst Betreuung" gesetzt hat. */
-async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer){
+async function schreibeBetreuungsAusnahme(iso, segmente, quelle, extra){
+  const daten = Object.assign({segmente, gesetztVon: window.myUid||'?', gesetztAm: new Date().toISOString(), quelle}, extra||{});
+  await setDoc(doc(db,'event_overrides','betreuung_'+iso), daten);
+}
+async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer, vonZeit, bisZeit){
+  // Mit Uhrzeit: am Starttag gilt die Ausnahme erst ab "von", am Endtag nur
+  // bis "bis" (dazwischen ganztägig). Ohne Uhrzeit: ganze Tage.
+  const von = zeitZuStunden(vonZeit), bis = zeitZuStunden(bisZeit);
   const start = new Date(startDatum+'T00:00:00');
   const end = new Date(endDatum+'T00:00:00');
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     const iso = isoDate(d);
-    await setDoc(doc(db,'custody_exceptions', iso), {
-      segmente: [{who: wer}], gesetztVon: window.myUid, gesetztAm: new Date().toISOString(), quelle: 'termin'
-    });
+    const istStart = iso === startDatum, istEnde = iso === endDatum;
+    const a = istStart && von!==null ? von : 0;
+    const b = istEnde && bis!==null ? bis : 24;
+    if(b <= a) continue;
+    let segmente;
+    if(a <= 0.01 && b >= 23.99){
+      segmente = [{from:0, to:24, who:wer}];
+    } else {
+      const base = bereinigeTagesSegmente(getCustodySegments(d));
+      segmente = ueberlagereBetreuung(base, a, b, wer);
+    }
+    await schreibeBetreuungsAusnahme(iso, segmente, 'termin');
   }
 }
 
@@ -2976,7 +3056,7 @@ window.hiSaveNewEntry = async function(){
     // "Nur Info" braucht keine Bestätigung -> Betreuungs-Ausnahme gilt
     // sofort. Bei "Anfrage" erst nach dem Bestätigen (siehe hiAcceptCustom).
     if(mode==='info' && beeinflusstBetreuung && betreuungWer){
-      await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer);
+      await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer, von, bis);
     }
     if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
@@ -3440,7 +3520,7 @@ window.hiSaveCustomEdit = async function(id){
       await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
       // "Nur Info" gilt sofort, keine Bestätigung nötig.
       if(beeinflusstBetreuung && betreuungWer){
-        await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer);
+        await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer, von, bis);
       }
     }
     if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode, mehrtaegig, beeinflusstBetreuung});
@@ -3466,11 +3546,11 @@ window.hiAcceptCustom = async function(id){
       const start = ev.startDatum || ev.datum, end = ev.endDatum || ev.datum;
       if(start && end){
         try{
-          await setzeBetreuungsAusnahmeFuerZeitraum(start, end, ev.betreuungWer);
+          await setzeBetreuungsAusnahmeFuerZeitraum(start, end, ev.betreuungWer, ev.von, ev.bis);
         } catch(e2){
           console.error('Betreuungs-Ausnahme setzen fehlgeschlagen:', e2);
           if(window.logEvent) window.logEvent('betreuungsausnahme_fehlgeschlagen', {id, fehler:String(e2&&e2.message||e2)});
-          alert('Termin wurde bestätigt, aber die Betreuungs-Änderung konnte nicht gespeichert werden: ' + (e2&&e2.message||e2));
+          alert('Termin wurde bestätigt, aber die Betreuungs-Änderung konnte nicht gespeichert werden: ' + (e2&&e2.message||e2) + regelHinweis(e2));
         }
       }
     }
@@ -4007,8 +4087,13 @@ window.oeffneTerminMitChat = function(evId){
   const ev = (window.customEvents||[]).find(e=>e.id===evId);
   if(!ev){ alert('Termin nicht gefunden.'); return; }
   document.getElementById('requestsOverlay').classList.remove('show');
-  const mitte = ev.von && ev.bis ? (parseFloat(ev.von.split(':')[0])+parseFloat(ev.bis.split(':')[0]))/2 : 12;
-  openHourInspector(ev.datum, mitte, 'custom_'+ev.id);
+  let tag = ev.datum, mitte = ev.von && ev.bis ? (parseFloat(ev.von.split(':')[0])+parseFloat(ev.bis.split(':')[0]))/2 : 12;
+  if(ev.mehrtaegig){
+    tag = ev.startDatum || ev.datum;
+    const r = mehrtaegigTagesbereich(ev, tag);
+    if(r) mitte = (r[0]+r[1])/2;
+  }
+  openHourInspector(tag, mitte, 'custom_'+ev.id);
 };
 /* Gemeinsame Aufräum-Logik. Jeder Eintrag einzeln in try/catch: darf
    ein einzelner (nicht erlaubter) Löschversuch nicht den ganzen Rest
@@ -4053,6 +4138,55 @@ async function autoCleanupVergangeneTermine(){
     if(res.anzahl && window.logEvent) window.logEvent('auto_aufgeraeumt', res);
   } catch(e){ console.error('Automatisches Aufräumen fehlgeschlagen:', e); }
 }
+function regelHinweis(e){
+  const m = String((e && e.message) || e || '');
+  return /permission|insufficient/i.test(m)
+    ? '\n\nHinweis: Die Firestore-Regeln in Firebase sind vermutlich veraltet. Bitte den Admin bitten, die aktuelle firestore.rules in der Firebase-Konsole (Firestore → Regeln) zu veröffentlichen.'
+    : '';
+}
+window.adminLueckenCheck = function(){
+  const box = document.getElementById('lueckenErgebnis');
+  if(!box) return;
+  const luecken = findCareGaps(10);
+  if(!luecken.length){
+    box.innerHTML = '<span style="color:var(--b); font-weight:600;">✓ Keine Betreuungslücke in den nächsten 12 Monaten gefunden.</span>';
+    return;
+  }
+  box.innerHTML = '<div style="color:var(--holiday-text); font-weight:600; margin-bottom:6px;">⚠️ Lücken gefunden (max. 10 angezeigt):</div>' +
+    luecken.map(iso=>`<div style="margin:3px 0;">${new Date(iso+'T00:00').toLocaleDateString('de-CH',{weekday:'long',day:'2-digit',month:'long'})} <button class="cr-save" style="margin-left:8px;" onclick="adminZuTag('${iso}')">Im Kalender ansehen</button></div>`).join('');
+};
+window.adminZuTag = function(iso){
+  openCalendarAsAdmin();
+  jumpToIso(iso);
+  setView('tag');
+};
+window.adminAusnahmenNeuSetzen = async function(){
+  if(!confirm('Betreuungs-Ausnahmen aus allen bestätigten Terminen (mit "Beeinflusst Betreuung") und akzeptierten Tagesplan-Anfragen ab heute neu setzen?')) return;
+  const heute = isoDate(new Date());
+  const quellen = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.beeinflusstBetreuung && ev.betreuungWer && (ev.status==='info' || ev.status==='bestaetigt')){
+      const s = ev.startDatum || ev.datum, e = ev.endDatum || ev.datum;
+      if(s && e && e >= heute) quellen.push({zeit: ev.erstelltAm||'', typ:'termin', s, e, wer: ev.betreuungWer, von: ev.von, bis: ev.bis});
+    }
+  });
+  (window.__reqReceived||[]).forEach(r=>{
+    if(r.status==='akzeptiert' && r.datum && r.datum >= heute){
+      const last = (r.verlauf||[]).slice().reverse().find(v=>v.neueSegmente && v.neueSegmente.length);
+      if(last) quellen.push({zeit: r.aktualisiertAm||'', typ:'anfrage', datum:r.datum, segs: bereinigeTagesSegmente(last.neueSegmente)});
+    }
+  });
+  quellen.sort((a,b)=> String(a.zeit).localeCompare(String(b.zeit))); // Neueres gewinnt
+  let ok = 0, fehler = 0, letzterFehler = null;
+  for(const q of quellen){
+    try{
+      if(q.typ==='termin') await setzeBetreuungsAusnahmeFuerZeitraum(q.s, q.e, q.wer, q.von, q.bis);
+      else await schreibeBetreuungsAusnahme(q.datum, q.segs, 'anfrage');
+      ok++;
+    } catch(e){ fehler++; letzterFehler = e; }
+  }
+  alert(quellen.length ? `${ok} von ${quellen.length} Quelle(n) neu gesetzt.` + (fehler ? ` ${fehler} fehlgeschlagen: ${letzterFehler&&letzterFehler.message||letzterFehler}${regelHinweis(letzterFehler)}` : '') : 'Keine passenden Termine oder Anfragen gefunden.');
+};
 window.openRequestsModal = function(){
   try{
     document.getElementById('requestsOverlay').classList.add('show');
@@ -4089,13 +4223,11 @@ window.acceptRequest = async function(id){
       const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
       const neueSegmente = lastEntry && lastEntry.neueSegmente ? bereinigeTagesSegmente(lastEntry.neueSegmente) : null;
       if(neueSegmente && neueSegmente.length){
-        await setDoc(doc(db,'custody_exceptions', r.datum), {
-          segmente: neueSegmente, gesetztVon: window.myUid, gesetztAm: new Date().toISOString(), ausAnfrageId: id
-        });
+        await schreibeBetreuungsAusnahme(r.datum, neueSegmente, 'anfrage', {ausAnfrageId: id});
       }
     }
     if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
-  } catch(e){ alert('Fehler: '+e.message); }
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
 window.rejectRequest = async function(id){
   await updateDoc(doc(db,'slot_changes',id), {
