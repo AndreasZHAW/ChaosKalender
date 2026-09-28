@@ -65,6 +65,7 @@
   .ansicht-head{font-size:10.5px; font-weight:700; color:var(--ink-soft); margin:12px 0 5px;}
   .legend-details .legend{margin-bottom:6px; gap:8px;}
   .kids-legend .legend-item.viewas{cursor:pointer; border:1px solid var(--line); background:var(--panel); padding:5px 10px;}
+  .hi-hint{font-size:11.5px; color:var(--ink-soft); margin:2px 0 10px; line-height:1.4;}
   .ansicht-hint{font-size:10.5px; color:var(--ink-soft); line-height:1.5; margin:2px 0 4px;}
   .allcols-table{width:100%; border-collapse:collapse; font-size:13px; min-width:760px;}
   .allcols-table th{text-align:left; padding:10px 12px; border-bottom:2px solid var(--line); font-size:12px; color:var(--ink-soft); white-space:nowrap;}
@@ -120,8 +121,8 @@
   .partner-day .num{font-size:13px; font-weight:600; margin-bottom:8px;}
   .status-pill{font-size:11px; font-weight:700; padding:4px 0; border-radius:6px; margin-bottom:4px;}
   .status-pill:last-child{margin-bottom:0;}
-  .status-pill.oben{background:#E5EEEC; color:var(--a);}
-  .status-pill.unten{background:#F2E9E1; color:var(--b);}
+  .status-pill.oben{background:var(--b-bg); color:var(--b);}
+  .status-pill.unten{background:var(--a-bg); color:var(--a);}
   .partner-note{margin-top:14px; font-size:12px; color:var(--ink-soft); text-align:center;}
 
   /* WEEK */
@@ -181,8 +182,8 @@
   .modal .sub{color:var(--ink-soft); font-size:12.5px; margin-bottom:14px;}
   .ort-row{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; padding:10px 12px; background:#F5F4F0; border-radius:8px;}
   .ort-row span{font-size:12.5px; font-weight:600;}
-  .switch{position:relative; width:52px; height:28px; background:var(--a); border-radius:20px; cursor:pointer; flex-shrink:0;}
-  .switch.unten{background:var(--b);}
+  .switch{position:relative; width:52px; height:28px; background:var(--b); border-radius:20px; cursor:pointer; flex-shrink:0;}
+  .switch.unten{background:var(--a);}
   .switch .knob{position:absolute; top:3px; left:3px; width:22px; height:22px; background:#fff; border-radius:50%; transition:left 0.15s ease;}
   .switch.unten .knob{left:27px;}
   .ort-labels{display:flex; justify-content:space-between; font-size:10px; color:var(--ink-soft); margin-top:-8px; margin-bottom:14px; padding:0 2px;}
@@ -504,17 +505,14 @@
       <div class="legend-item"><span class="dot" style="background:#9AA0A6"></span>Schule</div>
       <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
     </div>
-    <div class="ansicht-head">Kinder-Kalender ansehen (Punktfarbe = Farbe im Tag)</div>
+    <div class="ansicht-head">Weitere Ansichten</div>
     <div class="legend kids-legend" id="kidsLegendRow">
       <div class="legend-item viewas" data-person="janosch" onclick="viewAsPerson('janosch')"><span class="dot" style="background:var(--janosch)"></span>Janosch (9)</div>
       <div class="legend-item viewas" data-person="mischa" onclick="viewAsPerson('mischa')"><span class="dot" style="background:var(--mischa)"></span>Mischa (11)</div>
+      <div class="legend-item viewas" data-person="partner" id="partnerChip" onclick="togglePartnerView()"><span class="dot" style="background:var(--ink-soft)"></span>👥 Partner</div>
     </div>
+    <div class="ansicht-hint">Kinder: Punktfarbe = Farbe im Tag. Partner: nur „oben“ (Andi) / „unten“ (Janine), ohne Uhrzeiten und Namen. Nochmal tippen = zurück zur eigenen Ansicht.</div>
     <div class="ansicht-hint">Hintergrundfarbe im Tag = zusätzlicher Termin (Schule, Hort, Club, Bandprobe) – antippen für Details.</div>
-    <div class="ansicht-head">Darstellung</div>
-    <div class="role-switch">
-      <button class="active" data-role="eltern" onclick="setRole('eltern')">Ich</button>
-      <button data-role="partner" onclick="setRole('partner')">Partner</button>
-    </div>
   </details>
   <div id="viewAsHint" style="display:none; font-size:11px; color:var(--pending); margin:4px 0 6px;">
     👁 Vorschau: Ansicht wie <span id="viewAsName"></span> · <span style="text-decoration:underline; cursor:pointer;" onclick="viewAsPerson(null)" id="viewAsBackLink">zurück zur Admin-Ansicht</span>
@@ -750,13 +748,13 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
     const left = 7 + i*16;
     const oeffnen = `event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')`;
     const zusatz = (iso===ev.startDatum && ev.von) ? ' ab '+ev.von : ((iso===ev.endDatum && ev.bis) ? ' bis '+ev.bis : '');
-    const tip = escapeHtml((ev.titel||'Termin') + zusatz + (pending?' (wartet auf Bestätigung)':''));
+    const tip = escapeHtml(terminAnzeigeTitel(ev) + zusatz + (pending?' (wartet auf Bestätigung)':''));
     html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${left}px;background:${bg};" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}"></div>`;
     // Beschriftung: einmal pro Tag direkt neben der Linie. Ab 9 Uhr (im
     // Detail-Modus sichtbar), bei kurzen Abschnitten am Linienanfang.
     const ank = (r[1] - Math.max(r[0],9) >= 0.75) ? Math.max(r[0],9) : r[0];
     const labelTop = (ank-startHour)*px + 3 + i*15;
-    html += `<div class="multi-label ${pending?'pending':''}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}">${escapeHtml(ev.titel||'Termin')}</div>`;
+    html += `<div class="multi-label ${pending?'pending':''}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}">${escapeHtml(terminAnzeigeTitel(ev))}</div>`;
     i++;
   });
   return html;
@@ -958,16 +956,33 @@ function getBetreuungsAusnahme(iso){
   return null;
 }
 /* Betreuungs-Überlagerungen aus Terminen mit "Beeinflusst Betreuung": gelten,
-   sobald der Termin bestätigt bzw. als Info eingetragen ist (nicht solange
-   er noch schwebt/abgelehnt ist). Wird bei JEDER Anzeige direkt aus den
+   sobald der Termin per Anfrage bestätigt ist (nicht bei reinem Info-Termin,
+   nicht solange er noch schwebt/abgelehnt ist). Wird bei JEDER Anzeige direkt aus den
    Terminen berechnet – nichts wird dafür extra gespeichert. So wirkt ein
    Termin sofort für alle, und ein gelöschter/geänderter Termin nimmt seine
    Betreuungs-Änderung automatisch wieder mit. Spätere Termine gewinnen. */
+/* Privatsphäre: Info-Termine mit "Privat"-Häkchen zeigen allen anderen nur
+   "Gebucht" (ohne Titel). Ersteller und Admin sehen den Titel. Hinweis: Das
+   ist eine Anzeige-Regel der App (die Daten selbst liegen für alle aktiven
+   Konten lesbar in der Datenbank). */
+function terminIstPrivatFuerMich(ev){
+  return !!(ev && ev.privat && ev.status === 'info' && ev.erstelltVonUid !== window.myUid && window.__chaosRole !== 'admin');
+}
+function terminAnzeigeTitel(ev){
+  if(terminIstPrivatFuerMich(ev)) return '🔒 Gebucht';
+  return ((ev.privat && ev.status === 'info') ? '🔒 ' : '') + (ev.titel || 'Termin');
+}
+function terminFarbStil(ev, borderStyle){
+  if(terminIstPrivatFuerMich(ev)) return 'background:#ECECE6;color:#6B6B63;border:1px solid #D2D2C8;';
+  return 'background:var(--pending-bg);color:#7A5A00;' + borderStyle;
+}
 function getEventBetreuungsOverlays(iso){
   const out = [];
   (window.customEvents||[]).forEach(ev=>{
     if(!ev.beeinflusstBetreuung || !ev.betreuungWer) return;
-    if(ev.status !== 'info' && ev.status !== 'bestaetigt') return;
+    // Nur über eine ANFRAGE (= bestätigt) kann sich die Betreuung ändern.
+    // Reine Info-Termine ändern die Betreuung nie.
+    if(ev.status !== 'bestaetigt') return;
     let a, b;
     if(ev.mehrtaegig){
       const r = mehrtaegigTagesbereich(ev, iso);
@@ -1104,11 +1119,12 @@ function getCareAssignment(d){
   const exc = checkExceptions(d);
   if(exc) return {who:exc.who, ort:exc.ort};
   const dow = d.getDay(); // 0=So..6=Sa
-  if(dow===4) return {who:'b', ort:'unten'};       // Do ab 17 Uhr Andi (Haupt-Tag-Zuordnung)
-  if(dow===5) return {who:'a', ort:'oben', eveningTo:'b'}; // Fr tags Janine, ab 18 Uhr Andi
-  if(dow===6) return {who:'b', ort:'unten', morningFrom:'a'}; // Sa bis 10 Andi(Rest von Fr), ab 10 Janine
-  if(dow===0) return {who:'a', ort:'oben', eveningTo:'b'}; // So tags Janine, ab 16 Uhr Andi
-  return {who:'a', ort:'oben'}; // Mo-Mi durchgehend Janine
+  // Zuordnung: Andi (blau) = "oben", Janine (rot) = "unten"
+  if(dow===4) return {who:'b', ort:'oben'};       // Do ab 17 Uhr Andi (Haupt-Tag-Zuordnung)
+  if(dow===5) return {who:'a', ort:'unten', eveningTo:'b'}; // Fr tags Janine, ab 18 Uhr Andi
+  if(dow===6) return {who:'b', ort:'oben', morningFrom:'a'}; // Sa bis 10 Andi(Rest von Fr), ab 10 Janine
+  if(dow===0) return {who:'a', ort:'unten', eveningTo:'b'}; // So tags Janine, ab 16 Uhr Andi
+  return {who:'a', ort:'unten'}; // Mo-Mi durchgehend Janine
 }
 function whoLabel(who){ return {a:'Janine', b:'Andi', omami:'Omami', janosch:'Janosch', mischa:'Mischa'}[who] || ''; }
 
@@ -1200,9 +1216,11 @@ function fmtPeriodLabel(){
   return currentDate.toLocaleDateString('de-CH',{weekday:'short', day:'2-digit', month:'short', year:'numeric'});
 }
 
+function togglePartnerView(){ setRole(currentRole==='partner' ? 'eltern' : 'partner'); }
 function setRole(r){
   currentRole = r;
-  document.querySelectorAll('.role-switch button').forEach(b=>b.classList.toggle('active', b.dataset.role===r));
+  const partnerChip = document.getElementById('partnerChip');
+  if(partnerChip) partnerChip.classList.toggle('active-view', r==='partner');
   document.getElementById('viewToggle').style.display = r==='partner' ? 'none' : 'flex';
   document.getElementById('legendRow').style.display = r==='partner' ? 'none' : 'flex';
   render();
@@ -1222,6 +1240,7 @@ function viewAsPerson(who){
   // eine andere erwachsene Person imitiert.
   const isKidView = (who==='janosch' || who==='mischa' || who===null);
   if(!isKidView && !isAdminUser) return;
+  if(currentRole==='partner') setRole('eltern'); // Kinder-/Personenansicht verlässt die Partner-Ansicht
   currentPerson = who;
   document.querySelectorAll('.legend-item.viewas').forEach(el=>{
     el.classList.toggle('active-view', el.dataset.person===who);
@@ -1645,7 +1664,7 @@ function renderWeek(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil = tagHatFixeBloecke ? 'left:52%;right:1px;' : 'left:2px;right:2px;';
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;${spaltenStil}font-size:9.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;${spaltenStil}font-size:9.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });    body += `</div>`;
   }
   body += '</div>';
@@ -1752,7 +1771,7 @@ function eventBlock(who, start, end, startHour, dateObj, note){
   const height = (end-start)*44-3;
   const sub = dateObj.toLocaleDateString('de-CH',{weekday:'short', day:'2-digit', month:'short'});
   const iso = isoDate(dateObj);
-  return `<div class="event ${who}" style="top:${top}px;height:${height}px;z-index:1;" onclick="openModal('Slot ändern','${sub} · ${start}:00–${end}:00', '${who==='a'?'oben':'unten'}', '${iso}', '${fmtH(start)}', '${fmtH(end)}', '${who}')">
+  return `<div class="event ${who}" style="top:${top}px;height:${height}px;z-index:1;" onclick="openModal('Slot ändern','${sub} · ${start}:00–${end}:00', '${who==='a'?'unten':'oben'}', '${iso}', '${fmtH(start)}', '${fmtH(end)}', '${who}')">
     <strong>${whoLabel(who)}</strong>${note?note:''}
   </div>`;
 }
@@ -1910,7 +1929,7 @@ function renderDay(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil2 = tagHatFixeBloecke2 ? 'left:54%;right:4px;' : 'left:6px;right:6px;';
-      body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });
   }
   SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
@@ -2055,7 +2074,7 @@ function renderSwipeView(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil3 = tagHatFixeBloecke3 ? 'left:54%;right:2px;' : 'left:2px;right:2px;';
-      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;${spaltenStil3}z-index:4;font-size:10.5px;background:var(--pending-bg);color:#7A5A00;${borderStyle}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(ev.titel||'Termin')}${statusMark}</strong></div>`;
+      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;${spaltenStil3}z-index:4;font-size:10.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -2238,7 +2257,7 @@ function renderPartnerStrip(){
       html += `<div class="status-pill" style="background:var(--holiday-bg); color:var(--holiday-text);">frei</div>`;
     } else {
       // Kompakte Mini-Zeitleiste (0–24 Uhr auf 70px Höhe) mit denselben
-      // Farben wie überall sonst: blau=Andi, lila=Janine, grau=Schule.
+      // Farben wie überall sonst: blau=Andi (oben), rot=Janine (unten), grau=Schule.
       const barSegs = buildColorBarSegments(d, null);
       let barHtml = '<div class="partner-bar">';
       barSegs.forEach(seg=>{
@@ -2248,11 +2267,11 @@ function renderPartnerStrip(){
       barHtml += '</div>';
       html += barHtml;
       // Halbe Tage wie im Desktop: pro Betreuungs-Segment eine eigene
-      // Pille (z.B. morgens "oben", abends "unten") – weiterhin ohne
+      // Pille (z.B. morgens "unten", abends "oben") – weiterhin ohne
       // Namen oder genaue Uhrzeiten (Konzept 2.0).
       const segs = getCustodySegments(d);
       segs.forEach(seg=>{
-        const ort = (seg.who==='a') ? 'oben' : (seg.who==='b') ? 'unten' : 'unten';
+        const ort = (seg.who==='a') ? 'unten' : 'oben'; // Janine (rot) = unten, Andi (blau) = oben
         html += `<div class="status-pill ${ort}">${ort}</div>`;
       });
     }
@@ -2501,7 +2520,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v62 · 28.09.2026';
+const APP_VERSION = 'v63 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2521,7 +2540,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=62').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=63').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2860,7 +2879,7 @@ function buildHourEntries(iso, hourDec){
     if(r && hourDec>=r[0] && hourDec<r[1]) entries.push({id:key,label:'Bandprobe Mischa',type:'event',key,defS:16.5,defE:17.5});
   }
   getCustomEventsForIsoHour(iso,hourDec).forEach(ev=>{
-    entries.push({id:'custom_'+ev.id, label:ev.titel||'Termin', type:'custom', data:ev});
+    entries.push({id:'custom_'+ev.id, label:terminAnzeigeTitel(ev), type:'custom', data:ev});
   });
   return entries;
 }
@@ -2965,15 +2984,27 @@ function renderZeitBlockHtml(prefix, ev, vonId, bisId, vonVal, bisVal){
       <div class="time-field"><label id="${prefix}BisLbl">${mehrtaegig?'Uhrzeit am Endtag':'Bis (Uhrzeit)'}</label><input type="time" id="${bisId}" value="${bisVal||''}"></div>
     </div>`;
 }
-function renderBetreuungBlockHtml(prefix, ev){
+function renderBetreuungBlockHtml(prefix, ev, sichtbar){
   const beeinflusst = !!(ev && ev.beeinflusstBetreuung);
   const wer = (ev && ev.betreuungWer) || 'a';
   return `
-    <label class="hi-check"><input type="checkbox" id="${prefix}BeeinflusstBetreuung" ${beeinflusst?'checked':''} onchange="toggleBetreuungFields('${prefix}')"> 👪 Beeinflusst Betreuung</label>
-    <div id="${prefix}BetreuungFields" style="${beeinflusst?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
-      <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer betreut in diesem Zeitraum?</div>
-      <label style="margin-right:16px; font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="a" ${wer==='a'?'checked':''}> Janine</label>
-      <label style="font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="b" ${wer==='b'?'checked':''}> Andi</label>
+    <div id="${prefix}BetreuungWrap" style="${sichtbar===false?'display:none;':''}">
+      ${prefix==='hiEdit' ? '<div class="hi-sec">Betreuung</div>' : ''}
+      <label class="hi-check"><input type="checkbox" id="${prefix}BeeinflusstBetreuung" ${beeinflusst?'checked':''} onchange="toggleBetreuungFields('${prefix}')"> 👪 Beeinflusst Betreuung</label>
+      <div class="hi-hint">Nur eine bestätigte Anfrage kann die Betreuung ändern.</div>
+      <div id="${prefix}BetreuungFields" style="${beeinflusst?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer betreut in diesem Zeitraum?</div>
+        <label style="margin-right:16px; font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="a" ${wer==='a'?'checked':''}> Janine</label>
+        <label style="font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="b" ${wer==='b'?'checked':''}> Andi</label>
+      </div>
+    </div>`;
+}
+/* Privat-Häkchen (nur bei "Nur Info"): andere sehen nur "Gebucht". */
+function renderPrivatBlockHtml(prefix, checked, sichtbar){
+  return `
+    <div id="${prefix}PrivatWrap" style="${sichtbar?'':'display:none;'}">
+      <label class="hi-check"><input type="checkbox" id="${prefix}Privat" ${checked?'checked':''}> 🔒 Privat</label>
+      <div class="hi-hint">Alle anderen sehen nur „Gebucht“ – ohne Titel und Notiz. Der Admin sieht den Termin. Fotos im Chat sieht nur du.</div>
     </div>`;
 }
 window.toggleMehrtaegigFields = function(prefix){
@@ -3049,12 +3080,13 @@ function renderNewEntryForm(){
     <div class="auth-field" style="margin-bottom:12px;"><label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Titel</label>
       <input type="text" id="hiNewTitel" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
     ${renderZeitBlockHtml('hiNew', null, 'hiNewVon', 'hiNewBis', vonStr, bisStr)}
-    ${renderBetreuungBlockHtml('hiNew', null)}
     <div class="hi-toggle" id="hiModeToggle">
       <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
       <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
     </div>
-    <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+    <div class="hi-hint" style="margin-top:-4px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} <strong>Nur Info</strong> braucht keine Anfrage und ändert nie die Betreuung. <strong>Anfrage</strong>: andere müssen bestätigen – nur so kann sich die Betreuung ändern.</div>
+    ${renderPrivatBlockHtml('hiNew', true, defaultMode==='info')}
+    ${renderBetreuungBlockHtml('hiNew', null, defaultMode==='anfrage')}
     <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
       <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen? (Mehrfachauswahl möglich – erst wenn ALLE bestätigt haben, wird der Termin fest)</div>
       ${confirmersHtml}
@@ -3072,6 +3104,11 @@ window.hiSetMode = function(m){
   document.querySelectorAll('#hiModeToggle button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
   const box = document.getElementById('hiConfirmersBox');
   if(box) box.style.display = m==='anfrage' ? 'block' : 'none';
+  // Nur-Info: Privat-Häkchen. Anfrage: Betreuung (nur so kann sie sich ändern).
+  ['hiNew','hiEdit'].forEach(pfx=>{
+    const bw = document.getElementById(pfx+'BetreuungWrap'); if(bw) bw.style.display = m==='anfrage' ? 'block' : 'none';
+    const pw = document.getElementById(pfx+'PrivatWrap'); if(pw) pw.style.display = m==='info' ? 'block' : 'none';
+  });
 };
 window.hiSaveNewEntry = async function(){
   const titel = document.getElementById('hiNewTitel').value.trim();
@@ -3087,17 +3124,20 @@ window.hiSaveNewEntry = async function(){
   if(mehrtaegig && startDatum === endDatum && von && bis && bis <= von){
     alert('Am selben Tag muss die Bis-Uhrzeit nach der Von-Uhrzeit liegen.'); return;
   }
-  const beeinflusstBetreuung = document.getElementById('hiNewBeeinflusstBetreuung').checked;
-  const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiNewBetreuungWer"]:checked')||{}).value : null;
+  let beeinflusstBetreuung = document.getElementById('hiNewBeeinflusstBetreuung').checked;
+  let betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiNewBetreuungWer"]:checked')||{}).value : null;
   const modeBtn = document.querySelector('#hiModeToggle button.active');
   const mode = modeBtn ? modeBtn.dataset.mode : 'info';
+  // Nur Info: keine Anfrage, ändert nie die Betreuung. Privat = Standard (Häkchen).
+  if(mode==='info'){ beeinflusstBetreuung = false; betreuungWer = null; }
+  const privat = mode==='info' && !!((document.getElementById('hiNewPrivat')||{}).checked);
   const btn = document.getElementById('hiNewSaveBtn');
   btn.disabled = true; btn.textContent = 'Speichere…';
   try{
     const docData = {
       datum: mehrtaegig ? startDatum : hiState.iso, von, bis, titel,
       mehrtaegig, startDatum, endDatum,
-      beeinflusstBetreuung, betreuungWer,
+      beeinflusstBetreuung, betreuungWer, privat,
       erstelltVonUid: window.myUid||'?', erstelltVonName: window.myName||'?',
       erstelltAm: new Date().toISOString()
     };
@@ -3197,13 +3237,24 @@ const CHAT_SIZE_BLOCK_BYTES = 900*1024;  // ab hier: weitere Fotos blockieren (F
    Dokument-ID. */
 function renderSingleChatMsgHtml(m, coll, key, idx){
   const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
-  const bestaetigungsStatusHtml = (m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length)
-    ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${m.bestaetigungNoetigVon.map(p => (m.bestaetigtVon||[]).includes(p.uid) ? `✅ ${escapeHtml(p.name)}` : `⏳ ${escapeHtml(p.name)}`).join(' &nbsp;·&nbsp; ')}</div>`
+  const noetigVon = m.bestaetigungNoetigVon || [];
+  const gelesenVon = noetigVon.filter(p=>(m.bestaetigtVon||[]).includes(p.uid)).map(p=>escapeHtml(p.name));
+  const offenVon = noetigVon.filter(p=>!(m.bestaetigtVon||[]).includes(p.uid)).map(p=>escapeHtml(p.name));
+  const bestaetigungsStatusHtml = noetigVon.length
+    ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${gelesenVon.length ? '✅ gelesen von '+gelesenVon.join(', ') : ''}${(gelesenVon.length && offenVon.length) ? ' &nbsp;·&nbsp; ' : ''}${offenVon.length ? '⏳ noch offen: '+offenVon.join(', ') : ''}</div>`
     : '';
   const confirmBtnHtml = brauchtMeineBestaetigung
-    ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Bestätigen</button>`
+    ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Gelesen</button>`
     : '';
-  const photoHtml = m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
+  // Fotos in privaten Info-Terminen sieht nur die erstellende Person.
+  let fotoVerbergen = false, fotoBesitzer = '';
+  if(m.photo && coll==='custom_events'){
+    const evx = (window.customEvents||[]).find(e=>e.id===key);
+    if(evx && evx.privat && evx.status==='info' && evx.erstelltVonUid !== window.myUid){ fotoVerbergen = true; fotoBesitzer = evx.erstelltVonName || 'die erstellende Person'; }
+  }
+  const photoHtml = m.photo && fotoVerbergen
+    ? `<div style="margin-top:4px; font-size:11.5px; color:var(--ink-soft); background:#F2F1EC; border-radius:8px; padding:6px 10px; display:inline-block;">🔒 Privates Foto – nur für ${escapeHtml(fotoBesitzer)} sichtbar</div>`
+    : m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
   const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg('${coll}','${key}','${m.msgId||('__idx'+idx)}')" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
   return `
     <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
@@ -3364,32 +3415,57 @@ window.hiConfirmChatMsg = async function(coll, key, msgId){
       await setDoc(doc(db,'event_overrides',key), { chat: neueChat }, {merge:true});
     }
     if(window.logEvent) window.logEvent('chat_nachricht_bestaetigt', {coll, key, msgId});
-  } catch(e){ alert('Fehler beim Bestätigen: '+e.message); }
+    return true;
+  } catch(e){ alert('Fehler beim Bestätigen: '+e.message); return false; }
+};
+/* "Gelesen" aus den Änderungsanfragen heraus: bestätigt die Nachricht und
+   nimmt die Notiz aus meiner Liste; die Person, die geschrieben hat, sieht
+   "gelesen von <Name>" (im Chat und als Hinweis). */
+window.hiChatGelesen = async function(coll, key, msgId){
+  const ok = await window.hiConfirmChatMsg(coll, key, msgId);
+  if(!ok) return;
+  const quelle = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : window.getEventOverride(key);
+  if(quelle && quelle.chat){
+    quelle.chat = quelle.chat.map(m=> m.msgId===msgId ? {...m, bestaetigtVon:Array.from(new Set([...(m.bestaetigtVon||[]), window.myUid]))} : m);
+  }
+  renderRequestsUI();
 };
 
 /* Benachrichtigt automatisch, sobald eine eigene Chat-Nachricht von
    ALLEN angefragten Personen bestätigt wurde – ähnlich wie beim
    Ablehnen eines Termins. */
 let chatConfirmPopupShown = new Set();
+let chatGelesenMem = null;
+function chatGelesenSet(){
+  if(!chatGelesenMem){
+    try{ chatGelesenMem = new Set(JSON.parse(localStorage.getItem('chaos_gelesen_'+window.myUid)||'[]')); }
+    catch(e){ chatGelesenMem = new Set(); }
+  }
+  return chatGelesenMem;
+}
 function checkForChatConfirmations(){
-  const pruefeListe = (coll, items, chatVon) => {
-    items.forEach(item=>{
-      const chat = chatVon(item);
-      if(!chat) return;
-      chat.forEach(m=>{
-        if(m.vonUid===window.myUid && m.bestaetigungNoetigVon && m.bestaetigungNoetigVon.length){
-          const alleBestaetigt = m.bestaetigungNoetigVon.every(p=>(m.bestaetigtVon||[]).includes(p.uid));
-          const popupKey = coll+':'+(item.id||item.__key)+':'+m.msgId;
-          if(alleBestaetigt && !chatConfirmPopupShown.has(popupKey)){
-            chatConfirmPopupShown.add(popupKey);
-            alert(`✅ Deine Nachricht wurde von allen bestätigt:\n"${m.text || '(Foto)'}"`);
-          }
-        }
-      });
+  if(!window.myUid) return;
+  // Erster Lauf auf diesem Gerät: bereits vorhandene Bestätigungen still
+  // vormerken, damit nicht alte Nachrichten auf einmal aufpoppen.
+  let ersterLauf = false;
+  try{ ersterLauf = localStorage.getItem('chaos_gelesen_'+window.myUid) === null; }catch(e){}
+  const gezeigt = chatGelesenSet();
+  const neu = [];
+  const pruefe = (coll, itemId, chat) => (chat||[]).forEach(m=>{
+    if(m.vonUid !== window.myUid || !(m.bestaetigungNoetigVon||[]).length) return;
+    (m.bestaetigtVon||[]).forEach(uid=>{
+      const person = m.bestaetigungNoetigVon.find(x=>x.uid===uid);
+      if(!person) return;
+      const k = coll+':'+itemId+':'+m.msgId+':'+uid;
+      if(gezeigt.has(k)) return;
+      gezeigt.add(k);
+      if(!ersterLauf) neu.push({text: m.text || '(Foto)', name: person.name});
     });
-  };
-  pruefeListe('custom_events', window.customEvents||[], item=>item.chat);
-  pruefeListe('event_overrides', Object.entries(window.eventOverrides||{}).map(([k,v])=>({...v, __key:k})), item=>item.chat);
+  });
+  (window.customEvents||[]).forEach(ev=> pruefe('custom_events', ev.id, ev.chat));
+  Object.entries(window.eventOverrides||{}).forEach(([k,v])=> pruefe('event_overrides', k, v.chat));
+  try{ localStorage.setItem('chaos_gelesen_'+window.myUid, JSON.stringify(Array.from(gezeigt).slice(-800))); }catch(e){}
+  if(neu.length) alert(neu.map(n=>`✅ Gelesen von ${n.name}:\n„${n.text}“`).join('\n\n'));
 }
 
 function renderExistingEntryForm(entry){
@@ -3444,9 +3520,21 @@ function renderExistingEntryForm(entry){
   // direkt ändern. Alle anderen können im Chat einen Wunsch schreiben.
   const darfZeitAendern = isMine || isAdminUser;
 
+  // Privater Info-Termin einer anderen Person: nur "Gebucht" zeigen.
+  if(terminIstPrivatFuerMich(ev)){
+    const wannP = ev.mehrtaegig ? terminZeitText(ev)
+      : (new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'2-digit'}) + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis+' Uhr' : ''));
+    return `
+      <div class="hi-titel">🔒 Gebucht</div>
+      <div class="hi-status st-info">Privater Termin</div>
+      <div class="hi-wann">📅 ${escapeHtml(wannP)}</div>
+      <div class="hi-hint" style="margin-top:8px;">${escapeHtml(ev.erstelltVonName||'Die Person')} hat hier etwas vor. Titel und Details sind privat.</div>
+      <div class="modal-actions" style="margin-top:14px;"><button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button></div>`;
+  }
+
   // ---- Kopf: grosser Titel + Status + Wann
   let statusKlasse, statusKurz, statusDetail = '';
-  if(ev.status==='info'){ statusKlasse='st-info'; statusKurz='Info – keine Freigabe nötig'; }
+  if(ev.status==='info'){ statusKlasse='st-info'; statusKurz='Info – keine Freigabe nötig'; statusDetail = ev.privat ? '🔒 Privat – andere sehen nur „Gebucht“' : ''; }
   else if(ev.status==='bestaetigt'){ statusKlasse='st-ok'; statusKurz='✓ Bestätigt – fest eingetragen'; }
   else if(ev.status==='abgelehnt'){ statusKlasse='st-no'; statusKurz='✕ Abgelehnt'; statusDetail = ev.ablehnungsGrund ? '„'+escapeHtml(ev.ablehnungsGrund)+'“' : ''; }
   else {
@@ -3460,7 +3548,7 @@ function renderExistingEntryForm(entry){
   const betreuungZeile = (ev.beeinflusstBetreuung && ev.betreuungWer)
     ? `<div class="hi-wann">👪 Betreuung in diesem Zeitraum: <strong>${whoLabel(ev.betreuungWer)}</strong></div>` : '';
   const kopfHtml = `
-    <div class="hi-titel">${escapeHtml(ev.titel||'Termin')}</div>
+    <div class="hi-titel">${escapeHtml(terminAnzeigeTitel(ev))}</div>
     <div class="hi-status ${statusKlasse}">${statusKurz}</div>
     ${statusDetail ? `<div class="hi-status-detail">${statusDetail}</div>` : ''}
     <div class="hi-wann">📅 ${escapeHtml(wann)}${ev.erstelltVonName ? ' · von '+escapeHtml(ev.erstelltVonName) : ''}</div>
@@ -3473,17 +3561,22 @@ function renderExistingEntryForm(entry){
   // ---- Ausklappmenü "Termin ändern" (nur Ersteller/Admin)
   let aendernHtml;
   if(darfZeitAendern){
-    let freigabeHtml = '';
+    const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
+    // Vorbelegung: ein Info-Termin bleibt Info, ein bestätigter/schwebender
+    // bleibt eine Anfrage (sonst würde eine Bearbeitung ihn stillschweigend
+    // zum Info-Termin herabstufen und seine Betreuungs-Änderung entfernen).
+    const defaultMode = ev.status==='info' ? 'info' : ((ev.status==='bestaetigt' || ev.status==='schwebend') ? 'anfrage' : (iAmCustodian ? 'info' : 'anfrage'));
+    const modus = mussIchBestaetigen ? 'anfrage' : defaultMode;
+    let freigabeHtml = '', bestaetigerBoxHtml = '';
     if(!mussIchBestaetigen){
-      const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
-      const defaultMode = iAmCustodian ? 'info' : 'anfrage';
       freigabeHtml = `
         <div class="hi-sec">Freigabe</div>
         <div class="hi-toggle" id="hiModeToggle">
           <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
           <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
         </div>
-        <div style="font-size:11.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+        <div class="hi-hint" style="margin-top:-4px;"><strong>Nur Info</strong> braucht keine Anfrage und ändert nie die Betreuung. <strong>Anfrage</strong>: andere müssen bestätigen – nur so kann sich die Betreuung ändern.</div>`;
+      bestaetigerBoxHtml = `
         <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
           <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss die Änderung bestätigen? (Vorgewählt: nur der andere Elternteil)</div>
           ${renderBestaetigerListeHtml()}
@@ -3495,9 +3588,10 @@ function renderExistingEntryForm(entry){
         <div class="hi-edit-body">
           <div class="hi-sec">Wann?</div>
           ${renderZeitBlockHtml('hiEdit', ev, 'hiCustomVon', 'hiCustomBis', ev.von||'', ev.bis||'')}
-          <div class="hi-sec">Betreuung</div>
-          ${renderBetreuungBlockHtml('hiEdit', ev)}
           ${freigabeHtml}
+          ${renderPrivatBlockHtml('hiEdit', !!ev.privat, !mussIchBestaetigen && modus==='info')}
+          ${renderBetreuungBlockHtml('hiEdit', ev, modus==='anfrage')}
+          ${bestaetigerBoxHtml}
           <div class="modal-actions">
             ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>` : ''}
             <button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>
@@ -3586,6 +3680,13 @@ window.hiSaveCustomEdit = async function(id){
   // Ohne Freigabe-Umschalter (z.B. weil ich den Termin selbst noch bestätigen
   // muss) bleibt der Freigabe-Status unverändert.
   const mode = modeBtn ? modeBtn.dataset.mode : null;
+  // Nur Info: ändert nie die Betreuung, "Privat" nach Häkchen. Anfrage: nie privat.
+  if(mode==='info'){
+    zusatzFelder.beeinflusstBetreuung = false; zusatzFelder.betreuungWer = null;
+    zusatzFelder.privat = !!((document.getElementById('hiEditPrivat')||{}).checked);
+  } else if(mode==='anfrage'){
+    zusatzFelder.privat = false;
+  }
   try{
     if(mode===null){
       await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder});
@@ -4024,6 +4125,40 @@ function startRequestListeners(){
   }, err=> console.error('Anfragen (empfangen) Fehler:', err));
 }
 
+/* Chat-Nachrichten mit "Bestätigung nötig von …", bei denen ICH noch lesen
+   und bestätigen muss – erscheinen wie eine Anfrage in den Änderungsanfragen. */
+function getChatNotizenFuerMich(){
+  const out = [];
+  const offen = m => (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
+  (window.customEvents||[]).forEach(ev=>{
+    (ev.chat||[]).forEach(m=>{ if(offen(m)) out.push({coll:'custom_events', key:ev.id, titel:terminAnzeigeTitel(ev), datum:ev.datum, m}); });
+  });
+  Object.entries(window.eventOverrides||{}).forEach(([k,v])=>{
+    (v.chat||[]).forEach(m=>{ if(offen(m)) out.push({coll:'event_overrides', key:k, titel:k.split('_').slice(0,-1).join(' ').replace(/\b\w/g,ch=>ch.toUpperCase()), datum:k.split('_').slice(-1)[0], m}); });
+  });
+  out.sort((a,b)=> String(b.m.zeitstempel||'').localeCompare(String(a.m.zeitstempel||'')));
+  return out;
+}
+function renderChatNotizenHtml(liste){
+  let html = '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Nachrichten – bitte lesen</div>';
+  liste.forEach(n=>{
+    const m = n.m;
+    const wann = m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    const dateStr = (n.datum && /^\d{4}-\d{2}-\d{2}$/.test(n.datum)) ? new Date(n.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : 'Nachricht';
+    html += `<div class="req-card mine-turn">
+      <div class="req-top"><div class="req-date">${escapeHtml(dateStr)}</div><div class="req-status schwebend">Nachricht</div></div>
+      <div class="req-times">💬 ${escapeHtml(m.vonName||'?')} zu „${escapeHtml(n.titel)}“</div>
+      ${m.text ? `<div class="req-reason">„${escapeHtml(m.text)}“</div>` : ''}
+      ${m.photo ? '<div class="req-meta">📷 mit Foto – im Chat ansehen</div>' : ''}
+      <div class="req-meta">${escapeHtml(wann)} · bitte lesen und bestätigen</div>
+      <div class="req-actions">
+        ${n.coll==='custom_events' ? `<button class="req-btn-counter" onclick="oeffneTerminMitChat('${n.key}')">💬 Chat öffnen</button>` : ''}
+        <button class="req-btn-accept" onclick="hiChatGelesen('${n.coll}','${n.key}','${m.msgId}')">✓ Gelesen</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
 function renderRequestsUI(){
   // Zusammenführen + doppelte (falls je gesendet UND empfangen, kommt
   // theoretisch nicht vor, aber sicherheitshalber) nach id eindeutig machen
@@ -4037,7 +4172,8 @@ function renderRequestsUI(){
   );
 
   // Badge: Anzahl, bei denen ICH am Zug bin (Betreuungs-Anfragen + eigene Termine)
-  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length;
+  const chatNotizen = getChatNotizenFuerMich();
+  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length;
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -4048,15 +4184,16 @@ function renderRequestsUI(){
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
   const istAdmin = window.__chaosRole === 'admin';
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && !istAdmin){
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin){
     listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
     return;
   }
 
   let html = '';
   html += `<div style="margin-bottom:14px;"><button class="cr-del" onclick="adminAufraeumenAlteAnfragen()">🧹 Akzeptierte/abgelehnte Anfragen &amp; vergangene Termine löschen${istAdmin?'':' (nur meine)'}</button></div>`;
+  if(chatNotizen.length) html += renderChatNotizenHtml(chatNotizen);
   if(myPendingEvents.length){
-    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Eigene Termine – du musst bestätigen</div>';
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Eigene Termine – du musst bestätigen</div>';
     myPendingEvents.forEach(ev=>{
       const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
       html += `<div class="req-card mine-turn">
