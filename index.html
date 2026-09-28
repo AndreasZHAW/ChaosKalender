@@ -89,19 +89,21 @@
      nach ca. 2 Tagen zurückscrollen). */
   .swipe-row{display:flex;}
   .swipe-timecol{position:relative; left:0; z-index:8; background:var(--panel); flex:0 0 34px; border-right:1px solid var(--line); will-change:transform;}
-  .swipe-head{height:52px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px; text-align:center; position:sticky; top:0; z-index:7; background:var(--panel);}
+  .swipe-head{height:60px; border-bottom:1px solid var(--line); box-sizing:border-box; padding:5px 2px 4px; text-align:center; position:sticky; top:0; z-index:7; background:var(--panel);}
   .swipe-timebody{position:relative;}
   .swipe-hourlabel{text-align:right; padding-right:4px; font-size:11px; color:var(--ink-soft); box-sizing:border-box; position:relative; top:-7px;}
   .swipe-daycol{flex:0 0 clamp(88px, 24vw, 130px); border-right:1px solid var(--line); position:relative;}
   .swipe-daycol.is-today{border-left:3px solid var(--pending); border-right:3px solid var(--pending);}
   .swipe-daycol.is-today .swipe-head{background:var(--pending-bg);}
   .swipe-head{cursor:pointer;}
-  .swipe-dow{font-size:12px; color:var(--ink-soft);}
-  .swipe-daynum{font-size:16px; font-weight:700;}
-  .swipe-holtag{font-size:10px; color:var(--holiday-text); font-weight:700;}
+  .swipe-dow{font-size:12px; line-height:14px; color:var(--ink-soft);}
+  .swipe-daynum{font-size:16px; line-height:20px; font-weight:700;}
+  .swipe-holtag{font-size:10px; line-height:13px; margin-top:3px; color:var(--holiday-text); font-weight:700;}
   .swipe-body{position:relative;}
   .multi-line{position:absolute; width:4px; z-index:4; border-radius:2px; cursor:pointer;}
   .multi-line::before{content:''; position:absolute; left:-5px; right:-5px; top:0; bottom:0;}
+  .multi-label{position:absolute; z-index:5; height:14px; line-height:14px; box-sizing:border-box; padding:0 5px 0 4px; font-size:9.5px; font-weight:700; color:#7A5A00; background:#F8F0DC; border-radius:0 5px 5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;}
+  .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
@@ -419,9 +421,9 @@
       <div id="lueckenErgebnis" style="margin-top:10px; font-size:13px;"></div>
     </div>
     <div class="admin-card">
-      <h3>Betreuungs-Ausnahmen aus Terminen</h3>
-      <div class="muted">Setzt die Betreuung für alle bestätigten Termine mit "Beeinflusst Betreuung" (und akzeptierte Tagesplan-Anfragen) ab heute neu. Nützlich, wenn eine Betreuungs-Änderung vorher nicht gespeichert werden konnte.</div>
-      <button class="btn" style="margin-top:10px; width:auto; padding:9px 16px;" onclick="adminAusnahmenNeuSetzen()">↻ Ausnahmen neu setzen</button>
+      <h3>Akzeptierte Tagesplan-Anfragen</h3>
+      <div class="muted">Wendet alle akzeptierten Tagesplan-Anfragen ab heute erneut an – nützlich, falls eine Änderung damals nicht gespeichert werden konnte. Termine mit "Beeinflusst Betreuung" brauchen das nicht: ihre Betreuung wird immer live aus dem bestätigten Termin berechnet.</div>
+      <button class="btn" style="margin-top:10px; width:auto; padding:9px 16px;" onclick="adminAusnahmenNeuSetzen()">↻ Erneut anwenden</button>
     </div>
     <div class="admin-card">
       <h3>Standard-Betreuungsmuster</h3>
@@ -745,7 +747,16 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
     if(height <= 0) return;
     const pending = ev.status === 'schwebend';
     const bg = pending ? 'repeating-linear-gradient(to bottom, #C9A54B 0 6px, transparent 6px 10px)' : '#B58900';
-    html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${7+i*6}px;background:${bg};" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')" title="${escapeHtml((ev.titel||'Termin')+(pending?' (wartet auf Bestätigung)':''))}"></div>`;
+    const left = 7 + i*16;
+    const oeffnen = `event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')`;
+    const zusatz = (iso===ev.startDatum && ev.von) ? ' ab '+ev.von : ((iso===ev.endDatum && ev.bis) ? ' bis '+ev.bis : '');
+    const tip = escapeHtml((ev.titel||'Termin') + zusatz + (pending?' (wartet auf Bestätigung)':''));
+    html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${left}px;background:${bg};" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}"></div>`;
+    // Beschriftung: einmal pro Tag direkt neben der Linie. Ab 9 Uhr (im
+    // Detail-Modus sichtbar), bei kurzen Abschnitten am Linienanfang.
+    const ank = (r[1] - Math.max(r[0],9) >= 0.75) ? Math.max(r[0],9) : r[0];
+    const labelTop = (ank-startHour)*px + 3 + i*15;
+    html += `<div class="multi-label ${pending?'pending':''}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}">${escapeHtml(ev.titel||'Termin')}</div>`;
     i++;
   });
   return html;
@@ -938,12 +949,52 @@ function getCustodySegmentsHardcoded(d){
    custody_exceptions werden weiter gelesen. */
 function getBetreuungsAusnahme(iso){
   const ov = window.eventOverrides && window.eventOverrides['betreuung_'+iso];
-  if(ov && ov.segmente && ov.segmente.length) return ov.segmente;
+  // Einträge mit quelle "termin" stammen aus früheren Versionen (Termine
+  // wurden damals einzeln gespeichert). Termine werden jetzt live berechnet,
+  // die alten Kopien werden bewusst ignoriert, damit nichts veraltet.
+  if(ov && ov.quelle !== 'termin' && ov.segmente && ov.segmente.length) return ov.segmente;
   const ex = window.custodyExceptions && window.custodyExceptions[iso];
-  if(ex && ex.segmente && ex.segmente.length) return ex.segmente;
+  if(ex && ex.quelle !== 'termin' && ex.segmente && ex.segmente.length) return ex.segmente;
   return null;
 }
+/* Betreuungs-Überlagerungen aus Terminen mit "Beeinflusst Betreuung": gelten,
+   sobald der Termin bestätigt bzw. als Info eingetragen ist (nicht solange
+   er noch schwebt/abgelehnt ist). Wird bei JEDER Anzeige direkt aus den
+   Terminen berechnet – nichts wird dafür extra gespeichert. So wirkt ein
+   Termin sofort für alle, und ein gelöschter/geänderter Termin nimmt seine
+   Betreuungs-Änderung automatisch wieder mit. Spätere Termine gewinnen. */
+function getEventBetreuungsOverlays(iso){
+  const out = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(!ev.beeinflusstBetreuung || !ev.betreuungWer) return;
+    if(ev.status !== 'info' && ev.status !== 'bestaetigt') return;
+    let a, b;
+    if(ev.mehrtaegig){
+      const r = mehrtaegigTagesbereich(ev, iso);
+      if(!r) return;
+      a = r[0]; b = r[1];
+    } else {
+      if(ev.datum !== iso) return;
+      a = zeitZuStunden(ev.von); b = zeitZuStunden(ev.bis);
+      if(a === null) a = 0;
+      if(b === null) b = 24;
+      if(b <= a) return;
+    }
+    out.push({a, b, wer: ev.betreuungWer, zeit: ev.erstelltAm || ''});
+  });
+  out.sort((x,y)=> String(x.zeit).localeCompare(String(y.zeit)));
+  return out;
+}
 function getCustodySegments(d){
+  const basis = getCustodySegmentsBasis(d);
+  const overlays = getEventBetreuungsOverlays(isoDate(d));
+  if(!overlays.length) return basis;
+  if(basis.length === 1 && basis[0].label) return basis; // feste Sonderregel unverändert lassen
+  let segs = bereinigeTagesSegmente(basis);
+  overlays.forEach(o=>{ segs = ueberlagereBetreuung(segs, o.a, o.b, o.wer); });
+  return segs.length ? segmenteKompakt(segs) : basis;
+}
+function getCustodySegmentsBasis(d){
   const exc = checkExceptions(d);
   if(exc) return [{who:exc.who, label:exc.label}];
   // Tagesgenaue Ausnahme (z.B. akzeptierte Betreuungs-Anfrage) hat
@@ -1098,7 +1149,7 @@ function getCompactPxH(normalPx){
   // innerhalb desselben scrollbaren Containers, wurde bisher aber nie
   // von der verfügbaren Höhe abgezogen – dadurch war der Container
   // immer um genau die Kopfzeilenhöhe zu knapp bemessen.
-  const kopfzeileHoehe = 54;
+  const kopfzeileHoehe = 62;
   const container = document.getElementById('calContainer');
   const top = container ? container.getBoundingClientRect().top : 300;
   const androidToolbarPuffer = 25;
@@ -2275,7 +2326,7 @@ function fitCompactHeight(selectorOrId, isSelector){
     const container = document.getElementById('calContainer');
     const topVorMessung = container ? container.getBoundingClientRect().top : null;
     const px = getCompactPxH(9999); // Parameter wird ignoriert, da compactMode aktiv ist
-    const kopfzeileHoehe = 54;
+    const kopfzeileHoehe = 62;
     const gesetzteHoehe = 24*px + kopfzeileHoehe + 4;
     el.style.maxHeight = gesetzteHoehe + 'px';
     // Automatische, ausführliche Diagnose – läuft bei JEDEM Full-Day-
@@ -2450,7 +2501,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v61 · 28.09.2026';
+const APP_VERSION = 'v62 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2470,7 +2521,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=61').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=62').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2947,28 +2998,6 @@ async function schreibeBetreuungsAusnahme(iso, segmente, quelle, extra){
   const daten = Object.assign({segmente, gesetztVon: window.myUid||'?', gesetztAm: new Date().toISOString(), quelle}, extra||{});
   await setDoc(doc(db,'event_overrides','betreuung_'+iso), daten);
 }
-async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer, vonZeit, bisZeit){
-  // Mit Uhrzeit: am Starttag gilt die Ausnahme erst ab "von", am Endtag nur
-  // bis "bis" (dazwischen ganztägig). Ohne Uhrzeit: ganze Tage.
-  const von = zeitZuStunden(vonZeit), bis = zeitZuStunden(bisZeit);
-  const start = new Date(startDatum+'T00:00:00');
-  const end = new Date(endDatum+'T00:00:00');
-  for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
-    const iso = isoDate(d);
-    const istStart = iso === startDatum, istEnde = iso === endDatum;
-    const a = istStart && von!==null ? von : 0;
-    const b = istEnde && bis!==null ? bis : 24;
-    if(b <= a) continue;
-    let segmente;
-    if(a <= 0.01 && b >= 23.99){
-      segmente = [{from:0, to:24, who:wer}];
-    } else {
-      const base = bereinigeTagesSegmente(getCustodySegments(d));
-      segmente = ueberlagereBetreuung(base, a, b, wer);
-    }
-    await schreibeBetreuungsAusnahme(iso, segmente, 'termin');
-  }
-}
 
 /* Bestätiger-Vorauswahl: NUR der andere Elternteil (Janine <-> Andi; als
    Admin beide Eltern). Kinder, Partner, Großeltern und Admin sind wählbar,
@@ -3091,11 +3120,6 @@ window.hiSaveNewEntry = async function(){
       }];
     }
     await addDoc(collection(db,'custom_events'), docData);
-    // "Nur Info" braucht keine Bestätigung -> Betreuungs-Ausnahme gilt
-    // sofort. Bei "Anfrage" erst nach dem Bestätigen (siehe hiAcceptCustom).
-    if(mode==='info' && beeinflusstBetreuung && betreuungWer){
-      await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer, von, bis);
-    }
     if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
@@ -3577,10 +3601,6 @@ window.hiSaveCustomEdit = async function(id){
       });
     } else {
       await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
-      // "Nur Info" gilt sofort, keine Bestätigung nötig.
-      if(beeinflusstBetreuung && betreuungWer){
-        await setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, betreuungWer, von, bis);
-      }
     }
     if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
@@ -3597,22 +3617,8 @@ window.hiAcceptCustom = async function(id){
       bestaetigtVon: already,
       status: alleDa ? 'bestaetigt' : 'schwebend'
     });
-    // Erst wenn WIRKLICH alle bestätigt haben, gilt eine evtl. gesetzte
-    // "Beeinflusst Betreuung"-Angabe auch tatsächlich im Kalender.
-    // Eigener try/catch: falls DAS schiefgeht, soll die Bestätigung
-    // selbst trotzdem als erfolgreich gelten (nicht alles blockieren).
-    if(alleDa && ev.beeinflusstBetreuung && ev.betreuungWer){
-      const start = ev.startDatum || ev.datum, end = ev.endDatum || ev.datum;
-      if(start && end){
-        try{
-          await setzeBetreuungsAusnahmeFuerZeitraum(start, end, ev.betreuungWer, ev.von, ev.bis);
-        } catch(e2){
-          console.error('Betreuungs-Ausnahme setzen fehlgeschlagen:', e2);
-          if(window.logEvent) window.logEvent('betreuungsausnahme_fehlgeschlagen', {id, fehler:String(e2&&e2.message||e2)});
-          alert('Termin wurde bestätigt, aber die Betreuungs-Änderung konnte nicht gespeichert werden: ' + (e2&&e2.message||e2) + regelHinweis(e2));
-        }
-      }
-    }
+    // Die Betreuungs-Änderung eines Termins wird nicht gespeichert, sondern
+    // live aus dem bestätigten Termin berechnet (siehe getCustodySegments).
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
@@ -4137,6 +4143,7 @@ function renderRequestsUI(){
           <button class="req-btn-accept" style="width:100%;" onclick="submitCounter('${r.id}')">Gegenvorschlag senden</button>
         </div>
       ` : ''}
+      ${istAdmin ? `<div class="req-actions" style="margin-top:8px;"><button class="req-btn-reject" onclick="adminLoescheAnfrage('${r.id}')">🗑️ Löschen (Admin)</button></div>` : ''}
     </div>`;
   });
   listEl.innerHTML = html;
@@ -4220,15 +4227,9 @@ window.adminZuTag = function(iso){
   setView('tag');
 };
 window.adminAusnahmenNeuSetzen = async function(){
-  if(!confirm('Betreuungs-Ausnahmen aus allen bestätigten Terminen (mit "Beeinflusst Betreuung") und akzeptierten Tagesplan-Anfragen ab heute neu setzen?')) return;
+  if(!confirm('Alle akzeptierten Tagesplan-Anfragen ab heute erneut anwenden?')) return;
   const heute = isoDate(new Date());
   const quellen = [];
-  (window.customEvents||[]).forEach(ev=>{
-    if(ev.beeinflusstBetreuung && ev.betreuungWer && (ev.status==='info' || ev.status==='bestaetigt')){
-      const s = ev.startDatum || ev.datum, e = ev.endDatum || ev.datum;
-      if(s && e && e >= heute) quellen.push({zeit: ev.erstelltAm||'', typ:'termin', s, e, wer: ev.betreuungWer, von: ev.von, bis: ev.bis});
-    }
-  });
   (window.__reqReceived||[]).forEach(r=>{
     if(r.status==='akzeptiert' && r.datum && r.datum >= heute){
       const last = (r.verlauf||[]).slice().reverse().find(v=>v.neueSegmente && v.neueSegmente.length);
@@ -4239,12 +4240,16 @@ window.adminAusnahmenNeuSetzen = async function(){
   let ok = 0, fehler = 0, letzterFehler = null;
   for(const q of quellen){
     try{
-      if(q.typ==='termin') await setzeBetreuungsAusnahmeFuerZeitraum(q.s, q.e, q.wer, q.von, q.bis);
-      else await schreibeBetreuungsAusnahme(q.datum, q.segs, 'anfrage');
+      await schreibeBetreuungsAusnahme(q.datum, q.segs, 'anfrage');
       ok++;
     } catch(e){ fehler++; letzterFehler = e; }
   }
   alert(quellen.length ? `${ok} von ${quellen.length} Quelle(n) neu gesetzt.` + (fehler ? ` ${fehler} fehlgeschlagen: ${letzterFehler&&letzterFehler.message||letzterFehler}${regelHinweis(letzterFehler)}` : '') : 'Keine passenden Termine oder Anfragen gefunden.');
+};
+window.adminLoescheAnfrage = async function(id){
+  if(!confirm('Diese Änderungsanfrage endgültig löschen?')) return;
+  try{ await deleteDoc(doc(db,'slot_changes', id)); }
+  catch(e){ alert('Löschen fehlgeschlagen: ' + (e&&e.message||e) + regelHinweis(e)); }
 };
 window.openRequestsModal = function(){
   try{
