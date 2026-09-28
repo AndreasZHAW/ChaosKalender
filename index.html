@@ -298,6 +298,19 @@
   .hi-tab{border:1px solid var(--line); background:var(--panel); color:var(--ink-soft); padding:7px 11px; border-radius:8px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;}
   .hi-tab.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .hi-toggle{display:flex; background:var(--line); border-radius:8px; padding:2px; margin:10px 0;}
+  .hi-titel{font-size:24px; font-weight:700; line-height:1.2; margin:2px 0 8px;}
+  .hi-status{display:inline-block; font-size:16px; font-weight:700; padding:6px 14px; border-radius:999px;}
+  .hi-status.st-ok{background:#E3F3EA; color:#1F7A47;}
+  .hi-status.st-pending{background:var(--pending-bg); color:#7A5A00;}
+  .hi-status.st-info{background:var(--b-bg); color:var(--b);}
+  .hi-status.st-no{background:var(--a-bg); color:var(--a);}
+  .hi-status-detail{font-size:14px; color:var(--ink-soft); margin-top:6px;}
+  .hi-wann{font-size:14.5px; color:var(--ink-soft); margin:10px 0 4px;}
+  .hi-edit{border:1px solid var(--line); border-radius:12px; margin:14px 0; background:var(--panel);}
+  .hi-edit>summary{padding:13px 14px; font-size:15.5px; font-weight:700; cursor:pointer;}
+  .hi-edit-body{padding:0 14px 14px;}
+  .hi-sec{font-size:12px; font-weight:700; color:var(--ink-soft); margin:14px 0 6px;}
+  .hi-check{display:flex; align-items:center; gap:8px; font-size:14px; margin:0 0 8px; cursor:pointer;}
   .hi-toggle button{flex:1; border:none; background:transparent; color:var(--ink-soft); padding:7px; border-radius:6px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer;}
   .hi-toggle button.active{background:var(--panel); color:var(--ink);}
   .compact-toggle-btn{border:1px solid var(--line); background:var(--panel); border-radius:6px; padding:5px 10px; font-size:11px; color:var(--ink-soft); cursor:pointer; font-family:inherit;}
@@ -2437,7 +2450,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v59 · 28.09.2026';
+const APP_VERSION = 'v61 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2457,7 +2470,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=59').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=61').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2605,18 +2618,20 @@ async function writeLoginLog(user, userData){
    nicht ich selbst) und merkt UID+Name für den Änderungs-Workflow. */
 async function findPartnerInfo(){
   try{
-    // Sucht die jeweils andere Elternteil-Person (Janine bzw. Andi) direkt
-    // über die konkrete Rolle – robuster als der alte generische
-    // "elternteil" + Namensabgleich-Ansatz.
+    // Der andere Elternteil = die Gegenrolle (Janine <-> Andi). Früher galt
+    // "der zuletzt gefundene Elternteil", was bei mehreren Konten mit
+    // Elternrolle beim falschen Konto landen konnte.
     const q = query(collection(db,'users'), where('role','in',['janine','andi']));
     const snap = await getDocs(q);
+    const mein = window.__chaosRole;
+    const gesucht = mein==='janine' ? ['andi'] : mein==='andi' ? ['janine'] : ['janine','andi'];
+    const kand = [];
     snap.forEach(docSnap=>{
       const d = docSnap.data();
-      if(docSnap.id !== window.myUid && d.status === 'active'){
-        window.partnerUid = docSnap.id;
-        window.partnerName = d.username || '?';
-      }
+      if(docSnap.id !== window.myUid && d.status === 'active' && gesucht.includes(d.role)) kand.push({uid:docSnap.id, username:d.username||'?', role:d.role});
     });
+    const pick = kand.find(k=>String(k.username).trim().toLowerCase()===k.role) || kand.sort((a,b)=>a.username.localeCompare(b.username))[0];
+    if(pick){ window.partnerUid = pick.uid; window.partnerName = pick.username; }
   } catch(e){ console.error('Partner-Suche fehlgeschlagen:', e); }
 }
 
@@ -2700,7 +2715,7 @@ window.saveEventOverride = async function(){
     await setDoc(doc(db,'event_overrides',key), {
       von, bis, geloescht:false,
       geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString()
-    });
+    }, {merge:true});
     if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
     document.getElementById('eventEditOverlay').classList.remove('show');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
@@ -2711,7 +2726,7 @@ window.cancelEventOverride = async function(){
   try{
     await setDoc(doc(db,'event_overrides',key), {
       geloescht:true, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString()
-    });
+    }, {merge:true});
     if(window.logEvent) window.logEvent('termin_abgesagt', {key});
     document.getElementById('eventEditOverlay').classList.remove('show');
   } catch(e){ alert('Fehler beim Absagen: '+e.message); }
@@ -2879,37 +2894,46 @@ window.hiSwitchTab = function(tabId){
 /* Wiederverwendbarer Baustein: "Mehrtägig" + "Beeinflusst Betreuung"
    Häkchen, nutzbar sowohl beim Neu-Anlegen als auch beim Bearbeiten
    bestehender frei erstellter Termine. */
-function renderMehrtaegigUndBetreuungHtml(prefix, ev){
+/* Zeitblock: erst "Mehrtägig" + Datum (falls mehrtägig), darunter die
+   Uhrzeit. Bei mehrtägigen Terminen gilt die Von-Uhrzeit am Starttag, die
+   Bis-Uhrzeit am Endtag. */
+function renderZeitBlockHtml(prefix, ev, vonId, bisId, vonVal, bisVal){
   const mehrtaegig = !!(ev && ev.mehrtaegig);
-  const beeinflusst = !!(ev && ev.beeinflusstBetreuung);
-  const wer = (ev && ev.betreuungWer) || 'a';
   const startD = (ev && ev.startDatum) || hiState.iso;
   const endD = (ev && ev.endDatum) || hiState.iso;
   return `
-    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:8px; cursor:pointer;">
-      <input type="checkbox" id="${prefix}Mehrtaegig" ${mehrtaegig?'checked':''} onchange="toggleMehrtaegigFields('${prefix}')"> 📅 Mehrtägig
-    </label>
-    <div id="${prefix}MehrtaegigFields" style="${mehrtaegig?'':'display:none;'} margin-bottom:10px;">
+    <label class="hi-check"><input type="checkbox" id="${prefix}Mehrtaegig" ${mehrtaegig?'checked':''} onchange="toggleMehrtaegigFields('${prefix}')"> 📅 Mehrtägig</label>
+    <div id="${prefix}MehrtaegigFields" style="${mehrtaegig?'':'display:none;'}">
       <div class="time-row">
         <div class="time-field"><label>Von (Datum)</label><input type="date" id="${prefix}StartDatum" value="${startD}"></div>
         <div class="time-field"><label>Bis (Datum)</label><input type="date" id="${prefix}EndDatum" value="${endD}"></div>
       </div>
     </div>
-    <label style="display:flex; align-items:center; gap:6px; font-size:12.5px; margin-bottom:8px; cursor:pointer;">
-      <input type="checkbox" id="${prefix}BeeinflusstBetreuung" ${beeinflusst?'checked':''} onchange="toggleBetreuungFields('${prefix}')"> 👪 Beeinflusst Betreuung
-    </label>
+    <div class="time-row" id="${prefix}TimeRow">
+      <div class="time-field"><label id="${prefix}VonLbl">${mehrtaegig?'Uhrzeit am Starttag':'Von (Uhrzeit)'}</label><input type="time" id="${vonId}" value="${vonVal||''}"></div>
+      <div class="time-field"><label id="${prefix}BisLbl">${mehrtaegig?'Uhrzeit am Endtag':'Bis (Uhrzeit)'}</label><input type="time" id="${bisId}" value="${bisVal||''}"></div>
+    </div>`;
+}
+function renderBetreuungBlockHtml(prefix, ev){
+  const beeinflusst = !!(ev && ev.beeinflusstBetreuung);
+  const wer = (ev && ev.betreuungWer) || 'a';
+  return `
+    <label class="hi-check"><input type="checkbox" id="${prefix}BeeinflusstBetreuung" ${beeinflusst?'checked':''} onchange="toggleBetreuungFields('${prefix}')"> 👪 Beeinflusst Betreuung</label>
     <div id="${prefix}BetreuungFields" style="${beeinflusst?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
-      <div style="font-size:11px; color:var(--ink-soft); margin-bottom:4px;">Wer betreut in diesem Zeitraum?</div>
-      <label style="margin-right:16px; font-size:13px;"><input type="radio" name="${prefix}BetreuungWer" value="a" ${wer==='a'?'checked':''}> Janine</label>
-      <label style="font-size:13px;"><input type="radio" name="${prefix}BetreuungWer" value="b" ${wer==='b'?'checked':''}> Andi</label>
+      <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer betreut in diesem Zeitraum?</div>
+      <label style="margin-right:16px; font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="a" ${wer==='a'?'checked':''}> Janine</label>
+      <label style="font-size:14px;"><input type="radio" name="${prefix}BetreuungWer" value="b" ${wer==='b'?'checked':''}> Andi</label>
     </div>`;
 }
 window.toggleMehrtaegigFields = function(prefix){
   const checked = document.getElementById(prefix+'Mehrtaegig').checked;
   const fields = document.getElementById(prefix+'MehrtaegigFields');
   if(fields) fields.style.display = checked ? 'block' : 'none';
-  // Uhrzeiten bleiben bewusst sichtbar: bei mehrtägigen Terminen gilt
-  // "Von" am Starttag und "Bis" am Endtag.
+  // Uhrzeiten bleiben sichtbar: bei mehrtägigen Terminen gilt "Von" am
+  // Starttag und "Bis" am Endtag – die Beschriftung sagt das deutlich.
+  const vl = document.getElementById(prefix+'VonLbl'), bl = document.getElementById(prefix+'BisLbl');
+  if(vl) vl.textContent = checked ? 'Uhrzeit am Starttag' : 'Von (Uhrzeit)';
+  if(bl) bl.textContent = checked ? 'Uhrzeit am Endtag' : 'Bis (Uhrzeit)';
 };
 window.toggleBetreuungFields = function(prefix){
   const checked = document.getElementById(prefix+'BeeinflusstBetreuung').checked;
@@ -2946,14 +2970,37 @@ async function setzeBetreuungsAusnahmeFuerZeitraum(startDatum, endDatum, wer, vo
   }
 }
 
-/* Robuster als nur window.partnerUid (das hängt von einer asynchronen
-   Suche ab, die evtl. noch nicht fertig ist, wenn das Formular zum
-   ersten Mal gezeichnet wird): erkennt den anderen Kern-Elternteil
-   (Janine/Andi, nie Omami/Oma/Opa/Kinder) direkt über die Rolle. */
+/* Bestätiger-Vorauswahl: NUR der andere Elternteil (Janine <-> Andi; als
+   Admin beide Eltern). Kinder, Partner, Großeltern und Admin sind wählbar,
+   aber nie vorgewählt. Gibt es mehrere Konten mit derselben Elternrolle,
+   wird nur eines vorgewählt (bevorzugt das, dessen Name der Rolle
+   entspricht) – sonst würde z.B. ein falsch eingestuftes Kinderkonto
+   mitgewählt. */
+const ROLLEN_LABEL = {janine:'Mutter', andi:'Vater', mischa:'Kind', janosch:'Kind', partner_andi:'Partner von Andi', partner_janine:'Partner von Janine', oma:'Oma', opa:'Opa', omami:'Omami', admin:'Admin'};
+function kernKonto(rolle){
+  const kand = (window.allActiveUsers||[]).filter(x=>x.role===rolle && x.uid!==window.myUid);
+  if(!kand.length) return null;
+  const exakt = kand.find(x=>String(x.username||'').trim().toLowerCase()===rolle);
+  return (exakt || kand.slice().sort((a,b)=>String(a.username||'').localeCompare(String(b.username||'')))[0]).uid;
+}
 function istAndererKernElternteil(u){
-  if(u.uid === window.partnerUid) return true;
   if(u.uid === window.myUid) return false;
-  return u.role === 'janine' || u.role === 'andi';
+  if(u.role !== 'janine' && u.role !== 'andi') return false;
+  const mein = window.__chaosRole;
+  const gesucht = mein==='janine' ? ['andi'] : mein==='andi' ? ['janine'] : ['janine','andi'];
+  if(!gesucht.includes(u.role)) return false;
+  return u.uid === kernKonto(u.role);
+}
+/* Liste der möglichen Bestätiger (Eltern zuerst), gemeinsam für alle Formulare. */
+function renderBestaetigerListeHtml(){
+  const andere = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid);
+  andere.sort((a,b)=> (istAndererKernElternteil(b)?1:0)-(istAndererKernElternteil(a)?1:0) || String(a.username||'').localeCompare(String(b.username||'')));
+  return andere.map(u=>
+    `<label style="display:flex; align-items:center; gap:8px; padding:5px 0; font-size:14px;">
+      <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
+      <span>${escapeHtml(u.username||'?')} <span style="font-size:11px; color:var(--ink-soft);">${escapeHtml(ROLLEN_LABEL[u.role]||u.role||'')}</span></span>
+    </label>`
+  ).join('');
 }
 function renderNewEntryForm(){
   const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
@@ -2968,21 +3015,12 @@ function renderNewEntryForm(){
   }
   const vonStr = fmtH(safeStart);
   const bisStr = fmtH(safeEnd);
-  const others = (window.allActiveUsers||[]).filter(u=>u.uid !== window.myUid);
-  const confirmersHtml = others.map(u=>
-    `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-      <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
-      ${escapeHtml(u.username||'?')}
-    </label>`
-  ).join('') || '<div style="font-size:11.5px; color:var(--ink-soft);">Keine anderen aktiven Personen gefunden.</div>';
+  const confirmersHtml = renderBestaetigerListeHtml() || '<div style="font-size:11.5px; color:var(--ink-soft);">Keine anderen aktiven Personen gefunden.</div>';
   return `
     <div class="auth-field" style="margin-bottom:12px;"><label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Titel</label>
       <input type="text" id="hiNewTitel" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
-    <div class="time-row" id="hiNewTimeRow">
-      <div class="time-field"><label>Von</label><input type="time" id="hiNewVon" value="${vonStr}"></div>
-      <div class="time-field"><label>Bis</label><input type="time" id="hiNewBis" value="${bisStr}"></div>
-    </div>
-    ${renderMehrtaegigUndBetreuungHtml('hiNew', null)}
+    ${renderZeitBlockHtml('hiNew', null, 'hiNewVon', 'hiNewBis', vonStr, bisStr)}
+    ${renderBetreuungBlockHtml('hiNew', null)}
     <div class="hi-toggle" id="hiModeToggle">
       <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
       <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
@@ -3334,31 +3372,43 @@ function renderExistingEntryForm(entry){
   if(entry.type==='event'){
     const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
     const defaultMode = iAmCustodian ? 'info' : 'anfrage';
+    const ov = window.getEventOverride(entry.key) || {};
+    const aktuell = getOverrideRange(entry.key, entry.defS, entry.defE) || [entry.defS, entry.defE];
+    const geaendert = Math.abs(aktuell[0]-entry.defS) > 0.01 || Math.abs(aktuell[1]-entry.defE) > 0.01;
+    const datumTxt = new Date(hiState.iso+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'2-digit'});
+    const statusHtml = geaendert
+      ? `<div class="hi-status st-pending">✎ Zeit geändert</div><div class="hi-status-detail">Ursprünglich ${fmtH(entry.defS)}–${fmtH(entry.defE)} Uhr${ov.geaendertVon ? ' · geändert von '+escapeHtml(ov.geaendertVon) : ''}</div>`
+      : `<div class="hi-status st-info">Reguläre Zeit</div>`;
     return `
-      <div class="time-row">
-        <div class="time-field"><label>Von</label><input type="time" id="hiEvVon" value="${fmtH(entry.defS)}"></div>
-        <div class="time-field"><label>Bis</label><input type="time" id="hiEvBis" value="${fmtH(entry.defE)}"></div>
-      </div>
-      <div class="hi-toggle" id="hiModeToggle">
-        <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
-        <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
-      </div>
-      <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
-      <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
-        <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen?</div>
-        ${(window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
-          `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-            <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
-            ${escapeHtml(u.username||'?')}
-          </label>`
-        ).join('')}
-      </div>
-      <div class="modal-actions">
-        <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
-        <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent('${entry.key}')">Absagen</button>
-        <button class="btn" onclick="hiSaveEvent('${entry.key}')">Speichern</button>
-      </div>
-      ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, 'event_overrides', entry.key)}`;
+      <div class="hi-titel">${escapeHtml(entry.label)}</div>
+      ${statusHtml}
+      <div class="hi-wann">📅 ${escapeHtml(datumTxt)} · ${fmtH(aktuell[0])}–${fmtH(aktuell[1])} Uhr</div>
+      <details class="hi-edit">
+        <summary>✏️ Termin ändern</summary>
+        <div class="hi-edit-body">
+          <div class="hi-sec">Wann?</div>
+          <div class="time-row">
+            <div class="time-field"><label>Von</label><input type="time" id="hiEvVon" value="${fmtH(aktuell[0])}"></div>
+            <div class="time-field"><label>Bis</label><input type="time" id="hiEvBis" value="${fmtH(aktuell[1])}"></div>
+          </div>
+          <div class="hi-sec">Freigabe</div>
+          <div class="hi-toggle" id="hiModeToggle">
+            <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
+            <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
+          </div>
+          <div style="font-size:11.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+          <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+            <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss bestätigen? (Vorgewählt: nur der andere Elternteil)</div>
+            ${renderBestaetigerListeHtml()}
+          </div>
+          <div class="modal-actions">
+            <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent('${entry.key}')">Absagen</button>
+            <button class="btn" onclick="hiSaveEvent('${entry.key}')">Speichern</button>
+          </div>
+        </div>
+      </details>
+      ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, 'event_overrides', entry.key)}
+      <div class="modal-actions" style="margin-top:14px;"><button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button></div>`;
   }
   const ev = entry.data;
   const isMine = ev.erstelltVonUid === window.myUid;
@@ -3366,79 +3416,84 @@ function renderExistingEntryForm(entry){
   const bestaetigt = ev.bestaetigtVon || [];
   const mussIchBestaetigen = ev.status==='schwebend' && bestaetiger.includes(window.myUid) && !bestaetigt.includes(window.myUid);
   const darfLoeschen = isMine || isAdminUser; // nur Ersteller oder Admin dürfen wirklich löschen
-  // Nur die Person, die den Termin ursprünglich erstellt hat (oder
-  // Admin), darf die Uhrzeit direkt ändern. Alle anderen – auch wer
-  // gerade bestätigen soll – können nur im Chat einen anderen
-  // Zeitwunsch schreiben. Das hält die Bestätigungs-Logik einfach:
-  // wer bestätigt, bestätigt genau das, was der Ersteller vorgeschlagen
-  // hat, nicht eine heimlich selbst geänderte Zeit.
+  // Nur die Person, die den Termin erstellt hat (oder Admin), darf ihn
+  // direkt ändern. Alle anderen können im Chat einen Wunsch schreiben.
   const darfZeitAendern = isMine || isAdminUser;
-  let statusLabel;
-  if(ev.status==='info') statusLabel = 'Info (keine Freigabe nötig)';
-  else if(ev.status==='bestaetigt') statusLabel = 'Bestätigt – fest eingetragen';
-  else if(ev.status==='abgelehnt') statusLabel = 'Abgelehnt' + (ev.ablehnungsGrund ? (' – "' + ev.ablehnungsGrund + '"') : '');
+
+  // ---- Kopf: grosser Titel + Status + Wann
+  let statusKlasse, statusKurz, statusDetail = '';
+  if(ev.status==='info'){ statusKlasse='st-info'; statusKurz='Info – keine Freigabe nötig'; }
+  else if(ev.status==='bestaetigt'){ statusKlasse='st-ok'; statusKurz='✓ Bestätigt – fest eingetragen'; }
+  else if(ev.status==='abgelehnt'){ statusKlasse='st-no'; statusKurz='✕ Abgelehnt'; statusDetail = ev.ablehnungsGrund ? '„'+escapeHtml(ev.ablehnungsGrund)+'“' : ''; }
   else {
-    const namen = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
-      const uid = bestaetiger[idx];
-      return bestaetigt.includes(uid) ? `${escapeHtml(String(n))} ✓` : `${escapeHtml(String(n))} …`;
-    });
-    statusLabel = 'Wartet auf Bestätigung: ' + namen.join(', ');
+    statusKlasse='st-pending'; statusKurz='⏳ Wartet auf Bestätigung';
+    statusDetail = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>
+      bestaetigt.includes(bestaetiger[idx]) ? `${escapeHtml(String(n))} ✓` : `${escapeHtml(String(n))} …`).join(' · ');
   }
-  let actionsHtml = darfZeitAendern
-    ? `<button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>`
-    : '';
-  if(mussIchBestaetigen){
-    actionsHtml = `<button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">Bestätigen</button>`;
+  const wann = ev.mehrtaegig
+    ? terminZeitText(ev)
+    : (new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'2-digit'}) + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis+' Uhr' : ''));
+  const betreuungZeile = (ev.beeinflusstBetreuung && ev.betreuungWer)
+    ? `<div class="hi-wann">👪 Betreuung in diesem Zeitraum: <strong>${whoLabel(ev.betreuungWer)}</strong></div>` : '';
+  const kopfHtml = `
+    <div class="hi-titel">${escapeHtml(ev.titel||'Termin')}</div>
+    <div class="hi-status ${statusKlasse}">${statusKurz}</div>
+    ${statusDetail ? `<div class="hi-status-detail">${statusDetail}</div>` : ''}
+    <div class="hi-wann">📅 ${escapeHtml(wann)}${ev.erstelltVonName ? ' · von '+escapeHtml(ev.erstelltVonName) : ''}</div>
+    ${betreuungZeile}`;
+
+  // ---- Bestätigen / Ablehnen (wenn ich dran bin) direkt unter dem Kopf
+  const bestaetigenHtml = mussIchBestaetigen
+    ? `<div class="modal-actions" style="margin:6px 0 12px;"><button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">✓ Bestätigen</button></div>` : '';
+
+  // ---- Ausklappmenü "Termin ändern" (nur Ersteller/Admin)
+  let aendernHtml;
+  if(darfZeitAendern){
+    let freigabeHtml = '';
+    if(!mussIchBestaetigen){
+      const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
+      const defaultMode = iAmCustodian ? 'info' : 'anfrage';
+      freigabeHtml = `
+        <div class="hi-sec">Freigabe</div>
+        <div class="hi-toggle" id="hiModeToggle">
+          <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
+          <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
+        </div>
+        <div style="font-size:11.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
+        <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
+          <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss die Änderung bestätigen? (Vorgewählt: nur der andere Elternteil)</div>
+          ${renderBestaetigerListeHtml()}
+        </div>`;
+    }
+    aendernHtml = `
+      <details class="hi-edit">
+        <summary>✏️ Termin ändern</summary>
+        <div class="hi-edit-body">
+          <div class="hi-sec">Wann?</div>
+          ${renderZeitBlockHtml('hiEdit', ev, 'hiCustomVon', 'hiCustomBis', ev.von||'', ev.bis||'')}
+          <div class="hi-sec">Betreuung</div>
+          ${renderBetreuungBlockHtml('hiEdit', ev)}
+          ${freigabeHtml}
+          <div class="modal-actions">
+            ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>` : ''}
+            <button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>
+          </div>
+        </div>
+      </details>`;
+  } else {
+    aendernHtml = `
+      <div style="font-size:12.5px; color:var(--ink-soft); margin:10px 0;">Nur ${escapeHtml(ev.erstelltVonName||'die erstellende Person')} kann diesen Termin ändern. Wünschst du etwas anderes, schreib es unten in den Chat.</div>
+      <button class="btn secondary" style="width:100%; margin-bottom:10px;" onclick="hiRequestDelete('${ev.id}')">🗑️ Löschanfrage stellen</button>`;
   }
-  // Beim normalen Bearbeiten (nicht wenn man selbst gerade bestätigen
-  // muss) auch hier Info/Anfrage anbieten – z.B. wenn Andi eine Zeit
-  // ändert, die in Janines Betreuungszeit liegt, soll das automatisch
-  // als Anfrage vorgeschlagen werden. Nur sichtbar, wenn man die Zeit
-  // überhaupt ändern darf.
-  let modeToggleHtml = '';
-  if(!mussIchBestaetigen && darfZeitAendern){
-    const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
-    const defaultMode = iAmCustodian ? 'info' : 'anfrage';
-    const confirmersHtml = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid).map(u=>
-      `<label style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;">
-        <input type="checkbox" class="hi-confirmer-cb" value="${u.uid}" data-name="${escapeHtml(u.username||'?')}" ${istAndererKernElternteil(u)?'checked':''}>
-        ${escapeHtml(u.username||'?')}
-      </label>`
-    ).join('');
-    modeToggleHtml = `
-      <div class="hi-toggle" id="hiModeToggle">
-        <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
-        <button type="button" class="${defaultMode==='anfrage'?'active':''}" data-mode="anfrage" onclick="hiSetMode('anfrage')">Anfrage</button>
-      </div>
-      <div style="font-size:10.5px; color:var(--ink-soft); margin:-4px 0 12px;">${iAmCustodian ? 'Du hast zu dieser Zeit die Betreuung – Vorschlag: nur Info.' : 'Du hast zu dieser Zeit nicht die Betreuung – Vorschlag: als Anfrage senden.'} Du kannst das oben trotzdem umstellen.</div>
-      <div id="hiConfirmersBox" style="${defaultMode==='anfrage'?'':'display:none;'} margin-bottom:12px; border:1px solid var(--line); border-radius:8px; padding:8px 12px;">
-        <div style="font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Wer muss die Änderung bestätigen?</div>
-        ${confirmersHtml}
-      </div>`;
-  } else if(!darfZeitAendern){
-    modeToggleHtml = `<div style="font-size:11px; color:var(--ink-soft); margin:-4px 0 12px;">Nur ${escapeHtml(ev.erstelltVonName||'die erstellende Person')} kann die Uhrzeit ändern. Wünschst du eine andere Zeit, schreib es unten in den Chat.</div>`;
-  }
-  // Kleiner Chat, der fest am Termin hängt – bleibt erhalten, solange
-  // der Termin existiert (wird nur gelöscht, wenn der ganze Termin
-  // gelöscht wird).
+
+  // ---- Chat darunter (hängt fest am Termin, bleibt bis zum Löschen erhalten)
   const chatSectionHtml = renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen);
-  const mehrtaegigBlockHtml = darfZeitAendern ? renderMehrtaegigUndBetreuungHtml('hiEdit', ev) : '';
   return `
-    <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
-    <div class="time-row" id="hiEditTimeRow">
-      <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
-      <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
-    </div>
-    ${mehrtaegigBlockHtml}
-    ${modeToggleHtml}
-    <div class="modal-actions">
-      <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button>
-      ${darfLoeschen
-        ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>`
-        : `<button class="btn secondary" onclick="hiRequestDelete('${ev.id}')">🗑️ Löschanfrage stellen</button>`}
-      ${actionsHtml}
-    </div>
-    ${chatSectionHtml}`;
+    ${kopfHtml}
+    ${bestaetigenHtml}
+    ${aendernHtml}
+    ${chatSectionHtml}
+    <div class="modal-actions" style="margin-top:14px;"><button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button></div>`;
 }
 
 window.hiRequestDelete = async function(id){
@@ -3475,7 +3530,7 @@ window.hiSaveEvent = async function(key){
       });
       if(window.logEvent) window.logEvent('termin_anfrage_erstellt', {key, von, bis});
     } else {
-      await setDoc(doc(db,'event_overrides',key), { von, bis, geloescht:false, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() });
+      await setDoc(doc(db,'event_overrides',key), { von, bis, geloescht:false, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() }, {merge:true});
       if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
     }
     document.getElementById('hourInspectorOverlay').classList.remove('show');
@@ -3484,7 +3539,7 @@ window.hiSaveEvent = async function(key){
 window.hiCancelEvent = async function(key){
   if(!confirm('Diesen Termin wirklich absagen?')) return;
   try{
-    await setDoc(doc(db,'event_overrides',key), { geloescht:true, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() });
+    await setDoc(doc(db,'event_overrides',key), { geloescht:true, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() }, {merge:true});
     if(window.logEvent) window.logEvent('termin_abgesagt', {key});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
@@ -3502,11 +3557,15 @@ window.hiSaveCustomEdit = async function(id){
   const beeinflusstEl = document.getElementById('hiEditBeeinflusstBetreuung');
   const beeinflusstBetreuung = beeinflusstEl ? beeinflusstEl.checked : false;
   const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiEditBetreuungWer"]:checked')||{}).value : null;
-  const zusatzFelder = { mehrtaegig, startDatum, endDatum, beeinflusstBetreuung, betreuungWer };
+  const zusatzFelder = { datum: startDatum, mehrtaegig, startDatum, endDatum, beeinflusstBetreuung, betreuungWer };
   const modeBtn = document.querySelector('#hiModeToggle button.active');
-  const mode = modeBtn ? modeBtn.dataset.mode : 'info';
+  // Ohne Freigabe-Umschalter (z.B. weil ich den Termin selbst noch bestätigen
+  // muss) bleibt der Freigabe-Status unverändert.
+  const mode = modeBtn ? modeBtn.dataset.mode : null;
   try{
-    if(mode==='anfrage'){
+    if(mode===null){
+      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder});
+    } else if(mode==='anfrage'){
       const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
       if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
       await updateDoc(doc(db,'custom_events',id), {
@@ -4671,7 +4730,11 @@ function startUserListListener(){
     }
     const roleLabel = {admin:'Admin', janine:'Janine (Mutter)', andi:'Andi (Vater)', mischa:'Mischa (Kind)', janosch:'Janosch (Kind)', partner_andi:'Partner von Andi', partner_janine:'Partner von Janine', oma:'Oma', opa:'Opa', omami:'Omami'};
     const roleOptions = ['janine','andi','mischa','janosch','partner_andi','partner_janine','oma','opa','omami','admin'];
-    let html = '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Name</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Rolle</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
+    const rollenNamen = {};
+    snap.forEach(ds=>{ const r = ds.data().role; if(r==='janine' || r==='andi') (rollenNamen[r] = rollenNamen[r] || []).push(ds.data().username||'?'); });
+    const doppelt = Object.entries(rollenNamen).filter(([r,l])=>l.length>1).map(([r,l])=>
+      `⚠️ Die Rolle „${roleLabel[r]}“ ist ${l.length}× vergeben (${l.map(escapeHtml).join(', ')}). Vermutlich hat ein Konto die falsche Rolle (z.B. ein Kind) – bitte unten anpassen und speichern.`).join('<br>');
+    let html = (doppelt ? `<div style="background:var(--holiday-bg); color:#7A3B2A; border:1px solid var(--holiday-text); border-radius:8px; padding:10px 12px; margin-bottom:10px; font-size:12.5px; line-height:1.5;">${doppelt}</div>` : '') + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><tr><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Name</th><th style="text-align:left; padding:6px; color:var(--ink-soft); border-bottom:2px solid var(--line);">Rolle</th><th style="border-bottom:2px solid var(--line);"></th></tr>';
     snap.forEach(docSnap=>{
       const d = docSnap.data();
       const uid = docSnap.id;
