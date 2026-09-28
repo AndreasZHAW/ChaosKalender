@@ -358,6 +358,7 @@
     <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
     <button data-admintab="events" onclick="switchAdminTab('events')">🗓️ Alle Termine</button>
     <button data-admintab="chats" onclick="switchAdminTab('chats')">💬 Chats</button>
+    <button onclick="openRequestsAsAdmin()">📥 Änderungs&shy;anfragen</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
 
@@ -687,6 +688,15 @@ function hatDieserTagFixeBloecke(d, iso){
   return !!(janoschSchule || mischaSchule || hort || volleyball || bandprobeM);
 }
 
+/* Lesbare Zeitangabe eines frei erstellten Termins (auch mehrtägig:
+   Startdatum+Uhrzeit bis Enddatum+Uhrzeit). */
+function terminZeitText(ev){
+  const fmtD = iso => iso ? (iso.slice(8,10)+'.'+iso.slice(5,7)+'.') : '?';
+  if(ev.mehrtaegig){
+    return `${fmtD(ev.startDatum)}${ev.von?' '+ev.von:''} – ${fmtD(ev.endDatum)}${ev.bis?' '+ev.bis:''}`;
+  }
+  return (ev.von && ev.bis) ? `${ev.von}–${ev.bis} Uhr` : '';
+}
 function getMehrtaegigeTermineFuerTag(iso){
   return (window.customEvents||[]).filter(ev=>
     ev.mehrtaegig && ev.startDatum && ev.endDatum && iso>=ev.startDatum && iso<=ev.endDatum &&
@@ -695,7 +705,7 @@ function getMehrtaegigeTermineFuerTag(iso){
 }
 function renderMehrtaegigBannerHtml(iso){
   return getMehrtaegigeTermineFuerTag(iso).map(ev=>
-    `<span class="day-event-tag" style="background:var(--pending-bg); color:#7A5A00; padding:1px 5px; border-radius:5px; font-size:9px; cursor:pointer; display:inline-block; margin-top:2px;" onclick="event.stopPropagation(); openHourInspector('${iso}', 12, 'custom_${ev.id}')" title="${escapeHtml(ev.titel||'')}">📅 ${escapeHtml(ev.titel||'')}${ev.status==='schwebend'?' ⏳':''}</span>`
+    `<span class="day-event-tag" style="background:var(--pending-bg); color:#7A5A00; padding:1px 5px; border-radius:5px; font-size:9px; cursor:pointer; display:inline-block; margin-top:2px;" onclick="event.stopPropagation(); openHourInspector('${iso}', 12, 'custom_${ev.id}')" title="${escapeHtml(ev.titel||'')}">📅 ${escapeHtml(ev.titel||'')}${(iso===ev.startDatum && ev.von)?' ab '+ev.von:''}${(iso===ev.endDatum && ev.bis)?' bis '+ev.bis:''}${ev.status==='schwebend'?' ⏳':''}</span>`
   ).join(' ');
 }
 function isSchoolDayForKid(d, kid){
@@ -787,6 +797,60 @@ function getCustodySegmentsFromRules(d, rules){
   });
 }
 
+/* Robuste Aufräum-Logik für Tages-Segmente (wird sowohl für die Anzeige
+   als auch beim Speichern im Admin genutzt): entfernt Duplikate und
+   Überlappungen, schliesst Lücken (z.B. "bis 23.75" ohne Folgesegment),
+   schmilzt winzige Splitter (<0.26h) ein und führt benachbarte Segmente
+   derselben Person zusammen. Ergebnis deckt immer 0-24 Uhr lückenlos ab. */
+function bereinigeTagesSegmente(segs){
+  let eingang = (segs||[]).map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}))
+    .filter(s=>s.to>s.from).sort((a,b)=>a.from-b.from || a.to-b.to);
+  if(!eingang.length) return [];
+  const out = []; let cursor = 0;
+  eingang.forEach(s=>{
+    const from = Math.max(s.from, cursor);
+    if(s.to <= from) return;                       // komplett überdeckt (Duplikat)
+    if(from > cursor && out.length) out[out.length-1].to = from; // Lücke: Vorgänger verlängern
+    out.push({from, to:s.to, who:s.who});
+    cursor = s.to;
+  });
+  out[0].from = 0; out[out.length-1].to = 24;
+  let changed = true;
+  while(changed && out.length>1){
+    changed = false;
+    for(let i=0;i<out.length;i++){
+      if((out[i].to-out[i].from) < 0.26){
+        if(i===0){ out[1].from = out[0].from; } else { out[i-1].to = out[i].to; }
+        out.splice(i,1); changed = true; break;
+      }
+    }
+  }
+  changed = true;
+  while(changed){
+    changed = false;
+    for(let i=0;i<out.length-1;i++){
+      if(out[i].who === out[i+1].who){ out[i].to = out[i+1].to; out.splice(i+1,1); changed = true; break; }
+    }
+  }
+  return out;
+}
+/* Wandelt volle Segmente {from,to,who} ins kompakte Anzeigeformat
+   (from/to weglassen an den Tagesrändern). */
+function segmenteKompakt(segs){
+  return segs.map(s=>{
+    const o = {who:s.who};
+    if(s.from>0.01) o.from = Math.round(s.from*100)/100;
+    if(s.to<23.99) o.to = Math.round(s.to*100)/100;
+    return o;
+  });
+}
+/* Stunden-Dezimalzahl hübsch für Badges: 8 -> "8", 17.5 -> "17:30" */
+function fmtHintH(h){
+  if(Math.abs(h-Math.round(h))<0.001) return String(Math.round(h));
+  const hh = Math.floor(h+1e-6), mm = Math.round((h-hh)*60);
+  return hh + ':' + String(mm>=60?0:mm).padStart(2,'0');
+}
+
 function getCustodySegmentsHardcoded(d){
   const dow = d.getDay();
   // Echtes Muster aus dem Konzept: Andi hat Do 17-Fr 08, Fr 18-Sa 10,
@@ -806,7 +870,9 @@ function getCustodySegments(d){
   // Vorrang vor dem allgemeinen Wochenmuster.
   const iso = isoDate(d);
   if(window.custodyExceptions && window.custodyExceptions[iso] && window.custodyExceptions[iso].segmente && window.custodyExceptions[iso].segmente.length){
-    return window.custodyExceptions[iso].segmente;
+    const exSegs = window.custodyExceptions[iso].segmente;
+    const sauber = bereinigeTagesSegmente(exSegs);
+    return sauber.length ? segmenteKompakt(sauber) : exSegs;
   }
   // WICHTIG: try/catch – eine einzelne fehlerhafte/unvollständige Regel
   // (z.B. während des Speicherns im Admin-Bereich) darf niemals den
@@ -815,7 +881,10 @@ function getCustodySegments(d){
   try{
     if(window.custodyRules && window.custodyRules.length){
       const segs = getCustodySegmentsFromRules(d, window.custodyRules);
-      if(segs && segs.length) return segs;
+      if(segs && segs.length){
+        const sauber = bereinigeTagesSegmente(segs);
+        if(sauber.length) return segmenteKompakt(sauber);
+      }
     }
   } catch(e){
     console.error('Standard-Betreuung: Regel fehlerhaft, nutze Rückfallebene:', e);
@@ -844,8 +913,6 @@ function barColorFor(who){
   return 'var(--bar-other)'; // Omami / unklare Fälle
 }
 function buildColorBarSegments(d, kidFilter){
-  const hol = getHolidayName(d) || getSchoolHolidayName(d);
-  if(hol) return [{start:0,end:24,color:'var(--holiday-text)'}];
   const custody = getCustodySegments(d);
   const base = custody.map(seg=>({
     start: seg.from!==undefined?seg.from:0,
@@ -1177,7 +1244,26 @@ async function sendVerboseDiagnostic(){
     swipeSpaltenBreitePx: testRect ? Math.round(testRect.width) : 'keine sichtbar',
     mediaQueries: mediaChecks,
     verbindung: (navigator.connection && navigator.connection.effectiveType) || '?',
-    vermutlichDesktopModus: (window.screen.width < 600 && window.innerWidth >= 900)
+    vermutlichDesktopModus: (window.screen.width < 600 && window.innerWidth >= 900),
+    // Betreuungs-Rohdaten der gerade angezeigten Woche (zur Fehlersuche bei
+    // falschen Balken/Badges): Regel-Rohwerte, Ausnahme ja/nein, Endergebnis
+    // und die tatsächlich gezeichneten Balken.
+    betreuungsdiagnose: (function(){
+      try{
+        const out = [], s = startOfWeek(currentDate);
+        for(let i=0;i<7;i++){
+          const d = new Date(s); d.setDate(s.getDate()+i); const iso = isoDate(d);
+          out.push({
+            iso,
+            ausnahmeDoc: !!(window.custodyExceptions && window.custodyExceptions[iso]),
+            roh: JSON.stringify(getCustodySegmentsFromRules(d, window.custodyRules||[])),
+            final: JSON.stringify(getCustodySegments(d)),
+            balken: JSON.stringify(buildColorBarSegments(d,null).map(b=>[b.start,b.end,String(b.color).replace('var(--bar-','').replace(')','')]))
+          });
+        }
+        return {anzahlRegeln:(window.custodyRules||[]).length, tage: out};
+      } catch(e){ return 'Fehler: '+(e&&e.message||e); }
+    })()
   };
   if(window.logEvent) await window.logEvent('verbose_diagnose', payload);
   if(btn){ btn.textContent = '✓ Gesendet – siehe Admin-Protokoll'; setTimeout(()=>{btn.textContent='🔍 Diagnose senden'; btn.disabled=false;}, 3000); }
@@ -1319,7 +1405,7 @@ function renderWeek(){
     const segs = getCustodySegments(d);
     tag += segs.map(seg=>{
       const label = personFilteredLabel(seg.who);
-      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      const timeHint = seg.to ? ` bis ${fmtHintH(seg.to)}` : (seg.from ? ` ab ${fmtHintH(seg.from)}` : '');
       return `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
     }).join(' ');
     const specialEv = SCHOOL_EVENTS.find(ev=>ev.date===iso);
@@ -1432,7 +1518,7 @@ function renderWeek(){
       }
     }
     const tagHatFixeBloecke = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
@@ -1465,7 +1551,7 @@ function renderKidWeek(kid){
     if(hol) tag += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
     const segs = getCustodySegments(d);
     tag += segs.map(seg=>{
-      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      const timeHint = seg.to ? ` bis ${fmtHintH(seg.to)}` : (seg.from ? ` ab ${fmtHintH(seg.from)}` : '');
       return `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
     }).join(' ');
     head += `<div onclick="jumpToIso('${iso}'); setView('tag');" style="cursor:pointer;">${dowLabels[i]}<div class="daynum">${d.getDate()}</div><div class="day-tags">${tag}</div></div>`;
@@ -1603,13 +1689,13 @@ function renderDay(){
   if(hol) head += `<span class="holiday-tag">${hol}${schoolFree?' · schulfrei':''}</span>`;
   if(currentPerson === 'janosch' || currentPerson === 'mischa'){
     getCustodySegments(d).forEach(seg=>{
-      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      const timeHint = seg.to ? ` bis ${fmtHintH(seg.to)}` : (seg.from ? ` ab ${fmtHintH(seg.from)}` : '');
       head += `<span class="day-who-tag ${seg.who}">${whoLabel(seg.who)}${timeHint}</span>`;
     });
   } else {
     getCustodySegments(d).forEach(seg=>{
       const label = personFilteredLabel(seg.who);
-      const timeHint = seg.to ? ` bis ${seg.to}` : (seg.from ? ` ab ${seg.from}` : '');
+      const timeHint = seg.to ? ` bis ${fmtHintH(seg.to)}` : (seg.from ? ` ab ${fmtHintH(seg.from)}` : '');
       head += `<span class="day-who-tag ${seg.who}">${label}${timeHint}</span>`;
     });
   }
@@ -1696,7 +1782,7 @@ function renderDay(){
     if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--a-bg)','var(--a)',false,3);
     if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--omami-bg)','var(--omami)',false,3);
     const tagHatFixeBloecke2 = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*px, height=(e-s)*px-2;
@@ -1841,7 +1927,7 @@ function renderSwipeView(){
       }
     }
     const tagHatFixeBloecke3 = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis).forEach(ev=>{
+    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
@@ -2293,7 +2379,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v56 · 27.09.2026';
+const APP_VERSION = 'v57 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2313,7 +2399,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=56').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=57').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2388,7 +2474,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v6-2026-09-27';
+const EXPECTED_RULES_VERSION = 'rules-v7-2026-09-28';
 
 async function logEvent(type, details){
   try{
@@ -2447,8 +2533,14 @@ async function writeLoginLog(user, userData){
   if(userData.role === 'janine' || userData.role === 'andi'){
     await findPartnerInfo();
     startRequestListeners();
+  } else if(userData.role === 'admin'){
+    // Admin ist selbst nie Absender/Empfänger einer Anfrage – normale,
+    // uid-gefilterte Listener würden für Admin also immer leer bleiben.
+    // Stattdessen ALLE Betreuungs-Änderungen ungefiltert laden, damit
+    // Admin zur Übersicht/Aufräumen alles sehen kann.
+    startAdminRequestListener();
   }
-  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startCustodyExceptionsListener(); startAllActiveUsersListener(); }
+  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startCustodyExceptionsListener(); startAllActiveUsersListener(); autoCleanupVergangeneTermine(); }
 }
 
 /* Sucht die/den jeweils andere/n Elternteil (role=='janine' oder 'andi',
@@ -2752,11 +2844,8 @@ window.toggleMehrtaegigFields = function(prefix){
   const checked = document.getElementById(prefix+'Mehrtaegig').checked;
   const fields = document.getElementById(prefix+'MehrtaegigFields');
   if(fields) fields.style.display = checked ? 'block' : 'none';
-  // Bei mehrtägigen Terminen sind Uhrzeiten (nur EIN Tag) nicht sinnvoll
-  // – stattdessen gilt der ganze Tag, daher die Von/Bis-Uhrzeit-Felder
-  // ausblenden, falls vorhanden.
-  const timeRow = document.getElementById(prefix+'TimeRow');
-  if(timeRow) timeRow.style.display = checked ? 'none' : 'flex';
+  // Uhrzeiten bleiben bewusst sichtbar: bei mehrtägigen Terminen gilt
+  // "Von" am Starttag und "Bis" am Endtag.
 };
 window.toggleBetreuungFields = function(prefix){
   const checked = document.getElementById(prefix+'BeeinflusstBetreuung').checked;
@@ -2841,12 +2930,15 @@ window.hiSaveNewEntry = async function(){
   const titel = document.getElementById('hiNewTitel').value.trim();
   if(!titel){ alert('Bitte einen Titel eingeben.'); return; }
   const mehrtaegig = document.getElementById('hiNewMehrtaegig').checked;
-  const von = mehrtaegig ? null : document.getElementById('hiNewVon').value;
-  const bis = mehrtaegig ? null : document.getElementById('hiNewBis').value;
+  const von = document.getElementById('hiNewVon').value || null;
+  const bis = document.getElementById('hiNewBis').value || null;
   const startDatum = mehrtaegig ? document.getElementById('hiNewStartDatum').value : hiState.iso;
   const endDatum = mehrtaegig ? document.getElementById('hiNewEndDatum').value : hiState.iso;
   if(mehrtaegig && (!startDatum || !endDatum || endDatum < startDatum)){
     alert('Bitte ein gültiges Start- und Enddatum wählen (Ende darf nicht vor Anfang liegen).'); return;
+  }
+  if(mehrtaegig && startDatum === endDatum && von && bis && bis <= von){
+    alert('Am selben Tag muss die Bis-Uhrzeit nach der Von-Uhrzeit liegen.'); return;
   }
   const beeinflusstBetreuung = document.getElementById('hiNewBeeinflusstBetreuung').checked;
   const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiNewBetreuungWer"]:checked')||{}).value : null;
@@ -3253,7 +3345,7 @@ function renderExistingEntryForm(entry){
   const mehrtaegigBlockHtml = darfZeitAendern ? renderMehrtaegigUndBetreuungHtml('hiEdit', ev) : '';
   return `
     <div style="font-size:12px; color:var(--ink-soft); margin-bottom:10px;">${escapeHtml(ev.titel||'')} · ${statusLabel}</div>
-    <div class="time-row" id="hiEditTimeRow" style="${ev.mehrtaegig?'display:none;':''}">
+    <div class="time-row" id="hiEditTimeRow">
       <div class="time-field"><label>Von</label><input type="time" id="hiCustomVon" value="${ev.von||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
       <div class="time-field"><label>Bis</label><input type="time" id="hiCustomBis" value="${ev.bis||''}" ${darfZeitAendern?'':'disabled style="background:var(--panel-soft,#f2f2f0); color:var(--ink-soft);"'}></div>
     </div>
@@ -3320,8 +3412,8 @@ window.hiCancelEvent = async function(key){
 window.hiSaveCustomEdit = async function(id){
   const mehrtaegigEl = document.getElementById('hiEditMehrtaegig');
   const mehrtaegig = mehrtaegigEl ? mehrtaegigEl.checked : false;
-  const von = mehrtaegig ? null : document.getElementById('hiCustomVon').value;
-  const bis = mehrtaegig ? null : document.getElementById('hiCustomBis').value;
+  const von = document.getElementById('hiCustomVon').value || null;
+  const bis = document.getElementById('hiCustomBis').value || null;
   const startDatum = mehrtaegig ? document.getElementById('hiEditStartDatum').value : hiState.iso;
   const endDatum = mehrtaegig ? document.getElementById('hiEditEndDatum').value : hiState.iso;
   if(mehrtaegig && (!startDatum || !endDatum || endDatum < startDatum)){
@@ -3481,7 +3573,7 @@ function renderAllEventsList(){
     html += `<tr>
       <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.datum||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.titel||'(ohne Titel)')}</td>
-      <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.von||'?')}–${escapeHtml(ev.bis||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(terminZeitText(ev)||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); max-width:220px;">${statusDisplay}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.erstelltVonName||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent('${ev.id}')">✕ Löschen</button></td>
@@ -3610,8 +3702,10 @@ window.onDaySliderHandleDrag = function(el){
   // Übergaben durch Hin-und-her-Ziehen an den Rand wieder entfernen.
   const breiteLinks = segs[boundaryIdx].to - segs[boundaryIdx].from;
   const breiteRechts = segs[boundaryIdx+1].to - segs[boundaryIdx+1].from;
-  if(breiteLinks < 0.26){ segs.splice(boundaryIdx,1); rerenderDaySliderTrack(trackId); return; }
-  if(breiteRechts < 0.26){ segs.splice(boundaryIdx+1,1); rerenderDaySliderTrack(trackId); return; }
+  // Beim Entfernen den Nachbarn den frei werdenden Platz übernehmen
+  // lassen – sonst bleibt eine Lücke ("bis 23.75" ohne Folgesegment).
+  if(breiteLinks < 0.26){ segs[boundaryIdx+1].from = segs[boundaryIdx].from; segs.splice(boundaryIdx,1); rerenderDaySliderTrack(trackId); return; }
+  if(breiteRechts < 0.26){ segs[boundaryIdx].to = segs[boundaryIdx+1].to; segs.splice(boundaryIdx+1,1); rerenderDaySliderTrack(trackId); return; }
   // Live-Update direkt im DOM (kein Neuzeichnen), damit der gerade
   // gezogene Regler nicht mitten in der Bewegung ersetzt wird.
   const track = document.getElementById(trackId);
@@ -3661,7 +3755,7 @@ function buildCustodyEditStateFromRules(){
     const d = new Date(monday); d.setDate(monday.getDate() + (dow-1));
     let segs = getCustodySegmentsFromRules(d, rules);
     if(!segs || !segs.length) segs = getCustodySegmentsHardcoded(d);
-    segs = segs.map(s => ({ from: s.from||0, to: (s.to!==undefined?s.to:24), who: s.who }));
+    segs = bereinigeTagesSegmente(segs.map(s => ({ from: s.from||0, to: (s.to!==undefined?s.to:24), who: s.who })));
     state[dow] = segs;
   }
   return state;
@@ -3693,31 +3787,6 @@ function renderOneCustodyDaySlider(dow){
     </div>`;
 }
 window.retryCustodySeed = function(){ custodySeedTried = false; seedCustodyRulesIfEmpty(); };
-/* Räumt eine Tages-Segmentliste auf: winzige Restsegmente (<0.26h,
-   z.B. von früheren Zieh-Ungenauigkeiten übrig geblieben) werden ins
-   Nachbarsegment eingeschmolzen, benachbarte Segmente derselben Person
-   werden zusammengeführt. */
-function bereinigeTagesSegmente(segs){
-  let out = segs.map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}));
-  let changed = true;
-  while(changed && out.length>1){
-    changed = false;
-    for(let i=0;i<out.length;i++){
-      if((out[i].to-out[i].from) < 0.26){
-        if(i===0){ out[1].from = out[0].from; } else { out[i-1].to = out[i].to; }
-        out.splice(i,1); changed = true; break;
-      }
-    }
-  }
-  changed = true;
-  while(changed){
-    changed = false;
-    for(let i=0;i<out.length-1;i++){
-      if(out[i].who === out[i+1].who){ out[i].to = out[i+1].to; out.splice(i+1,1); changed = true; break; }
-    }
-  }
-  return out;
-}
 window.cleanupDuplicateCustodyRules = async function(){
   if(!confirm('Betreuungs-Regeln komplett neu berechnen und bereinigen? Winzige Restsegmente und doppelte/überschneidende Regeln werden dabei entfernt, die Betreuungszeiten selbst bleiben unverändert.')) return;
   try{
@@ -3785,6 +3854,15 @@ window.saveCustodySliders = async function(){
 window.__reqSent = [];
 window.__reqReceived = [];
 let reqUnsub1 = null, reqUnsub2 = null;
+let adminReqUnsub = null;
+function startAdminRequestListener(){
+  if(adminReqUnsub) return;
+  adminReqUnsub = onSnapshot(collection(db,'slot_changes'), snap=>{
+    window.__reqSent = [];
+    window.__reqReceived = snap.docs.map(d=>({id:d.id, ...d.data()})); // Admin sieht alle als "empfangen" (rein zur Anzeige)
+    renderRequestsUI();
+  }, err=> console.error('Admin-Anfragen Fehler:', err));
+}
 function startRequestListeners(){
   if(reqUnsub1 || !window.myUid) return; // schon aktiv
   const q1 = query(collection(db,'slot_changes'), where('angefragtVonUid','==', window.myUid));
@@ -3824,17 +3902,14 @@ function renderRequestsUI(){
   const listEl = document.getElementById('requestsList');
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0){
+  const istAdmin = window.__chaosRole === 'admin';
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && !istAdmin){
     listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
-    // Automatisch schliessen, falls das Fenster gerade offen ist (z.B.
-    // weil man den letzten Eintrag soeben bestätigt hat) – so einfach
-    // wie möglich, kein manuelles Wegklicken nötig.
-    const overlay = document.getElementById('requestsOverlay');
-    if(overlay && overlay.classList.contains('show')) overlay.classList.remove('show');
     return;
   }
 
   let html = '';
+  html += `<div style="margin-bottom:14px;"><button class="cr-del" onclick="adminAufraeumenAlteAnfragen()">🧹 Akzeptierte/abgelehnte Anfragen &amp; vergangene Termine löschen${istAdmin?'':' (nur meine)'}</button></div>`;
   if(myPendingEvents.length){
     html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Eigene Termine – du musst bestätigen</div>';
     myPendingEvents.forEach(ev=>{
@@ -3844,8 +3919,9 @@ function renderRequestsUI(){
           <div class="req-date">${dateStr}</div>
           <div class="req-status schwebend">Schwebend</div>
         </div>
-        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(ev.von||'')}–${escapeHtml(ev.bis||'')} Uhr</div>
+        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat('${ev.id}')">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions">
           <button class="req-btn-accept" onclick="hiAcceptCustom('${ev.id}')">✓ Bestätigen</button>
           <button class="req-btn-reject" onclick="hiRejectCustom('${ev.id}')">✗ Ablehnen</button>
@@ -3874,8 +3950,9 @@ function renderRequestsUI(){
           <div class="req-date">${dateStr}</div>
           <div class="req-status schwebend">Schwebend</div>
         </div>
-        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(ev.von||'')}–${escapeHtml(ev.bis||'')} Uhr</div>
+        <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">${namen}</div>
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat('${ev.id}')">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions">
           <button class="req-btn-reject" onclick="hiDeleteCustom('${ev.id}')">✕ Zurückziehen</button>
         </div>
@@ -3891,7 +3968,7 @@ function renderRequestsUI(){
     let zeitZeile;
     if(lastEntry && lastEntry.neueSegmente && lastEntry.neueSegmente.length){
       // Neues Format: kompletter Tages-Regler statt einzelner Block
-      zeitZeile = 'Neuer Tagesplan: ' + lastEntry.neueSegmente.map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(' · ');
+      zeitZeile = 'Neuer Tagesplan: ' + bereinigeTagesSegmente(lastEntry.neueSegmente).map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(' · ');
     } else {
       const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry && lastEntry.neuVon && lastEntry.neuBis) ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '(keine Zeit angegeben)';
       zeitZeile = `Ursprünglich: ${r.altVon||'?'}–${r.altBis||'?'} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${(vorschlagText!=='nur streichen' && vorschlagText!=='(keine Zeit angegeben)')?' Uhr':''}`;
@@ -3926,9 +4003,71 @@ function renderRequestsUI(){
   listEl.innerHTML = html;
 }
 
+window.oeffneTerminMitChat = function(evId){
+  const ev = (window.customEvents||[]).find(e=>e.id===evId);
+  if(!ev){ alert('Termin nicht gefunden.'); return; }
+  document.getElementById('requestsOverlay').classList.remove('show');
+  const mitte = ev.von && ev.bis ? (parseFloat(ev.von.split(':')[0])+parseFloat(ev.bis.split(':')[0]))/2 : 12;
+  openHourInspector(ev.datum, mitte, 'custom_'+ev.id);
+};
+/* Gemeinsame Aufräum-Logik. Jeder Eintrag einzeln in try/catch: darf
+   ein einzelner (nicht erlaubter) Löschversuch nicht den ganzen Rest
+   abbrechen. Admin darf alles, alle anderen nur, was sie selbst
+   angefragt/bekommen bzw. erstellt haben. */
+async function raeumeAufIntern(auchErledigte){
+  const istAdmin = window.__chaosRole === 'admin';
+  const heute = isoDate(new Date());
+  let anzahl = 0, fehler = 0;
+  const map = new Map();
+  [...(window.__reqSent||[]), ...(window.__reqReceived||[])].forEach(r=> map.set(r.id, r));
+  for(const r of map.values()){
+    const erledigt = r.status==='akzeptiert' || r.status==='abgelehnt';
+    const vergangen = !!(r.datum && r.datum < heute);
+    if((auchErledigte && erledigt) || vergangen){
+      try{ await deleteDoc(doc(db,'slot_changes', r.id)); anzahl++; } catch(e){ fehler++; }
+    }
+  }
+  for(const ev of (window.customEvents||[])){
+    const endDatum = ev.endDatum || ev.datum;
+    if(endDatum && endDatum < heute && (istAdmin || ev.erstelltVonUid === window.myUid)){
+      try{ await deleteDoc(doc(db,'custom_events', ev.id)); anzahl++; } catch(e){ fehler++; }
+    }
+  }
+  return {anzahl, fehler};
+}
+window.adminAufraeumenAlteAnfragen = async function(){
+  const istAdmin = window.__chaosRole === 'admin';
+  if(!confirm('Alle akzeptierten/abgelehnten Betreuungs-Anfragen sowie alle Termine mit vergangenem Datum jetzt endgültig löschen?' + (istAdmin ? '' : ' (Es werden nur deine eigenen Einträge gelöscht.)'))) return;
+  const {anzahl, fehler} = await raeumeAufIntern(true);
+  alert(`${anzahl} Eintrag/Einträge gelöscht.` + (fehler ? ` ${fehler} konnten nicht gelöscht werden (keine Berechtigung).` : ''));
+};
+/* Räumt vergangene Termine/Anfragen automatisch und leise weg (ohne
+   Nachfrage). Wartet kurz, bis die Live-Listener ihre Daten geladen haben. */
+let autoCleanupVergangenerTermineLief = false;
+async function autoCleanupVergangeneTermine(){
+  if(autoCleanupVergangenerTermineLief) return;
+  autoCleanupVergangenerTermineLief = true;
+  try{
+    await new Promise(r=> setTimeout(r, 6000));
+    const res = await raeumeAufIntern(false);
+    if(res.anzahl && window.logEvent) window.logEvent('auto_aufgeraeumt', res);
+  } catch(e){ console.error('Automatisches Aufräumen fehlgeschlagen:', e); }
+}
 window.openRequestsModal = function(){
-  document.getElementById('requestsOverlay').classList.add('show');
-  renderRequestsUI();
+  try{
+    document.getElementById('requestsOverlay').classList.add('show');
+    renderRequestsUI();
+  } catch(e){
+    console.error('Anfragen-Fenster:', e);
+    if(window.logEvent) window.logEvent('anfragen_fenster_fehler', {fehler:String(e&&e.message||e)});
+    alert('Das Anfragen-Fenster konnte nicht angezeigt werden: ' + (e&&e.message||e));
+  }
+};
+/* Für Admin: direkt aus dem Admin-Bereich heraus (Kalender öffnen, dann
+   das Anfragen-Fenster obenauf). */
+window.openRequestsAsAdmin = function(){
+  openCalendarAsAdmin();
+  openRequestsModal();
 };
 
 window.toggleCounterForm = function(id){
@@ -3948,7 +4087,7 @@ window.acceptRequest = async function(id){
     // Betreuungsplan für diesen Tag tatsächlich etwas änderte.
     if(r && r.datum){
       const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
-      const neueSegmente = lastEntry && lastEntry.neueSegmente;
+      const neueSegmente = lastEntry && lastEntry.neueSegmente ? bereinigeTagesSegmente(lastEntry.neueSegmente) : null;
       if(neueSegmente && neueSegmente.length){
         await setDoc(doc(db,'custody_exceptions', r.datum), {
           segmente: neueSegmente, gesetztVon: window.myUid, gesetztAm: new Date().toISOString(), ausAnfrageId: id

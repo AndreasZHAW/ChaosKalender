@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v6-2026-09-27 (muss mit "erwarteteRegelVersion"
+// REGEL-VERSION: rules-v7-2026-09-28 (muss mit "erwarteteRegelVersion"
 // im Admin-Protokoll übereinstimmen – falls nicht, sind diese Regeln
 // noch nicht die neuesten, die die App erwartet).
 // Stand: Paket 2 (Login & Registrierung).
@@ -94,7 +94,13 @@ service cloud.firestore {
                        request.auth.uid == resource.data.angefragtVonUid ||
                        request.auth.uid == resource.data.angefragtAnUid
                      );
-      allow delete: if isAdmin();
+      // Löschen: Admin, oder die beiden Beteiligten (zum Aufräumen
+      // erledigter/vergangener Anfragen).
+      allow delete: if isSignedIn() && (
+                       isAdmin() ||
+                       request.auth.uid == resource.data.angefragtVonUid ||
+                       request.auth.uid == resource.data.angefragtAnUid
+                     );
     }
 
     // --- event_overrides: verschobene/abgesagte Fixtermine (Bandprobe,
