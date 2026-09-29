@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Sicherheit: verbietet Plugins/<base>-Umbiegen/Formular-Ziele fremder Seiten. Bewusst KEINE
+     script-src/connect-src-Sperre: die Seite nutzt Inline-Handler und Firebase-Server, das ließe
+     sich ohne Umbau nicht ohne Ausfallrisiko sperren. -->
+<meta http-equiv="Content-Security-Policy" content="object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="no-referrer">
+<script>try{ if(window.top !== window.self){ window.top.location = window.self.location; } }catch(e){ document.documentElement.style.display='none'; }</script>
 <title>ChaosKalender</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#C0392B">
@@ -345,13 +351,13 @@
   <div class="auth-error" id="authError"></div>
 
   <div id="loginForm">
-    <div class="auth-field"><label>Benutzername</label><input type="text" id="loginUsername" autocomplete="username" placeholder="z. B. Andi"></div>
+    <div class="auth-field"><label>Benutzername</label><input type="text" id="loginUsername" autocomplete="username" maxlength="60" placeholder="z. B. Andi"></div>
     <div class="auth-field"><label>Passwort</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
     <button class="auth-btn" onclick="handleLogin()">Anmelden</button>
   </div>
 
   <div id="registerForm" style="display:none;">
-    <div class="auth-field"><label>Gewünschter Benutzername</label><input type="text" id="regUsername" autocomplete="username" placeholder="frei wählbar"></div>
+    <div class="auth-field"><label>Gewünschter Benutzername</label><input type="text" id="regUsername" autocomplete="username" maxlength="60" placeholder="frei wählbar (Buchstaben, Zahlen, Leerzeichen)"></div>
     <div class="auth-field"><label>Passwort</label><input type="password" id="regPassword" autocomplete="new-password"></div>
     <div class="auth-field"><label>Passwort wiederholen</label><input type="password" id="regPassword2" autocomplete="new-password"></div>
     <button class="auth-btn" onclick="handleRegister()">Registrierung anfragen</button>
@@ -451,6 +457,7 @@
       <div id="chatsStorageOverview"><div class="empty-note">Lade …</div></div>
       <div style="display:flex; gap:8px; margin:10px 0;">
         <button class="cr-save" onclick="exportAllChats()">📥 Alle Chats exportieren</button>
+        <button class="cr-save" onclick="adminSicherung()">💾 Komplett-Sicherung (JSON)</button>
         <button class="cr-del" onclick="adminClearAllChats()">🗑️ ALLE Chats auf einmal löschen</button>
       </div>
       <div id="chatsList" style="margin-top:14px;"><div class="empty-note">Lade …</div></div>
@@ -468,6 +475,7 @@
       <div class="brand-sub"><span id="versionTag"></span> <span id="loggedInAs"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" style="text-decoration:underline; cursor:pointer;">🔍 Diagnose senden</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:6px;">
+      <div class="gear-btn" title="Suche" onclick="openSearchModal()">🔍</div>
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()" style="display:none;">⚙</div>
       <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
@@ -522,6 +530,19 @@
   <div id="chatStorageWarningBanner" style="display:none; background:var(--holiday-bg); color:var(--holiday-text); border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:12px; font-weight:600;"></div>
 
   <div id="calContainer"></div>
+</div>
+
+<div class="overlay" id="searchOverlay">
+  <div class="modal" style="max-width:560px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <h3 style="margin:0;">🔍 Suche</h3>
+      <span onclick="document.getElementById('searchOverlay').classList.remove('show')" style="cursor:pointer; font-size:20px; color:var(--ink-soft); line-height:1;">×</span>
+    </div>
+    <input type="text" id="searchInput" maxlength="120" placeholder="Titel suchen …" autocomplete="off"
+      style="width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px; font-family:inherit; font-size:15px; margin:10px 0 4px;"
+      oninput="runSearch(this.value)">
+    <div id="searchResults" style="max-height:60vh; overflow-y:auto; margin-top:8px;"></div>
+  </div>
 </div>
 
 <div class="overlay" id="requestsOverlay">
@@ -601,6 +622,25 @@
    normale <script>-Funktionen. Deshalb hier eine eigene Kopie, damit
    Render-Funktionen in DIESEM Script sie ohne ReferenceError nutzen
    können. */
+/* ====================== SICHERHEITS-HELFER ======================
+   jsArg: Werte, die aus der Datenbank stammen (IDs, Schlüssel, Namen), NIE
+   direkt in onclick="…('${wert}')" einsetzen – sonst kann ein Anführungszeichen
+   im Wert aus dem Handler ausbrechen und fremden Code ausführen. jsArg liefert
+   ein korrekt maskiertes JS-Zeichenketten-Literal (JSON), zusätzlich
+   HTML-maskiert für die Verwendung innerhalb eines Attributs.
+   idOk: nur unauffällige Dokument-IDs/-Schlüssel akzeptieren.
+   safePhotoSrc: nur echte Bild-Daten (data:image/…;base64,…) zulassen. */
+function jsArg(v){
+  return JSON.stringify(String(v))
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+const SAFE_ID_RE = /^[A-Za-z0-9_.-]{1,120}$/;
+function idOk(id){ return typeof id === 'string' && SAFE_ID_RE.test(id); }
+function safePhotoSrc(p){
+  return (typeof p === 'string' && p.length < 1200000 && /^data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+\/=]+$/.test(p)) ? p : '';
+}
+const USERNAME_RE = /^[A-Za-zäöüÄÖÜéèàß0-9 _.,!?()-]{2,60}$/;
+
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ====================== FEHLER-PROTOKOLL ======================
@@ -969,7 +1009,7 @@ function terminIstPrivatFuerMich(ev){
   return !!(ev && ev.privat && ev.status === 'info' && ev.erstelltVonUid !== window.myUid && window.__chaosRole !== 'admin');
 }
 function terminAnzeigeTitel(ev){
-  if(terminIstPrivatFuerMich(ev)) return '🔒 Gebucht';
+  if(terminIstPrivatFuerMich(ev)) return '🔒 ' + (ev.erstelltVonName || 'Jemand') + ' gebucht';
   return ((ev.privat && ev.status === 'info') ? '🔒 ' : '') + (ev.titel || 'Termin');
 }
 function terminFarbStil(ev, borderStyle){
@@ -1140,7 +1180,7 @@ let currentDate = new Date(2026,10,15);
 // echte Bildschirmbreite. Wir nehmen deshalb den kleineren der beiden
 // Werte, damit echte Handys zuverlässig erkannt werden.
 const effectiveWidth = Math.min(window.innerWidth, window.screen.width || window.innerWidth);
-let currentView = effectiveWidth < 700 ? 'swipe' : 'woche';
+let currentView = 'swipe';
 let currentRole = 'eltern';
 var currentPerson = null; // 'a' (Janine), 'b' (Andi) oder null (Admin/ungefiltert) – var statt let, damit das Firebase-Modul-Script (separater Scope) via window.currentPerson darauf zugreifen kann
 var isAdminUser = true; // Default true für die Testdatei; echter Login setzt dies korrekt
@@ -1586,7 +1626,7 @@ function renderWeek(){
         const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
         const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${(ov&&ov.von)?'✎':''}</div>`;
+        body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, ${jsArg(key)})">${(ov&&ov.von)?'✎':''}</div>`;
       }
     });
     if(dow===4){
@@ -1601,7 +1641,7 @@ function renderWeek(){
           const top = (s-startHour)*PXH, height=(e-s)*PXH-3;
           const leftPct = idx===0 ? '1px' : '50%';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${(ov&&ov.von)?' ✎':''}</div>`;
+          body += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, ${jsArg(key)})">Hort${(ov&&ov.von)?' ✎':''}</div>`;
         }
       });
     }
@@ -1621,7 +1661,7 @@ function renderWeek(){
           const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
           const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       });
     }
@@ -1632,7 +1672,7 @@ function renderWeek(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
         const top=(s-startHour)*PXH, height=(Math.min(24,endHour)-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     if(dow===3 && !hol && showFullDetailFor('b')){
@@ -1642,7 +1682,7 @@ function renderWeek(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 19, '${key}')"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 19, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
       }
     }
     if(BAND_DATES_MISCHA.includes(iso)){
@@ -1653,7 +1693,7 @@ function renderWeek(){
         const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     const tagHatFixeBloecke = hatDieserTagFixeBloecke(d, iso);
@@ -1664,7 +1704,7 @@ function renderWeek(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil = tagHatFixeBloecke ? 'left:52%;right:1px;' : 'left:2px;right:2px;';
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;${spaltenStil}font-size:9.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:3;${spaltenStil}font-size:9.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, ${jsArg('custom_'+ev.id)})"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });    body += `</div>`;
   }
   body += '</div>';
@@ -1929,7 +1969,7 @@ function renderDay(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil2 = tagHatFixeBloecke2 ? 'left:54%;right:4px;' : 'left:6px;right:6px;';
-      body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, ${jsArg('custom_'+ev.id)})"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });
   }
   SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
@@ -2001,7 +2041,7 @@ function renderSwipeView(){
           const kidBg = kid==='janosch' ? 'var(--janosch-bg)' : 'var(--mischa-bg)';
           const kidName = kid==='janosch' ? 'Janosch' : 'Mischa';
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">${(ov&&ov.von)?'✎':''}</div>`;
+          daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:${kidBg};cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, ${jsArg(key)})">${(ov&&ov.von)?'✎':''}</div>`;
         }
       });
       if(dow===4){
@@ -2016,7 +2056,7 @@ function renderSwipeView(){
             const top=(s-startHour)*px, height=(e-s)*px-2;
             const leftPct = idx===0?'1px':'50%';
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, '${key}')">Hort${(ov&&ov.von)?' ✎':''}</div>`;
+            daysHtml += `<div class="school-block" style="top:${top}px;height:${height}px;left:${leftPct};right:${idx===0?'50%':'1px'};background:var(--school);cursor:pointer;" onclick="openHourInspector('${iso}', ${(defS+defE)/2}, ${jsArg(key)})">Hort${(ov&&ov.von)?' ✎':''}</div>`;
           }
         });
       }
@@ -2034,7 +2074,7 @@ function renderSwipeView(){
             const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
             const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, '${key}')"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
           }
         });
       }
@@ -2044,7 +2084,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, '${key}')"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
+          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       }
       if(dow===3 && !hol && showFullDetailFor('b')){
@@ -2053,7 +2093,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, '${key}')"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
+          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
         }
       }
     }
@@ -2064,7 +2104,7 @@ function renderSwipeView(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, '${key}')"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     const tagHatFixeBloecke3 = hatDieserTagFixeBloecke(d, iso);
@@ -2074,7 +2114,7 @@ function renderSwipeView(){
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
       const borderStyle = ev.status==='schwebend' ? 'border:2px dashed var(--pending);' : 'border:1px solid var(--pending);';
       const spaltenStil3 = tagHatFixeBloecke3 ? 'left:54%;right:2px;' : 'left:2px;right:2px;';
-      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;${spaltenStil3}z-index:4;font-size:10.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, 'custom_${ev.id}')"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
+      daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;${spaltenStil3}z-index:4;font-size:10.5px;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, ${jsArg('custom_'+ev.id)})"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });
     daysHtml += `</div></div>`; // .swipe-body, .swipe-daycol
   }
@@ -2520,7 +2560,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v63 · 28.09.2026';
+const APP_VERSION = 'v64 · 28.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2540,7 +2580,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=63').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=64').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2559,7 +2599,7 @@ import {
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
   collection, query, where, onSnapshot, addDoc, orderBy, limit,
-  arrayUnion, getDocs
+  arrayUnion, getDocs, runTransaction, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2617,8 +2657,18 @@ function detectTextScaling(){
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
 const EXPECTED_RULES_VERSION = 'rules-v7-2026-09-28';
 
+/* Schutz vor Protokoll-Flut (Kosten/Kontingent): automatische Diagnose-Meldungen
+   (Scroll-/Höhen-Messungen, Ansichtswechsel) werden nur im Debug-Modus geschrieben
+   (?debug=1 an die Adresse hängen). Zusätzlich gilt ein Budget pro Sitzung. */
+const LOG_LAERM = new Set(['heute_sprung_ergebnis','heute_sprung_ueberholt','heute_sprung_fehlgeschlagen','details_sprung_diagnose','full_day_diagnose','sticky_problem_auto','view_change','zeit_fallback_genutzt','desktop_site_erkannt']);
+let logDebugModus = false;
+try{ logDebugModus = /[?&]debug=1/.test(location.search) || localStorage.getItem('chaos_debug') === '1'; }catch(e){}
+let logBudgetRest = 60, logFehlerRest = 10;
 async function logEvent(type, details){
   try{
+    if(LOG_LAERM.has(type) && !logDebugModus) return;
+    if(type === 'error'){ if(--logFehlerRest < 0) return; }
+    if(--logBudgetRest < 0) return;
     const user = auth.currentUser;
     if(!user) return; // ohne Login kein Log-Eintrag möglich (Sicherheitsregeln)
     const ua = navigator.userAgent;
@@ -2759,7 +2809,7 @@ function startEventOverrideListener(){
   if(evOverrideUnsub) return;
   evOverrideUnsub = onSnapshot(collection(db,'event_overrides'), snap=>{
     const map = {};
-    snap.forEach(d=> map[d.id] = d.data());
+    snap.forEach(d=>{ if(idOk(d.id)) map[d.id] = d.data(); }); // manipulierte Schlüssel ignorieren
     window.eventOverrides = map;
     if(typeof render === 'function') render();
     if(typeof checkForChatConfirmations === 'function') checkForChatConfirmations();
@@ -2937,7 +2987,7 @@ window.openHourInspector = function(iso, hourDec, forcedTab, endHourDec){
   document.getElementById('hiSub').textContent = 'Betreuung zu dieser Zeit: ' + whoLabel(custodySeg.who);
 
   document.getElementById('hiTabs').innerHTML = tabs.map(t=>
-    `<button class="hi-tab" data-tab="${t.id}" onclick="hiSwitchTab('${t.id}')">${t.label}</button>`
+    `<button class="hi-tab" data-tab="${t.id}" onclick="hiSwitchTab(${jsArg(t.id)})">${t.label}</button>`
   ).join('');
 
   const defaultTab = forcedTab || (entries.length ? entries[0].id : 'new');
@@ -3078,7 +3128,7 @@ function renderNewEntryForm(){
   const confirmersHtml = renderBestaetigerListeHtml() || '<div style="font-size:11.5px; color:var(--ink-soft);">Keine anderen aktiven Personen gefunden.</div>';
   return `
     <div class="auth-field" style="margin-bottom:12px;"><label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Titel</label>
-      <input type="text" id="hiNewTitel" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
+      <input type="text" id="hiNewTitel" maxlength="120" placeholder="z.B. Zahnarzt Janosch" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:14px;"></div>
     ${renderZeitBlockHtml('hiNew', null, 'hiNewVon', 'hiNewBis', vonStr, bisStr)}
     <div class="hi-toggle" id="hiModeToggle">
       <button type="button" class="${defaultMode==='info'?'active':''}" data-mode="info" onclick="hiSetMode('info')">Nur Info</button>
@@ -3093,7 +3143,7 @@ function renderNewEntryForm(){
     </div>
     <div class="auth-field" style="margin-bottom:12px;">
       <label style="display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:4px;">Erklärung / Notiz (optional – wird die erste Chat-Nachricht zu diesem Termin)</label>
-      <textarea id="hiNewNote" rows="2" placeholder="z.B. warum, oder was noch wichtig ist …" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+      <textarea id="hiNewNote" rows="2" maxlength="2000" placeholder="z.B. warum, oder was noch wichtig ist …" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Abbrechen</button>
@@ -3111,7 +3161,7 @@ window.hiSetMode = function(m){
   });
 };
 window.hiSaveNewEntry = async function(){
-  const titel = document.getElementById('hiNewTitel').value.trim();
+  const titel = document.getElementById('hiNewTitel').value.trim().slice(0,120);
   if(!titel){ alert('Bitte einen Titel eingeben.'); return; }
   const mehrtaegig = document.getElementById('hiNewMehrtaegig').checked;
   const von = document.getElementById('hiNewVon').value || null;
@@ -3244,7 +3294,7 @@ function renderSingleChatMsgHtml(m, coll, key, idx){
     ? `<div style="font-size:10.5px; color:var(--ink-soft); margin-top:3px;">${gelesenVon.length ? '✅ gelesen von '+gelesenVon.join(', ') : ''}${(gelesenVon.length && offenVon.length) ? ' &nbsp;·&nbsp; ' : ''}${offenVon.length ? '⏳ noch offen: '+offenVon.join(', ') : ''}</div>`
     : '';
   const confirmBtnHtml = brauchtMeineBestaetigung
-    ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg('${coll}','${key}','${m.msgId}')">✓ Gelesen</button>`
+    ? `<button class="btn" style="width:auto; padding:4px 10px; font-size:11.5px; margin-top:4px;" onclick="hiConfirmChatMsg(${jsArg(coll)},${jsArg(key)},${jsArg(m.msgId)})">✓ Gelesen</button>`
     : '';
   // Fotos in privaten Info-Terminen sieht nur die erstellende Person.
   let fotoVerbergen = false, fotoBesitzer = '';
@@ -3254,8 +3304,8 @@ function renderSingleChatMsgHtml(m, coll, key, idx){
   }
   const photoHtml = m.photo && fotoVerbergen
     ? `<div style="margin-top:4px; font-size:11.5px; color:var(--ink-soft); background:#F2F1EC; border-radius:8px; padding:6px 10px; display:inline-block;">🔒 Privates Foto – nur für ${escapeHtml(fotoBesitzer)} sichtbar</div>`
-    : m.photo ? `<img src="${m.photo}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
-  const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg('${coll}','${key}','${m.msgId||('__idx'+idx)}')" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
+    : safePhotoSrc(m.photo) ? `<img src="${safePhotoSrc(m.photo)}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
+  const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg(${jsArg(coll)},${jsArg(key)},${jsArg(m.msgId||('__idx'+idx))})" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
   return `
     <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
       <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
@@ -3294,9 +3344,9 @@ function renderChatSection(chatArray, coll, key, einfachMode){
       <div style="font-size:10.5px; color:var(--ink-soft); margin-bottom:4px;">Bestätigung nötig von (optional):</div>
       <div style="margin-bottom:6px;">${confirmCbHtml || '<span style="font-size:11px; color:var(--ink-soft);">(niemand sonst aktiv)</span>'}</div>`}
       <div style="display:flex; gap:6px; align-items:center;">
-        <input type="text" id="hiChatInput" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){hiSendChatMsg('${coll}','${key}');}">
+        <input type="text" id="hiChatInput" maxlength="2000" placeholder="Nachricht schreiben …" style="flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px;" onkeydown="if(event.key==='Enter'){hiSendChatMsg(${jsArg(coll)},${jsArg(key)});}">
         <label class="btn secondary" style="width:auto; padding:8px 10px; cursor:pointer; margin:0;" title="Foto anhängen">📷<input type="file" accept="image/*" style="display:none;" onchange="hiPickChatPhoto(event)"></label>
-        <button class="btn" style="width:auto; padding:8px 14px;" onclick="hiSendChatMsg('${coll}','${key}')">Senden</button>
+        <button class="btn" style="width:auto; padding:8px 14px;" onclick="hiSendChatMsg(${jsArg(coll)},${jsArg(key)})">Senden</button>
       </div>
     </div>`;
 }
@@ -3340,7 +3390,7 @@ window.hiClearChatPhoto = function(){
 
 window.hiSendChatMsg = async function(coll, key){
   const input = document.getElementById('hiChatInput');
-  const text = input.value.trim();
+  const text = input.value.trim().slice(0,2000);
   const photo = window.__pendingChatPhoto;
   if(!text && !photo) return;
   const confirmCbs = Array.from(document.querySelectorAll('.chat-confirm-cb:checked'));
@@ -3398,22 +3448,14 @@ window.hiSendChatMsg = async function(coll, key){
 
 window.hiConfirmChatMsg = async function(coll, key, msgId){
   try{
-    const currentData = coll==='custom_events'
-      ? (window.customEvents||[]).find(e=>e.id===key)
-      : window.getEventOverride(key);
-    if(!currentData || !currentData.chat) return;
-    const neueChat = currentData.chat.map(m=>{
-      if(m.msgId===msgId){
-        const bestaetigtVon = Array.from(new Set([...(m.bestaetigtVon||[]), window.myUid]));
-        return {...m, bestaetigtVon};
-      }
-      return m;
+    await runTransaction(db, async (tx)=>{
+      const ref = doc(db, coll==='custom_events' ? 'custom_events' : 'event_overrides', key);
+      const snap = await tx.get(ref);
+      if(!snap.exists()) return;
+      const chat = snap.data().chat || [];
+      const neueChat = chat.map(m=> m.msgId===msgId ? {...m, bestaetigtVon: Array.from(new Set([...(m.bestaetigtVon||[]), window.myUid]))} : m);
+      if(coll==='custom_events') tx.update(ref, {chat: neueChat}); else tx.set(ref, {chat: neueChat}, {merge:true});
     });
-    if(coll==='custom_events'){
-      await updateDoc(doc(db,'custom_events',key), { chat: neueChat });
-    } else {
-      await setDoc(doc(db,'event_overrides',key), { chat: neueChat }, {merge:true});
-    }
     if(window.logEvent) window.logEvent('chat_nachricht_bestaetigt', {coll, key, msgId});
     return true;
   } catch(e){ alert('Fehler beim Bestätigen: '+e.message); return false; }
@@ -3483,6 +3525,7 @@ function renderExistingEntryForm(entry){
       <div class="hi-titel">${escapeHtml(entry.label)}</div>
       ${statusHtml}
       <div class="hi-wann">📅 ${escapeHtml(datumTxt)} · ${fmtH(aktuell[0])}–${fmtH(aktuell[1])} Uhr</div>
+      ${!(['janine','andi','admin'].includes(window.__chaosRole)) ? '<div class="hi-hint">Zeiten ändern können nur Janine, Andi und der Admin. Schreib deinen Wunsch unten in den Chat.</div>' : `
       <details class="hi-edit">
         <summary>✏️ Termin ändern</summary>
         <div class="hi-edit-body">
@@ -3502,11 +3545,11 @@ function renderExistingEntryForm(entry){
             ${renderBestaetigerListeHtml()}
           </div>
           <div class="modal-actions">
-            <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent('${entry.key}')">Absagen</button>
-            <button class="btn" onclick="hiSaveEvent('${entry.key}')">Speichern</button>
+            <button class="btn" style="background:var(--holiday-text);" onclick="hiCancelEvent(${jsArg(entry.key)})">Absagen</button>
+            <button class="btn" onclick="hiSaveEvent(${jsArg(entry.key)})">Speichern</button>
           </div>
         </div>
-      </details>
+      </details>`}
       ${renderChatSection((window.getEventOverride(entry.key)||{}).chat, 'event_overrides', entry.key)}
       <div class="modal-actions" style="margin-top:14px;"><button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">Schließen</button></div>`;
   }
@@ -3525,7 +3568,7 @@ function renderExistingEntryForm(entry){
     const wannP = ev.mehrtaegig ? terminZeitText(ev)
       : (new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'2-digit'}) + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis+' Uhr' : ''));
     return `
-      <div class="hi-titel">🔒 Gebucht</div>
+      <div class="hi-titel">🔒 ${escapeHtml(ev.erstelltVonName || 'Jemand')} gebucht</div>
       <div class="hi-status st-info">Privater Termin</div>
       <div class="hi-wann">📅 ${escapeHtml(wannP)}</div>
       <div class="hi-hint" style="margin-top:8px;">${escapeHtml(ev.erstelltVonName||'Die Person')} hat hier etwas vor. Titel und Details sind privat.</div>
@@ -3556,7 +3599,7 @@ function renderExistingEntryForm(entry){
 
   // ---- Bestätigen / Ablehnen (wenn ich dran bin) direkt unter dem Kopf
   const bestaetigenHtml = mussIchBestaetigen
-    ? `<div class="modal-actions" style="margin:6px 0 12px;"><button class="btn secondary" onclick="hiRejectCustom('${ev.id}')">Ablehnen</button><button class="btn" onclick="hiAcceptCustom('${ev.id}')">✓ Bestätigen</button></div>` : '';
+    ? `<div class="modal-actions" style="margin:6px 0 12px;"><button class="btn secondary" onclick="hiRejectCustom(${jsArg(ev.id)})">Ablehnen</button><button class="btn" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button></div>` : '';
 
   // ---- Ausklappmenü "Termin ändern" (nur Ersteller/Admin)
   let aendernHtml;
@@ -3593,15 +3636,15 @@ function renderExistingEntryForm(entry){
           ${renderBetreuungBlockHtml('hiEdit', ev, modus==='anfrage')}
           ${bestaetigerBoxHtml}
           <div class="modal-actions">
-            ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom('${ev.id}')">Löschen</button>` : ''}
-            <button class="btn" onclick="hiSaveCustomEdit('${ev.id}')">Speichern</button>
+            ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom(${jsArg(ev.id)})">Löschen</button>` : ''}
+            <button class="btn" onclick="hiSaveCustomEdit(${jsArg(ev.id)})">Speichern</button>
           </div>
         </div>
       </details>`;
   } else {
     aendernHtml = `
       <div style="font-size:12.5px; color:var(--ink-soft); margin:10px 0;">Nur ${escapeHtml(ev.erstelltVonName||'die erstellende Person')} kann diesen Termin ändern. Wünschst du etwas anderes, schreib es unten in den Chat.</div>
-      <button class="btn secondary" style="width:100%; margin-bottom:10px;" onclick="hiRequestDelete('${ev.id}')">🗑️ Löschanfrage stellen</button>`;
+      <button class="btn secondary" style="width:100%; margin-bottom:10px;" onclick="hiRequestDelete(${jsArg(ev.id)})">🗑️ Löschanfrage stellen</button>`;
   }
 
   // ---- Chat darunter (hängt fest am Termin, bleibt bis zum Löschen erhalten)
@@ -3709,17 +3752,27 @@ window.hiSaveCustomEdit = async function(id){
 };
 window.hiAcceptCustom = async function(id){
   try{
-    const ev = (window.customEvents||[]).find(e=>e.id===id);
-    if(!ev){ alert('Termin nicht gefunden.'); return; }
-    const already = ev.bestaetigtVon || [];
-    if(!already.includes(window.myUid)) already.push(window.myUid);
-    const alleDa = (ev.bestaetigerUids||[]).every(uid => already.includes(uid));
-    await updateDoc(doc(db,'custom_events',id), {
-      bestaetigtVon: already,
-      status: alleDa ? 'bestaetigt' : 'schwebend'
+    // Transaktion: liest den AKTUELLEN Stand aus der Datenbank (nicht den
+    // lokalen Zwischenspeicher). Bestätigen zwei Personen gleichzeitig, wiederholt
+    // Firestore die Transaktion – keine Bestätigung geht mehr verloren.
+    await runTransaction(db, async (tx)=>{
+      const ref = doc(db,'custom_events',id);
+      const snap = await tx.get(ref);
+      if(!snap.exists()) throw new Error('Termin nicht gefunden.');
+      const ev = snap.data();
+      if(ev.status !== 'schwebend') throw new Error('Dieser Termin wartet nicht mehr auf eine Bestätigung.');
+      const bestaetiger = ev.bestaetigerUids || [];
+      if(!bestaetiger.includes(window.myUid)) throw new Error('Du bist bei diesem Termin nicht als Bestätiger vorgesehen.');
+      const already = Array.from(new Set([...(ev.bestaetigtVon||[]), window.myUid]));
+      const alleDa = bestaetiger.every(uid => already.includes(uid));
+      tx.update(ref, { bestaetigtVon: already, status: alleDa ? 'bestaetigt' : 'schwebend' });
+      // Änderungs-Anfrage für Schul-/Hort-/Club-Zeiten: erst wenn ALLE bestätigt
+      // haben, gilt die neue Zeit wirklich (vorher wurde sie nie übernommen).
+      if(alleDa && ev.zielTyp === 'event_override' && idOk(ev.zielKey) && ev.von && ev.bis){
+        tx.set(doc(db,'event_overrides',ev.zielKey), { von: ev.von, bis: ev.bis, geloescht:false,
+          geaendertVon: ev.erstelltVonName || '?', geaendertAm: new Date().toISOString() }, {merge:true});
+      }
     });
-    // Die Betreuungs-Änderung eines Termins wird nicht gespeichert, sondern
-    // live aus dem bestätigten Termin berechnet (siehe getCustodySegments).
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
@@ -3753,14 +3806,14 @@ function startAllActiveUsersListener(){
   if(allActiveUsersUnsub) return;
   const q = query(collection(db,'users'), where('status','==','active'));
   allActiveUsersUnsub = onSnapshot(q, snap=>{
-    window.allActiveUsers = snap.docs.map(d=>({uid:d.id, username:d.data().username, role:d.data().role}));
+    window.allActiveUsers = snap.docs.filter(d=>idOk(d.id)).map(d=>({uid:d.id, username:String(d.data().username||'?').slice(0,80), role:d.data().role}));
   }, err=> console.error('Nutzerliste Fehler:', err));
 }
 
 function startCustomEventsListener(){
   if(customEventsUnsub) return;
   customEventsUnsub = onSnapshot(collection(db,'custom_events'), snap=>{
-    window.customEvents = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    window.customEvents = snap.docs.filter(d=>idOk(d.id)).map(d=>({id:d.id, ...d.data()}));
     if(typeof render === 'function') render();
     if(typeof renderAllEventsList === 'function') renderAllEventsList();
     if(typeof renderRequestsUI === 'function') renderRequestsUI();
@@ -3822,7 +3875,7 @@ function renderAllEventsList(){
       <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(terminZeitText(ev)||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); max-width:220px;">${statusDisplay}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.erstelltVonName||'?')}</td>
-      <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent('${ev.id}')">✕ Löschen</button></td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent(${jsArg(ev.id)})">✕ Löschen</button></td>
     </tr>`;
   });
   html += '</table>';
@@ -4055,8 +4108,12 @@ window.cleanupDuplicateCustodyRules = async function(){
         });
       });
     }
-    for(const r of aktuelleRegeln) await deleteDoc(doc(db,'custody_rules', r.id));
-    for(const r of neueRegeln) await addDoc(collection(db,'custody_rules'), r);
+    // Atomar: entweder wird ALLES ersetzt oder nichts (früher: erst alles löschen,
+    // dann neu anlegen – bei einem Abbruch dazwischen blieb das Muster leer).
+    const batch = writeBatch(db);
+    aktuelleRegeln.forEach(r=> batch.delete(doc(db,'custody_rules', r.id)));
+    neueRegeln.forEach(r=> batch.set(doc(collection(db,'custody_rules')), r));
+    await batch.commit();
     window.custodyEditState = null;
     alert('Betreuungs-Regeln neu berechnet und bereinigt.');
   } catch(e){ alert('Fehler: '+e.message); }
@@ -4071,14 +4128,14 @@ window.saveCustodySliders = async function(){
     // Live-Listener nachgezogen ist), was sonst zu Karteileichen und
     // doppelten Regeln führen kann.
     const frischeSnap = await getDocs(collection(db,'custody_rules'));
-    for(const d of frischeSnap.docs){
-      await deleteDoc(doc(db,'custody_rules',d.id));
-    }
+    // Alles in EINER atomaren Schreib-Gruppe (Batch): altes Muster löschen + neues anlegen.
+    const batch = writeBatch(db);
+    frischeSnap.docs.forEach(d=> batch.delete(doc(db,'custody_rules',d.id)));
     for(let dow=1; dow<=7; dow++){
       const bereinigt = bereinigeTagesSegmente(window.custodyEditState[dow]);
       for(const seg of bereinigt){
         const bisRicht = seg.to>=24;
-        await addDoc(collection(db,'custody_rules'), {
+        batch.set(doc(collection(db,'custody_rules')), {
           vonTag: dow, vonZeit: fmtHM(seg.from),
           bisTag: bisRicht ? (dow===7?1:dow+1) : dow,
           bisZeit: bisRicht ? '00:00' : fmtHM(seg.to),
@@ -4086,10 +4143,7 @@ window.saveCustodySliders = async function(){
         });
       }
     }
-    // Das neue Wochenmuster gilt sofort für ALLE zukünftigen Tage dieser
-    // Wochentage (die Regel wird bei jedem Kalender-Aufbau live
-    // ausgewertet, keine Datumsbindung) – kein Refresh nötig, der
-    // Firestore-Live-Listener aktualisiert den Kalender automatisch.
+    await batch.commit();
     if(window.logEvent) window.logEvent('standardbetreuung_geaendert', {methode:'regler'});
     alert('Betreuungszeiten gespeichert – gilt ab sofort für alle zukünftigen Tage.');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
@@ -4105,7 +4159,7 @@ function startAdminRequestListener(){
   if(adminReqUnsub) return;
   adminReqUnsub = onSnapshot(collection(db,'slot_changes'), snap=>{
     window.__reqSent = [];
-    window.__reqReceived = snap.docs.map(d=>({id:d.id, ...d.data()})); // Admin sieht alle als "empfangen" (rein zur Anzeige)
+    window.__reqReceived = snap.docs.filter(d=>idOk(d.id)).map(d=>({id:d.id, ...d.data()})); // Admin sieht alle als "empfangen" (rein zur Anzeige)
     renderRequestsUI();
   }, err=> console.error('Admin-Anfragen Fehler:', err));
 }
@@ -4114,13 +4168,13 @@ function startRequestListeners(){
   const q1 = query(collection(db,'slot_changes'), where('angefragtVonUid','==', window.myUid));
   reqUnsub1 = onSnapshot(q1, snap=>{
     window.__reqSent = [];
-    snap.forEach(d=> window.__reqSent.push({id:d.id, ...d.data()}));
+    snap.forEach(d=>{ if(idOk(d.id)) window.__reqSent.push({id:d.id, ...d.data()}); });
     renderRequestsUI();
   }, err=> console.error('Anfragen (gesendet) Fehler:', err));
   const q2 = query(collection(db,'slot_changes'), where('angefragtAnUid','==', window.myUid));
   reqUnsub2 = onSnapshot(q2, snap=>{
     window.__reqReceived = [];
-    snap.forEach(d=> window.__reqReceived.push({id:d.id, ...d.data()}));
+    snap.forEach(d=>{ if(idOk(d.id)) window.__reqReceived.push({id:d.id, ...d.data()}); });
     renderRequestsUI();
   }, err=> console.error('Anfragen (empfangen) Fehler:', err));
 }
@@ -4152,8 +4206,8 @@ function renderChatNotizenHtml(liste){
       ${m.photo ? '<div class="req-meta">📷 mit Foto – im Chat ansehen</div>' : ''}
       <div class="req-meta">${escapeHtml(wann)} · bitte lesen und bestätigen</div>
       <div class="req-actions">
-        ${n.coll==='custom_events' ? `<button class="req-btn-counter" onclick="oeffneTerminMitChat('${n.key}')">💬 Chat öffnen</button>` : ''}
-        <button class="req-btn-accept" onclick="hiChatGelesen('${n.coll}','${n.key}','${m.msgId}')">✓ Gelesen</button>
+        ${n.coll==='custom_events' ? `<button class="req-btn-counter" onclick="oeffneTerminMitChat(${jsArg(n.key)})">💬 Chat öffnen</button>` : ''}
+        <button class="req-btn-accept" onclick="hiChatGelesen(${jsArg(n.coll)},${jsArg(n.key)},${jsArg(m.msgId)})">✓ Gelesen</button>
       </div>
     </div>`;
   });
@@ -4203,10 +4257,10 @@ function renderRequestsUI(){
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat('${ev.id}')">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions">
-          <button class="req-btn-accept" onclick="hiAcceptCustom('${ev.id}')">✓ Bestätigen</button>
-          <button class="req-btn-reject" onclick="hiRejectCustom('${ev.id}')">✗ Ablehnen</button>
+          <button class="req-btn-accept" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button>
+          <button class="req-btn-reject" onclick="hiRejectCustom(${jsArg(ev.id)})">✗ Ablehnen</button>
         </div>
       </div>`;
     });
@@ -4234,9 +4288,9 @@ function renderRequestsUI(){
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">${namen}</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat('${ev.id}')">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions">
-          <button class="req-btn-reject" onclick="hiDeleteCustom('${ev.id}')">✕ Zurückziehen</button>
+          <button class="req-btn-reject" onclick="hiDeleteCustom(${jsArg(ev.id)})">✕ Zurückziehen</button>
         </div>
       </div>`;
     });
@@ -4267,9 +4321,9 @@ function renderRequestsUI(){
       <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
       ${isMyTurn ? `
         <div class="req-actions">
-          <button class="req-btn-accept" onclick="acceptRequest('${r.id}')">✓ Akzeptieren</button>
-          <button class="req-btn-counter" onclick="toggleCounterForm('${r.id}')">↩ Anders vorschlagen</button>
-          <button class="req-btn-reject" onclick="rejectRequest('${r.id}')">✗ Ablehnen</button>
+          <button class="req-btn-accept" onclick="acceptRequest(${jsArg(r.id)})">✓ Akzeptieren</button>
+          <button class="req-btn-counter" onclick="toggleCounterForm(${jsArg(r.id)})">↩ Anders vorschlagen</button>
+          <button class="req-btn-reject" onclick="rejectRequest(${jsArg(r.id)})">✗ Ablehnen</button>
         </div>
         <div class="req-counter-form" id="counterForm-${r.id}">
           <div class="time-row">
@@ -4277,10 +4331,10 @@ function renderRequestsUI(){
             <div class="time-field"><label>Bis</label><input type="time" id="counterBis-${r.id}" value="${lastEntry?lastEntry.neuBis||'19:00':'19:00'}"></div>
           </div>
           <textarea id="counterGrund-${r.id}" placeholder="Grund (optional) …"></textarea>
-          <button class="req-btn-accept" style="width:100%;" onclick="submitCounter('${r.id}')">Gegenvorschlag senden</button>
+          <button class="req-btn-accept" style="width:100%;" onclick="submitCounter(${jsArg(r.id)})">Gegenvorschlag senden</button>
         </div>
       ` : ''}
-      ${istAdmin ? `<div class="req-actions" style="margin-top:8px;"><button class="req-btn-reject" onclick="adminLoescheAnfrage('${r.id}')">🗑️ Löschen (Admin)</button></div>` : ''}
+      ${istAdmin ? `<div class="req-actions" style="margin-top:8px;"><button class="req-btn-reject" onclick="adminLoescheAnfrage(${jsArg(r.id)})">🗑️ Löschen (Admin)</button></div>` : ''}
     </div>`;
   });
   listEl.innerHTML = html;
@@ -4388,6 +4442,51 @@ window.adminLoescheAnfrage = async function(id){
   try{ await deleteDoc(doc(db,'slot_changes', id)); }
   catch(e){ alert('Löschen fehlgeschlagen: ' + (e&&e.message||e) + regelHinweis(e)); }
 };
+window.openSearchModal = function(){
+  document.getElementById('searchOverlay').classList.add('show');
+  const input = document.getElementById('searchInput');
+  input.value = '';
+  runSearch('');
+  setTimeout(()=> input.focus(), 50);
+};
+/* Sucht in den frei erstellten Terminen (Titel). Private Info-Termine
+   anderer Personen werden nicht durchsucht/gefunden – so wie sie auch
+   sonst nirgends mit ihrem Titel sichtbar sind. Zeigt zu jedem Treffer
+   Datum/Uhrzeit und wer ihn erstellt hat, sortiert nach Datum. */
+window.runSearch = function(qRoh){
+  const box = document.getElementById('searchResults');
+  const q = qRoh.trim().toLowerCase();
+  if(!q){ box.innerHTML = '<div class="empty-note">Titel eingeben, um Termine zu finden.</div>'; return; }
+  const treffer = (window.customEvents||[]).filter(ev=>
+    !terminIstPrivatFuerMich(ev) && (ev.titel||'').toLowerCase().includes(q)
+  ).sort((a,b)=> String(a.mehrtaegig?a.startDatum:a.datum).localeCompare(String(b.mehrtaegig?b.startDatum:b.datum)));
+  if(!treffer.length){ box.innerHTML = '<div class="empty-note">Keine Termine gefunden.</div>'; return; }
+  const statusLabel = {info:'Info', schwebend:'⏳ wartet auf Bestätigung', bestaetigt:'✓ bestätigt', abgelehnt:'✕ abgelehnt'};
+  box.innerHTML = treffer.map(ev=>{
+    const wann = ev.mehrtaegig ? terminZeitText(ev)
+      : (ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?')
+        + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis+' Uhr' : '');
+    return `<div class="req-card" style="cursor:pointer;" onclick="springeZuSuchtreffer(${jsArg(ev.id)})">
+      <div class="req-times"><strong>${escapeHtml(terminAnzeigeTitel(ev))}</strong></div>
+      <div class="req-meta">📅 ${escapeHtml(wann)}</div>
+      <div class="req-meta">Erstellt von ${escapeHtml(ev.erstelltVonName||'?')} · ${statusLabel[ev.status]||escapeHtml(ev.status||'?')}</div>
+    </div>`;
+  }).join('');
+};
+window.springeZuSuchtreffer = function(id){
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(!ev) return;
+  document.getElementById('searchOverlay').classList.remove('show');
+  const iso = ev.mehrtaegig ? ev.startDatum : ev.datum;
+  if(!iso) return;
+  currentDate = new Date(iso+'T00:00:00');
+  setView('swipe');
+  setTimeout(()=>{
+    scrollSwipeToToday(true, iso);
+    const stunde = ev.von ? (parseFloat(ev.von.split(':')[0]) + parseFloat(ev.von.split(':')[1])/60) : 10;
+    openHourInspector(iso, stunde, 'custom_'+ev.id);
+  }, 250);
+};
 window.openRequestsModal = function(){
   try{
     document.getElementById('requestsOverlay').classList.add('show');
@@ -4489,6 +4588,7 @@ window.handleRegister = async function(){
   const password = document.getElementById('regPassword').value;
   const password2 = document.getElementById('regPassword2').value;
   if(!username || username.length < 2){ showAuthError('Bitte einen Benutzernamen (mind. 2 Zeichen) eingeben.'); return; }
+  if(!USERNAME_RE.test(username)){ showAuthError('Der Benutzername darf 2–60 Zeichen lang sein und nur Buchstaben, Zahlen, Leerzeichen sowie _ . , ! ? ( ) - enthalten.'); return; }
   if(password.length < 8){ showAuthError('Das Passwort muss mindestens 8 Zeichen lang sein.'); return; }
   if(password !== password2){ showAuthError('Die Passwörter stimmen nicht überein.'); return; }
   try{
@@ -4520,7 +4620,7 @@ window.openAdminFromCalendar = function(){
 window.openCalendarAsAdmin = function(){
   showScreen('calendarScreen');
   if(typeof setAdminUIState === 'function') setAdminUIState(true);
-  if(typeof render === 'function') render();
+  jumpToToday(); setView('swipe');
 };
 
 window.switchAdminTab = function(tab){
@@ -4538,10 +4638,16 @@ window.switchAdminTab = function(tab){
   if(tab==='chats') renderChatsOverview();
 };
 
+/* Fotos in privaten Info-Terminen gehören nur der erstellenden Person – auch nicht
+   in Exporten/Sicherungen für den Admin. */
+function chatOhnePrivateFotos(ev){
+  const privat = !!(ev && ev.privat && ev.status === 'info');
+  return (ev.chat||[]).map(m=> (privat && m.photo) ? {...m, photo:'[privates Foto – nicht exportiert]'} : m);
+}
 window.exportAllChats = function(){
   const items = [];
   (window.customEvents||[]).forEach(ev=>{
-    if(ev.chat && ev.chat.length) items.push({typ:'custom_events', id:ev.id, titel: ev.titel||'(ohne Titel)', datum: ev.datum||'?', chat: ev.chat});
+    if(ev.chat && ev.chat.length) items.push({typ:'custom_events', id:ev.id, titel: ev.titel||'(ohne Titel)', datum: ev.datum||'?', chat: chatOhnePrivateFotos(ev)});
   });
   Object.entries(window.eventOverrides||{}).forEach(([key,ov])=>{
     if(ov.chat && ov.chat.length) items.push({typ:'event_overrides', id:key, titel: key.split('_').slice(0,-1).join(' '), datum: key.split('_').slice(-1)[0], chat: ov.chat});
@@ -4557,6 +4663,26 @@ window.exportAllChats = function(){
   if(window.logEvent) window.logEvent('admin_chats_exportiert', {anzahlTermine: items.length});
 };
 
+/* Komplett-Sicherung für den Notfall (versehentlich gelöscht, falsche Regeln …):
+   lädt Betreuungsmuster, Termine, Anfragen, Overrides und Nutzerliste (ohne
+   Passwörter – die liegen nie hier) als eine JSON-Datei herunter. */
+window.adminSicherung = async function(){
+  try{
+    const lies = async (name)=> (await getDocs(collection(db,name))).docs.map(d=>({id:d.id, ...d.data()}));
+    const [regeln, termine, anfragen, overrides, nutzer, ausnahmen] = await Promise.all(['custody_rules','custom_events','slot_changes','event_overrides','users','custody_exceptions'].map(lies));
+    const daten = {
+      gesichertAm: new Date().toISOString(), appVersion: (document.getElementById('versionTag')||{}).textContent||'?',
+      nutzer: nutzer.map(u=>({id:u.id, username:u.username, role:u.role, status:u.status})),
+      betreuungsregeln: regeln, termine: termine.map(t=>({...t, chat: chatOhnePrivateFotos(t)})),
+      anfragen, overrides, betreuungsAusnahmenAlt: ausnahmen
+    };
+    const blob = new Blob([JSON.stringify(daten, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob); const a = document.createElement('a');
+    a.href = url; a.download = 'chaoskalender-sicherung-' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    if(window.logEvent) window.logEvent('admin_sicherung', {termine: termine.length, regeln: regeln.length});
+  } catch(e){ alert('Sicherung fehlgeschlagen: ' + (e&&e.message||e)); }
+};
 window.adminClearAllChats = async function(){
   const items = [];
   (window.customEvents||[]).forEach(ev=>{ if(ev.chat && ev.chat.length) items.push({coll:'custom_events', key:ev.id}); });
@@ -4676,7 +4802,7 @@ window.renderChatsOverview = function(){
           <div style="font-size:11px; font-weight:700;">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft);">${m.zeitstempel?new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</span></div>
           <div style="font-size:12.5px; white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text||'')}${m.photo?' 📷 (Foto)':''}</div>
         </div>
-        <button class="cr-del" style="flex-shrink:0;" onclick="adminDeleteChatMsg('${it.coll}','${it.key}','${m.msgId||('__idx'+idx)}')">✕</button>
+        <button class="cr-del" style="flex-shrink:0;" onclick="adminDeleteChatMsg(${jsArg(it.coll)},${jsArg(it.key)},${jsArg(m.msgId||('__idx'+idx))})">✕</button>
       </div>`).join('');
     return `
       <details style="border:1px solid var(--line); border-radius:8px; margin-bottom:8px; padding:8px 12px;">
@@ -4685,7 +4811,7 @@ window.renderChatsOverview = function(){
           <span style="color:${farbe}; font-size:12px; font-weight:${warnstufe!=='ok'?'700':'400'};">${(groesse/1024).toFixed(0)} KB${warnstufe==='kritisch'?' ⚠️ kritisch':warnstufe==='warnung'?' ⚠️':''}</span>
         </summary>
         <div style="margin-top:8px;">${nachrichtenHtml}</div>
-        <button class="cr-del" style="margin-top:8px;" onclick="adminClearWholeChat('${it.coll}','${it.key}')">🗑️ Ganzen Chat leeren</button>
+        <button class="cr-del" style="margin-top:8px;" onclick="adminClearWholeChat(${jsArg(it.coll)},${jsArg(it.key)})">🗑️ Ganzen Chat leeren</button>
       </details>`;
   }).join('');
 };
@@ -4693,18 +4819,20 @@ window.renderChatsOverview = function(){
 window.adminDeleteChatMsg = async function(coll, key, msgId){
   if(!confirm('Diese Nachricht wirklich löschen?')) return;
   try{
-    const currentData = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : window.getEventOverride(key);
-    if(!currentData || !currentData.chat) return;
-    let neueChat;
-    if(String(msgId).startsWith('__idx')){
-      // Fallback für ältere Nachrichten ohne msgId (vor diesem Update erstellt)
-      const idx = parseInt(String(msgId).slice(5), 10);
-      neueChat = currentData.chat.filter((_,i)=>i!==idx);
-    } else {
-      neueChat = currentData.chat.filter(m=>m.msgId!==msgId);
-    }
-    if(coll==='custom_events') await updateDoc(doc(db,'custom_events',key), {chat: neueChat});
-    else await setDoc(doc(db,'event_overrides',key), {chat: neueChat}, {merge:true});
+    await runTransaction(db, async (tx)=>{
+      const ref = doc(db, coll==='custom_events' ? 'custom_events' : 'event_overrides', key);
+      const snap = await tx.get(ref);
+      if(!snap.exists()) return;
+      const chat = snap.data().chat || [];
+      let neueChat;
+      if(String(msgId).startsWith('__idx')){
+        const idx = parseInt(String(msgId).slice(5), 10); // ältere Nachrichten ohne msgId
+        neueChat = chat.filter((_,i)=>i!==idx);
+      } else {
+        neueChat = chat.filter(m=>m.msgId!==msgId);
+      }
+      if(coll==='custom_events') tx.update(ref, {chat: neueChat}); else tx.set(ref, {chat: neueChat}, {merge:true});
+    });
     if(window.logEvent) window.logEvent('admin_chat_nachricht_geloescht', {coll,key,msgId});
     if(typeof renderChatsOverview === 'function' && document.getElementById('adminChats') && document.getElementById('adminChats').style.display !== 'none') renderChatsOverview();
   } catch(e){ alert('Fehler: '+e.message); }
@@ -4773,14 +4901,14 @@ function startLogListener(){
         const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
         html += `<tr style="border-bottom:1px solid var(--line); line-height:1.3; ${isError?'background:var(--holiday-bg);':''}">
           <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${zeitStr}</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${typLabel[d.typ]||d.typ||'?'}</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${typLabel[d.typ]||escapeHtml(d.typ||'?')}</td>
           <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
           <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.appVersion||'?')}</td>
           <td style="padding:4px 6px; white-space:nowrap; font-size:10.5px; vertical-align:top;">${escapeHtml(d.erwarteteRegelVersion||'?')}</td>
           <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.geraet||'?')}</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${d.bildschirmBreite||'?'}×${d.bildschirmHoehe||'?'}px</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${d.fensterBreite||'?'}×${d.fensterHoehe||'?'}px</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?scaleRatio+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.bildschirmBreite||'?')}×${escapeHtml(d.bildschirmHoehe||'?')}px</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.fensterBreite||'?')}×${escapeHtml(d.fensterHoehe||'?')}px</td>
+          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?escapeHtml(String(scaleRatio))+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
           <td style="padding:4px 6px; max-width:260px; font-size:10px; color:var(--ink-soft); word-break:break-word; vertical-align:top;">${escapeHtml(d.details||'')}</td>
         </tr>`;
       } catch(rowErr){
@@ -4833,6 +4961,7 @@ function startPendingListener(){
       const uid = docSnap.id;
       html += `<div class="pending-item">
         <div class="pname">${escapeHtml(d.username||'(ohne Namen)')}</div>
+        ${(/[^\x20-\x7E]/.test(String(d.username||'')) || !USERNAME_RE.test(String(d.username||''))) ? '<div style="font-size:11px; color:var(--holiday-text); margin-bottom:4px;">⚠️ Ungewöhnliche Zeichen im Namen – könnte ein Doppelgänger sein. Nur freischalten, wenn du die Person kennst.</div>' : ''}
         <select id="role-${uid}">
           <option value="janine">Janine (Mutter)</option>
           <option value="andi">Andi (Vater)</option>
@@ -4846,8 +4975,8 @@ function startPendingListener(){
           <option value="admin">Admin</option>
         </select>
         <div class="actions">
-          <button class="btn-approve" onclick="approveUser('${uid}')">Freischalten</button>
-          <button class="btn-reject" onclick="rejectUser('${uid}')">Ablehnen</button>
+          <button class="btn-approve" onclick="approveUser(${jsArg(uid)})">Freischalten</button>
+          <button class="btn-reject" onclick="rejectUser(${jsArg(uid)})">Ablehnen</button>
         </div>
       </div>`;
     });
@@ -4889,8 +5018,8 @@ function startUserListListener(){
         <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}</td>
         <td style="padding:6px; border-bottom:1px solid var(--line);">${selectHtml}${isOldRole?' <span style="font-size:10px; color:var(--holiday-text);">⚠️ alte Rolle "'+escapeHtml(d.role||'?')+'" – bitte aktualisieren</span>':''}</td>
         <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap;">
-          <button class="cr-save" onclick="saveUserRole('${uid}')">Speichern</button>
-          ${isMe?'':`<button class="cr-del" onclick="deleteUserAccount('${uid}','${escapeHtml(d.username||'?')}')">✕ Löschen</button>`}
+          <button class="cr-save" onclick="saveUserRole(${jsArg(uid)})">Speichern</button>
+          ${isMe?'':`<button class="cr-del" onclick="deleteUserAccount(${jsArg(uid)},${jsArg(d.username||'?')})">✕ Löschen</button>`}
         </td>
       </tr>`;
     });
@@ -4989,7 +5118,7 @@ onAuthStateChanged(auth, async (user) => {
     // (Admin landet zuerst im Adminbereich, siehe oben) -> Vorschau-
     // Funktionen (Alle Spalten, Namen anklicken) für alle anderen sperren.
     if(typeof setAdminUIState === 'function') setAdminUIState(false);
-    if(typeof render === 'function') render();
+    jumpToToday(); setView('swipe');
   }
   // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen;
   // den Anfragen-Knopf nur für die beiden Elternteile (echter Workflow) zeigen.
