@@ -1,13 +1,18 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v7-2026-09-28 (muss mit "erwarteteRegelVersion"
-// im Admin-Protokoll übereinstimmen – falls nicht, sind diese Regeln
-// noch nicht die neuesten, die die App erwartet).
-// Stand: Paket 2 (Login & Registrierung).
-// Nur die "users"-Sammlung ist bereits freigeschaltet. Alle anderen
-// Sammlungen (Kalender, Nachrichten, Dokumente ...) werden gezielt in den
-// nächsten Paketen ergänzt, bis dahin sind sie komplett gesperrt.
+// REGEL-VERSION: rules-v8-2026-09-28
+//
+// Neu in v8 (gegenüber v7), alles Sicherheits-Härtung:
+//  * users:  Registrierung nur mit gültigem Namen, keine Selbst-Änderungen mehr
+//            (Änderungen nur durch den Admin).
+//  * logs:   nur aktive Personen, feste Feldliste – kein beliebiger Inhalt mehr.
+//  * custom_events: Info-Termine ändern nie die Betreuung; niemand kann sich selbst
+//            bestätigen; nur genannte Bestätiger können bestätigen/ablehnen; andere
+//            aktive Personen dürfen nur chatten (Chat darf nicht schrumpfen).
+//  * event_overrides: Zeiten/Betreuung nur Janine, Andi, Admin; alle anderen nur Chat.
+//  * slot_changes: Status ändern nur, wer gerade am Zug ist.
+//  * Dokument-IDs nur aus harmlosen Zeichen.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -20,82 +25,111 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function myRole() {
-      return userDoc().data.role;
-    }
-
-    function myStatus() {
-      return userDoc().data.status;
-    }
-
     function isActive() {
       return isSignedIn() && userDoc().data.status == 'active';
     }
 
     function isAdmin() {
-      return isSignedIn() && isActive() && myRole() == 'admin';
+      return isActive() && userDoc().data.role == 'admin';
+    }
+
+    function isParentOrAdmin() {
+      return isActive() && userDoc().data.role in ['janine', 'andi', 'admin'];
+    }
+
+    function okId(id) {
+      return id.matches('[A-Za-z0-9_.-]{1,120}');
+    }
+
+    function okStr(v, n) {
+      return v is string && v.size() <= n;
+    }
+
+    function numOrShort(v) {
+      return v is number || (v is string && v.size() <= 12);
     }
 
     // --- users ---------------------------------------------------------
     match /users/{userId} {
-      // Lesen: eigenes Profil, Admin, oder jede AKTIVE Person (nötig, damit
-      // z.B. Andi den Namen/die UID von Janine finden kann, um ihr eine
-      // Änderungsanfrage zu schicken). Reine Profildaten, keine Kalenderdaten.
+      // Lesen: eigenes Profil, Admin oder jede AKTIVE Person (Namen/UIDs werden
+      // z.B. für Änderungsanfragen gebraucht). Reine Profildaten.
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isActive());
 
-      // Registrierung: ein neuer Account legt AUSSCHLIESSLICH sein eigenes
-      // Dokument an, zwingend mit status "pending" und OHNE eigene
-      // Rollenwahl (die Rolle vergibt ausschließlich der Admin bei der
-      // Freischaltung).
+      // Registrierung: nur das EIGENE Dokument, zwingend "pending", ohne Rolle,
+      // nur diese drei Felder, Name aus harmlosen Zeichen (2–60).
       allow create: if isSignedIn()
                     && request.auth.uid == userId
+                    && request.resource.data.keys().hasOnly(['username', 'status', 'createdAt'])
                     && request.resource.data.status == 'pending'
-                    && !('role' in request.resource.data);
+                    && okStr(request.resource.data.username, 60)
+                    && request.resource.data.username.matches('[A-Za-zäöüÄÖÜéèàß0-9 _.,!?()-]{2,60}')
+                    && (!('createdAt' in request.resource.data) || okStr(request.resource.data.createdAt, 40));
 
-      // Ändern: Admin darf Status/Rolle setzen (Freischaltung). Die Person
-      // selbst darf z. B. die optionale E-Mail-Adresse pflegen, aber nicht
-      // ihren eigenen Status oder ihre Rolle selbst hochstufen.
-      allow update: if isAdmin() || (
-                       isSignedIn() && request.auth.uid == userId &&
-                       request.resource.data.status == resource.data.status &&
-                       request.resource.data.role  == resource.data.role
-                     );
-
+      // Ändern (Freischalten, Rolle) und Löschen: nur der Admin. Die App ändert
+      // das eigene Profil nirgends – deshalb keine Selbst-Änderung (verhindert
+      // Umbenennen in Doppelgänger-Namen und jedes Hochstufen).
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     // --- logs: Login-/Geräte-Protokoll --------------------------------
     match /logs/{logId} {
-      // Jede angemeldete Person darf einen Log-Eintrag über SICH SELBST
-      // anlegen (uid muss der eigenen entsprechen) – nie für andere.
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      // Lesen darf ausschliesslich der Admin (Datenschutz: Geräte-/
-      // Nutzungsdaten sind sensibel).
+      // Nur aktive Personen, nur über sich selbst, nur bekannte Felder mit
+      // passenden Typen/Längen (kein beliebiger Inhalt, keine Riesen-Dokumente).
+      allow create: if isActive()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly([
+                         'uid', 'typ', 'erwarteteRegelVersion', 'username', 'role', 'zeitpunkt',
+                         'appVersion', 'url', 'sprache', 'zeitzone', 'online', 'geraet', 'userAgent',
+                         'bildschirmBreite', 'bildschirmHoehe', 'fensterBreite', 'fensterHoehe',
+                         'documentClientBreite', 'visualViewportScale', 'pixelRatio',
+                         'textSkalierungsVerdacht', 'textSkalierungsDetails', 'details'
+                       ])
+                    && okStr(request.resource.data.typ, 40)
+                    && request.resource.data.typ.matches('[a-z0-9_]{1,40}')
+                    && (!('details' in request.resource.data) || okStr(request.resource.data.details, 4100))
+                    && (!('username' in request.resource.data) || okStr(request.resource.data.username, 100))
+                    && (!('role' in request.resource.data) || okStr(request.resource.data.role, 40))
+                    && (!('url' in request.resource.data) || okStr(request.resource.data.url, 600))
+                    && (!('userAgent' in request.resource.data) || okStr(request.resource.data.userAgent, 600))
+                    && (!('bildschirmBreite' in request.resource.data) || numOrShort(request.resource.data.bildschirmBreite))
+                    && (!('bildschirmHoehe' in request.resource.data) || numOrShort(request.resource.data.bildschirmHoehe))
+                    && (!('fensterBreite' in request.resource.data) || numOrShort(request.resource.data.fensterBreite))
+                    && (!('fensterHoehe' in request.resource.data) || numOrShort(request.resource.data.fensterHoehe))
+                    && (!('textSkalierungsVerdacht' in request.resource.data) || numOrShort(request.resource.data.textSkalierungsVerdacht));
+      // Lesen darf ausschließlich der Admin (Geräte-/Nutzungsdaten sind sensibel).
       allow read: if isAdmin();
       allow update, delete: if false;
     }
 
     // --- slot_changes: Änderungsanfragen zwischen den Elternteilen -----
     match /slot_changes/{changeId} {
-      // Lesen: nur die beiden Beteiligten (Anfragende/r + Empfänger/in)
-      // oder Admin.
       allow read: if isSignedIn() && (
                      isAdmin() ||
                      request.auth.uid == resource.data.angefragtVonUid ||
                      request.auth.uid == resource.data.angefragtAnUid
                    );
-      // Neu anlegen: nur eine aktive Person, und zwar als "angefragtVon"
-      // über sich selbst (nicht im Namen anderer).
-      allow create: if isSignedIn() && isActive()
-                    && request.resource.data.angefragtVonUid == request.auth.uid;
-      // Ändern (akzeptieren/ablehnen/gegenvorschlagen): nur die beiden
-      // Beteiligten dürfen den Status/Verlauf fortschreiben.
-      allow update: if isSignedIn() && (
-                       request.auth.uid == resource.data.angefragtVonUid ||
-                       request.auth.uid == resource.data.angefragtAnUid
+      // Anlegen: nur als "angefragtVon" über sich selbst, an eine existierende
+      // andere Person, immer als "offen" (nie schon akzeptiert).
+      allow create: if isActive() && okId(changeId)
+                    && request.resource.data.angefragtVonUid == request.auth.uid
+                    && request.resource.data.status == 'offen'
+                    && request.resource.data.angefragtAnUid is string
+                    && request.resource.data.angefragtAnUid != request.auth.uid
+                    && exists(/databases/$(database)/documents/users/$(request.resource.data.angefragtAnUid));
+      // Ändern: nur die beiden Beteiligten; Beteiligte bleiben unverändert;
+      // den Status ändern (akzeptieren/ablehnen/Gegenvorschlag) darf nur, wer
+      // gerade am Zug ist – niemand kann seine eigene Anfrage selbst akzeptieren.
+      allow update: if isActive() && (
+                       isAdmin() || (
+                         (request.auth.uid == resource.data.angefragtVonUid ||
+                          request.auth.uid == resource.data.angefragtAnUid)
+                         && request.resource.data.angefragtVonUid == resource.data.angefragtVonUid
+                         && request.resource.data.angefragtAnUid == resource.data.angefragtAnUid
+                         && (request.resource.data.status == resource.data.status ||
+                             request.auth.uid == resource.data.get('aktuellAmZugUid', ''))
+                       )
                      );
-      // Löschen: Admin, oder die beiden Beteiligten (zum Aufräumen
-      // erledigter/vergangener Anfragen).
       allow delete: if isSignedIn() && (
                        isAdmin() ||
                        request.auth.uid == resource.data.angefragtVonUid ||
@@ -103,49 +137,92 @@ service cloud.firestore {
                      );
     }
 
-    // --- event_overrides: verschobene/abgesagte Fixtermine (Bandprobe,
-    // Volleyball, Clubs, Hort) -------------------------------------
+    // --- event_overrides: verschobene/abgesagte Fixtermine (Schule, Hort,
+    // Club, Bandprobe), Chats dazu und tagesgenaue Betreuungs-Ausnahmen
+    // (Schlüssel "betreuung_<Datum>") --------------------------------
     match /event_overrides/{key} {
-      allow read: if isSignedIn() && isActive();
-      // Für alle aktiven Personen geöffnet (nicht nur Eltern/Admin) –
-      // jede Person soll bei Schule/Hort/Club/Bandprobe mitchatten
-      // können, auch wenn sie die Uhrzeit nicht selbst ändern soll.
-      allow write: if isSignedIn() && isActive();
+      allow read: if isActive();
+      // Zeiten/Absagen/Betreuung: nur Janine, Andi und Admin. Alle anderen
+      // aktiven Personen dürfen ausschließlich im Chat schreiben.
+      allow create: if isActive() && okId(key)
+                    && (isParentOrAdmin() || request.resource.data.keys().hasOnly(['chat']));
+      allow update: if isActive()
+                    && (isParentOrAdmin()
+                        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['chat']));
+      allow delete: if isParentOrAdmin();
     }
 
-    // --- custom_events: frei eintragbare Termine (z.B. "Zahnarzt
-    // Janosch"), je nach Kontext direkt sichtbar oder als Anfrage -------
+    // --- custom_events: frei eintragbare Termine ----------------------
     match /custom_events/{eventId} {
-      allow read: if isSignedIn() && isActive();
-      allow create: if isSignedIn() && isActive() &&
-                     request.resource.data.erstelltVonUid == request.auth.uid;
-      // Update darf jede aktive Person (u.a. für den Chat, der an jedem
-      // Termin hängt, und um eine Löschanfrage zu markieren) – NUR das
-      // Löschen selbst bleibt strenger (siehe unten).
-      allow update: if isSignedIn() && isActive();
-      // Löschen: ausschliesslich Admin oder die Person, die den Termin
-      // ursprünglich erstellt hat. Alle anderen können nur über den Chat
-      // eine Löschanfrage stellen.
-      allow delete: if isSignedIn() && isActive() &&
+      allow read: if isActive();
+
+      // Anlegen: als sich selbst; nur "info" oder "schwebend" (nie schon
+      // "bestaetigt"); ein reiner Info-Termin ändert NIE die Betreuung;
+      // noch keine Bestätigungen.
+      allow create: if isActive() && okId(eventId)
+                    && request.resource.data.erstelltVonUid == request.auth.uid
+                    && request.resource.data.status in ['info', 'schwebend']
+                    && okStr(request.resource.data.titel, 200)
+                    && (request.resource.data.status == 'schwebend'
+                        || request.resource.data.get('beeinflusstBetreuung', false) == false)
+                    && request.resource.data.get('bestaetigtVon', []).size() == 0;
+
+      allow update: if isActive() && (
+        // Admin: alles.
+        isAdmin() ||
+
+        // Ersteller: darf bearbeiten, aber nicht die Herkunft ändern, sich nicht
+        // selbst bestätigen, und einen Info-Termin nie mit Betreuungs-Wirkung
+        // versehen. Ein bereits bestätigter Termin behält seine Zeit-/Betreuungs-
+        // Daten, solange er "bestaetigt" bleibt (Änderung nur über neue Anfrage).
+        (resource.data.erstelltVonUid == request.auth.uid
+          && request.resource.data.erstelltVonUid == resource.data.erstelltVonUid
+          && (request.resource.data.status != 'bestaetigt' || resource.data.status == 'bestaetigt')
+          && (request.resource.data.status != 'info'
+              || request.resource.data.get('beeinflusstBetreuung', false) == false)
+          && !(resource.data.status == 'bestaetigt' && request.resource.data.status == 'bestaetigt'
+               && request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                    'beeinflusstBetreuung', 'betreuungWer', 'datum', 'startDatum', 'endDatum',
+                    'von', 'bis', 'mehrtaegig', 'bestaetigerUids']))) ||
+
+        // Genannte Bestätiger: nur bestätigen/ablehnen (+ Chat), nur für sich
+        // selbst, und "bestaetigt" nur, wenn wirklich alle Genannten bestätigt haben.
+        (request.auth.uid in resource.data.get('bestaetigerUids', [])
+          && resource.data.status == 'schwebend'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'bestaetigtVon', 'status', 'ablehnungsGrund', 'ablehnungGesehen', 'chat'])
+          && request.resource.data.status in ['schwebend', 'bestaetigt', 'abgelehnt']
+          && request.resource.data.get('bestaetigtVon', []).toSet()
+               .difference(resource.data.get('bestaetigtVon', []).toSet()).hasOnly([request.auth.uid])
+          && (request.resource.data.status != 'bestaetigt'
+              || resource.data.get('bestaetigerUids', []).toSet()
+                   .difference(request.resource.data.get('bestaetigtVon', []).toSet()).size() == 0)
+          && request.resource.data.get('chat', []).size() >= resource.data.get('chat', []).size()) ||
+
+        // Alle anderen aktiven Personen: nur Chat – und der darf nicht schrumpfen.
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['chat'])
+          && request.resource.data.get('chat', []).size() >= resource.data.get('chat', []).size())
+      );
+
+      // Löschen: nur Admin oder die Person, die den Termin erstellt hat.
+      allow delete: if isActive() &&
                      (resource.data.erstelltVonUid == request.auth.uid || isAdmin());
     }
 
-    // --- custody_rules: Standard-Betreuungsmuster (wiederkehrend), nur
-    // Admin darf es ändern, alle aktiven Personen dürfen es lesen -------
+    // --- custody_rules: Standard-Betreuungsmuster; nur der Admin ändert ---
     match /custody_rules/{ruleId} {
-      allow read: if isSignedIn() && isActive();
+      allow read: if isActive();
       allow write: if isAdmin();
     }
-    // Tagesgenaue Betreuungs-Ausnahmen (z.B. durch eine akzeptierte
-    // Betreuungs-Änderungsanfrage) – für alle aktiven Personen offen,
-    // da sie durch acceptRequest() beim Bestätigen gesetzt werden, nicht
-    // nur vom Admin.
+
+    // --- custody_exceptions: ALTE Sammlung, nur noch lesbar (die App schreibt
+    // Betreuungs-Ausnahmen inzwischen in event_overrides). ---------------
     match /custody_exceptions/{datum} {
-      allow read: if isSignedIn() && isActive();
-      allow write: if isSignedIn() && isActive();
+      allow read: if isActive();
+      allow write: if isAdmin();
     }
 
-    // --- alles andere: vorerst komplett gesperrt ------------------------
+    // --- alles andere: komplett gesperrt -------------------------------
     match /{document=**} {
       allow read, write: if false;
     }
