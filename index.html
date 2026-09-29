@@ -111,6 +111,20 @@
   .multi-line::before{content:''; position:absolute; left:-5px; right:-5px; top:0; bottom:0;}
   .multi-label{position:absolute; z-index:5; height:14px; line-height:14px; box-sizing:border-box; padding:0 5px 0 4px; font-size:9.5px; font-weight:700; color:#7A5A00; background:#F8F0DC; border-radius:0 5px 5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;}
   .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
+  .multi-label.special{background:#EEE8F6; color:#4F3A75;}
+  .wueb-tag{font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin:12px 0 4px;}
+  .wueb-tag.heute{color:var(--pending);}
+  .wueb-punkt{display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; background:#F6F5F1; margin-bottom:5px; cursor:pointer;}
+  .wueb-punkt:active{background:#ECEAE3;}
+  .wueb-punkt.wichtig{background:var(--pending-bg); }
+  .wueb-icon{font-size:16px; width:20px; text-align:center; flex-shrink:0;}
+  .wueb-text{flex:1; min-width:0; display:flex; flex-direction:column;}
+  .wueb-titel{font-size:13.5px; line-height:1.3;}
+  .wueb-zeit{font-weight:700;}
+  .wueb-sub{font-size:11.5px; color:var(--ink-soft); margin-top:1px;}
+  .wueb-pfeil{color:var(--ink-soft); font-size:18px; flex-shrink:0;}
+  .wueb-leer{padding:18px 4px; color:var(--ink-soft); font-size:13.5px; text-align:center;}
+  .wueb-nav{border:none; background:#F2F1EC; border-radius:8px; padding:4px 10px; font-size:14px; cursor:pointer;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
@@ -499,6 +513,7 @@
 
   <div class="test-row">
     <button class="test-btn" onclick="jumpToToday()">Heute</button>
+    <button class="test-btn" id="wuebBtn" onclick="oeffneWochenueberblick()">📋 Woche</button>
     <button class="test-btn" id="nextHolBtn" onclick="jumpToNextHoliday(1)">…</button>
     <button class="compact-toggle-btn" id="compactBtn" onclick="toggleCompactView()" title="Zwischen Detail-Ansicht (8-20 Uhr) und ganzem Tag umschalten">Full Day</button>
   </div>
@@ -569,6 +584,24 @@
       <button class="btn" style="background:var(--holiday-text);" onclick="cancelEventOverride()">Absagen</button>
       <button class="btn" onclick="saveEventOverride()">Speichern</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== WOCHENÜBERBLICK (ab Sonntag 16 Uhr) ===== -->
+<div class="overlay" id="wochenueberblickOverlay" onclick="if(event.target===this) wuebSchliessen()">
+  <div class="modal" style="max-width:460px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <h3 style="margin:0;">📋 Wochenüberblick</h3>
+      <span onclick="wuebSchliessen()" style="cursor:pointer; font-size:24px; color:var(--ink-soft); line-height:1; padding:0 4px;">×</span>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin:6px 0 2px;">
+      <button class="wueb-nav" onclick="wuebWoche(-1)" title="Woche vorher">‹</button>
+      <div class="sub" id="wuebTitel" style="margin:0;">—</div>
+      <button class="wueb-nav" onclick="wuebWoche(1)" title="Woche danach">›</button>
+    </div>
+    <div class="sub" style="font-size:11.5px; margin:0 0 4px;">Alles, was diese Woche vom Normalfall abweicht. Antippen für Details.</div>
+    <div id="wuebInhalt"></div>
+    <div class="modal-actions" style="margin-top:14px;"><button class="btn" onclick="wuebSchliessen()">Alles klar</button></div>
   </div>
 </div>
 
@@ -695,12 +728,14 @@ const SPECIAL_SCHOOL_DAYS = {
 };
 
 /* Einzelne Schul-/Familien-Termine (kein Feiertag, aber wichtig) */
+/* von/bis = Dauer des Balkens im Kalender. Ohne von/bis gilt der Termin
+   für den ganzen Tag. "time" ist nur der Anzeigetext. */
 const SCHOOL_EVENTS = [
-  {date:'2026-09-04', time:'09:40', title:'Klassenfoto', who:'mischa'},
-  {date:'2026-09-10', time:'19:30', title:'Elternabend (Singsaal Dorf)', who:'eltern'},
+  {date:'2026-09-04', time:'09:40', von:'09:40', bis:'10:10', title:'Klassenfoto', who:'mischa'},
+  {date:'2026-09-10', time:'19:30', von:'19:30', bis:'21:30', title:'Elternabend (Singsaal Dorf)', who:'eltern'},
   {date:'2026-09-24', time:'', title:'Stufensporttag (Zeit noch offen)', who:'mischa'},
   {date:'2026-11-12', time:'', title:'Nationaler Zukunftstag (freiwillig)', who:'mischa'},
-  {date:'2026-11-13', time:'abends', title:'Erzählabend (freiwillig, Zeit offen)', who:'mischa'},
+  {date:'2026-11-13', time:'abends', von:'18:00', bis:'21:00', title:'Erzählabend (freiwillig, Zeit offen)', who:'mischa'},
 ];
 /* Klassenlager Mischa: Mo 7.6.–Fr 11.6.2027, ganze Woche inkl. Nächte */
 const CAMP_MISCHA = ['2027-06-07','2027-06-11'];
@@ -774,28 +809,83 @@ function mehrtaegigTagesbereich(ev, iso){
   const b = (iso===ev.endDatum && bis!==null) ? bis : 24;
   return b > a ? [a,b] : null;
 }
-/* Mehrtägige Termine als senkrechte Linie im Tagesraster – direkt rechts
-   neben der Betreuungs-Linie (mit kleinem Abstand), über die belegte Zeit. */
+/* Spezielle Tage (Schul-Sondertermine wie Stufensporttag + schulfreie
+   Einzeltage wie Schilftag) – für ALLE sichtbar, unabhängig von der
+   gewählten Person. Werden als ganztägiger Balken gezeichnet. */
+function getSondertageFuerTag(iso){
+  const out = [];
+  const sp = SPECIAL_SCHOOL_DAYS[iso];
+  if(sp) out.push({titel: sp.label, zeit: '', von: null, bis: null});
+  SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
+    const von = zeitZuStunden(ev.von), bis = zeitZuStunden(ev.bis);
+    const mitZeit = von !== null && bis !== null && bis > von;
+    out.push({titel: ev.title, zeit: ev.time || '', von: mitZeit ? von : null, bis: mitZeit ? bis : null,
+              zeitText: mitZeit ? (ev.von + '–' + ev.bis) : (ev.time || '')});
+  });
+  return out;
+}
+/* Anzahl senkrechter Balken an einem Tag (Sondertage + mehrtägige Termine). */
+function anzahlTagesBalken(iso){
+  return getSondertageFuerTag(iso).length + getMehrtaegigeTermineFuerTag(iso).length;
+}
+/* Wie viele Pixel ein Tag breiter werden muss: bis 2 Balken passt alles in
+   die normale Spalte, ab dem 3. Balken wird der Tag pro Balken um 16px
+   breiter (gleicher Abstand wie zwischen den Balken). KEINE Obergrenze:
+   100 Balken = 98 × 16px zusätzliche Breite. */
+const BALKEN_ABSTAND = 16;
+function tagesZusatzBreite(iso){
+  return Math.max(0, anzahlTagesBalken(iso) - 2) * BALKEN_ABSTAND;
+}
+/* Spaltenvorlage für die 7-Tage-Wochenraster (Kopf und Körper gleich),
+   damit ein Tag mit vielen Balken breiter wird. */
+function wochenSpaltenStil(start){
+  const cols = [];
+  let minSumme = 34;
+  for(let i=0;i<7;i++){
+    const d = new Date(start); d.setDate(d.getDate()+i);
+    const extra = tagesZusatzBreite(isoDate(d));
+    cols.push(`minmax(${92+extra}px,${extra ? (1 + extra/92).toFixed(2) : 1}fr)`);
+    minSumme += 92 + extra;
+  }
+  return `grid-template-columns:34px ${cols.join(' ')};min-width:${Math.max(698,minSumme)}px;`;
+}
+
+/* Senkrechte Balken im Tagesraster, direkt rechts neben der Betreuungs-
+   Linie (mit kleinem Abstand): zuerst die speziellen Tage (lila, ganztägig),
+   dann mehrtägige Termine (gold, über die belegte Zeit). */
 function renderMehrtaegigLinienHtml(iso, startHour, px){
   let html = '', i = 0;
-  getMehrtaegigeTermineFuerTag(iso).forEach(ev=>{
-    const r = mehrtaegigTagesbereich(ev, iso);
-    if(!r) return;
+  const stop = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
+  function balken(r, bg, labelKlasse, titel, tip, oeffnen){
     const top = (r[0]-startHour)*px, height = (r[1]-r[0])*px;
     if(height <= 0) return;
-    const pending = ev.status === 'schwebend';
-    const bg = pending ? 'repeating-linear-gradient(to bottom, #C9A54B 0 6px, transparent 6px 10px)' : '#B58900';
-    const left = 7 + i*16;
-    const oeffnen = `event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')`;
-    const zusatz = (iso===ev.startDatum && ev.von) ? ' ab '+ev.von : ((iso===ev.endDatum && ev.bis) ? ' bis '+ev.bis : '');
-    const tip = escapeHtml(terminAnzeigeTitel(ev) + zusatz + (pending?' (wartet auf Bestätigung)':''));
-    html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${left}px;background:${bg};" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}"></div>`;
+    const left = 7 + i*BALKEN_ABSTAND;
+    html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${left}px;background:${bg};" ${stop} onclick="${oeffnen}" title="${tip}"></div>`;
     // Beschriftung: einmal pro Tag direkt neben der Linie. Ab 9 Uhr (im
     // Detail-Modus sichtbar), bei kurzen Abschnitten am Linienanfang.
     const ank = (r[1] - Math.max(r[0],9) >= 0.75) ? Math.max(r[0],9) : r[0];
-    const labelTop = (ank-startHour)*px + 3 + i*15;
-    html += `<div class="multi-label ${pending?'pending':''}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="${oeffnen}" title="${tip}">${escapeHtml(terminAnzeigeTitel(ev))}</div>`;
+    let labelTop = (ank-startHour)*px + 3 + i*15;
+    const platz = Math.max(30, (24-startHour)*px - 18);
+    if(labelTop > platz) labelTop = 3 + ((labelTop - 3) % platz);
+    html += `<div class="multi-label ${labelKlasse}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" ${stop} onclick="${oeffnen}" title="${tip}">${escapeHtml(titel)}</div>`;
     i++;
+  }
+
+  getSondertageFuerTag(iso).forEach(sd=>{
+    const text = sd.titel + (sd.zeitText ? ' · ' + sd.zeitText : '');
+    const r = sd.von !== null ? [sd.von, sd.bis] : [0,24];
+    balken(r, '#7B5EA7', 'special', sd.titel, escapeHtml(text), `event.stopPropagation(); alert(${jsArg(text)})`);
+  });
+
+  getMehrtaegigeTermineFuerTag(iso).forEach(ev=>{
+    const r = mehrtaegigTagesbereich(ev, iso);
+    if(!r) return;
+    const pending = ev.status === 'schwebend';
+    const bg = pending ? 'repeating-linear-gradient(to bottom, #C9A54B 0 6px, transparent 6px 10px)' : '#B58900';
+    const oeffnen = `event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')`;
+    const zusatz = (iso===ev.startDatum && ev.von) ? ' ab '+ev.von : ((iso===ev.endDatum && ev.bis) ? ' bis '+ev.bis : '');
+    const tip = escapeHtml(terminAnzeigeTitel(ev) + zusatz + (pending?' (wartet auf Bestätigung)':''));
+    balken(r, bg, pending?'pending':'', terminAnzeigeTitel(ev), tip, oeffnen);
   });
   return html;
 }
@@ -1569,7 +1659,8 @@ function renderWeek(){
   const PXH = getCompactPxH(44);
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
-  let head = '<div class="week-head"><div></div>';
+  const spaltenStil = wochenSpaltenStil(start);
+  let head = `<div class="week-head" style="${spaltenStil}"><div></div>`;
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const iso = isoDate(d);
@@ -1593,7 +1684,7 @@ function renderWeek(){
   }
   head += '</div>';
 
-  let body = '<div class="week-body"><div class="time-col">';
+  let body = `<div class="week-body" style="${spaltenStil}"><div class="time-col">`;
   for(let h=startHour; h<endHour; h+=2) body += `<div class="slot-h" style="height:${PXH*2}px;">${h}</div>`;
   body += '</div>';
 
@@ -1720,7 +1811,8 @@ function renderKidWeek(kid){
   const dowLabels = ['Mo','Di','Mi','Do','Fr','Sa','So'];
   const kidLabel = kid==='janosch' ? 'Janosch' : 'Mischa';
 
-  let head = '<div class="week-head"><div></div>';
+  const spaltenStil = wochenSpaltenStil(start);
+  let head = `<div class="week-head" style="${spaltenStil}"><div></div>`;
   for(let i=0;i<7;i++){
     const d = new Date(start); d.setDate(d.getDate()+i);
     const iso = isoDate(d);
@@ -1737,7 +1829,7 @@ function renderKidWeek(kid){
   }
   head += '</div>';
 
-  let body = '<div class="week-body"><div class="time-col">';
+  let body = `<div class="week-body" style="${spaltenStil}"><div class="time-col">`;
   for(let h=startHour; h<endHour; h+=2) body += `<div class="slot-h" style="height:88px;">${h}</div>`;
   body += '</div>';
 
@@ -1972,10 +2064,8 @@ function renderDay(){
       body += `<div class="event" style="top:${top}px;height:${height}px;${spaltenStil2}z-index:3;${terminFarbStil(ev,borderStyle)}cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, ${jsArg('custom_'+ev.id)})"><strong>${escapeHtml(terminAnzeigeTitel(ev))}${statusMark}</strong></div>`;
     });
   }
-  SCHOOL_EVENTS.filter(ev=>ev.date===iso).forEach(ev=>{
-    const t = ev.time && ev.time.includes(':') ? parseFloat(ev.time.split(':')[0]) + parseFloat(ev.time.split(':')[1])/60 : 8;
-    body += block(t, t+0.5, ev.title, 'var(--pending-bg)', 'var(--holiday-text)', false, 4);
-  });
+  // Spezielle Tage (Stufensporttag usw.) erscheinen als Balken, siehe
+  // renderMehrtaegigLinienHtml.
 
   body += `</div></div>`;
   return head + body;
@@ -2006,7 +2096,9 @@ function renderSwipeView(){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     const isToday = off===0;
 
-    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}" data-iso="${iso}" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
+    const zusatzBreite = tagesZusatzBreite(iso);
+    const breiteStil = zusatzBreite ? ` style="flex-basis:calc(clamp(88px, 24vw, 130px) + ${zusatzBreite}px);"` : '';
+    daysHtml += `<div class="swipe-daycol ${isToday?'is-today':''}"${breiteStil} data-iso="${iso}" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
     daysHtml += `<div class="swipe-head" onclick="jumpToIso('${iso}'); setView('tag');"><div class="swipe-dow">${dowLabels[dow]}</div><div class="swipe-daynum">${d.getDate()}.${d.getMonth()+1}.</div>`;
     if(hol) daysHtml += `<div class="swipe-holtag">${hol.length>12?hol.slice(0,11)+'…':hol}</div>`;
     daysHtml += `</div>`;
@@ -2322,9 +2414,220 @@ function renderPartnerStrip(){
   return html;
 }
 
+/* ====================== WOCHENÜBERBLICK ======================
+   Ab Sonntag 16 Uhr erscheint beim Öffnen einmal eine kurze Übersicht
+   über die kommende Woche (Mo–So): alles, was vom Normalfall abweicht –
+   Betreuung anders als Standard, Sondertermine (Elternabend usw.),
+   Feiertage/Ferien, verschobene/abgesagte feste Termine und frei
+   eingetragene Termine. Wegklicken merkt sich das Gerät pro Woche. Über
+   den Knopf "📋 Woche" lässt sie sich jederzeit wieder öffnen. */
+let wuebWocheStart = null; // Montag der angezeigten Woche
+
+function wuebZielWoche(){
+  const jetzt = new Date();
+  const mo = startOfWeek(jetzt);
+  if(jetzt.getDay()===0 && jetzt.getHours()>=16) mo.setDate(mo.getDate()+7);
+  return mo;
+}
+function wuebSpeicherKey(mo){ return 'chaos_wochenueberblick_' + (window.myUid||'x') + '_' + isoDate(mo); }
+
+/* Standard-Betreuung eines Tages (nur Wochenregel, ohne Ausnahmen und
+   ohne Termine) – Vergleichsbasis für "weicht ab". */
+function standardBetreuungSegmente(d){
+  try{
+    if(window.custodyRules && window.custodyRules.length){
+      const segs = getCustodySegmentsFromRules(d, window.custodyRules);
+      const sauber = bereinigeTagesSegmente(segs||[]);
+      if(sauber.length) return sauber;
+    }
+  } catch(e){}
+  return bereinigeTagesSegmente(getCustodySegmentsHardcoded(d));
+}
+function segmenteGleich(x, y){
+  const norm = a => JSON.stringify(a.map(s=>[s.who, Math.round(s.from*4), Math.round(s.to*4)]));
+  return norm(x) === norm(y);
+}
+function betreuungText(segs){
+  return segs.map(s=>{
+    let t = whoLabel(s.who) || s.who;
+    if(s.from > 0.01) t += ' ab ' + fmtHintH(s.from);
+    if(s.to < 23.99) t += ' bis ' + fmtHintH(s.to);
+    return t;
+  }).join(', ');
+}
+
+const WUEB_FIX_LABEL = {
+  schule_janosch:'Schule Janosch', schule_mischa:'Schule Mischa',
+  hort_janosch:'Hort Janosch', hort_mischa:'Hort Mischa',
+  club_kidsclub:'KidsClub (Mischa)', club_boysclub:'BoysClub (Janosch)',
+  bandprobe_janine:'Bandprobe Janine', bandprobe_mischa:'Bandprobe Mischa',
+  volleyball_andi:'Volleyball Andi'
+};
+
+function sammleWochenPunkte(mo){
+  const tage = [];
+  const erledigteFerien = new Set();
+  for(let i=0;i<7;i++){
+    const d = new Date(mo); d.setDate(mo.getDate()+i);
+    const iso = isoDate(d);
+    const punkte = [];
+    const add = (p) => punkte.push(p);
+
+    // Feiertag / Ferien (Ferien nur einmal pro Woche)
+    const fei = getHolidayName(d);
+    if(fei) add({icon:'🎉', zeit:'', titel:fei + (isSchoolDay(d)?'':' · schulfrei'), klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+    const fer = getSchoolHolidayName(d);
+    if(fer && !erledigteFerien.has(fer)){
+      erledigteFerien.add(fer);
+      const eintrag = SCHOOL_HOLIDAYS.find(h=>h[2]===fer);
+      const bisTxt = eintrag ? ' (bis ' + eintrag[1].slice(8,10) + '.' + eintrag[1].slice(5,7) + '.)' : '';
+      add({icon:'🏖', zeit:'', titel:fer + bisTxt, klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+    }
+    // Klassenlager
+    if(iso >= CAMP_MISCHA[0] && iso <= CAMP_MISCHA[1] && (i===0 || iso===CAMP_MISCHA[0])){
+      add({icon:'⛺', zeit:'', titel:'Klassenlager Mischa (bis ' + CAMP_MISCHA[1].slice(8,10) + '.' + CAMP_MISCHA[1].slice(5,7) + '.)', klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+    }
+
+    // Betreuung weicht vom Standard ab
+    try{
+      const ist = bereinigeTagesSegmente(getCustodySegments(d));
+      const std = standardBetreuungSegmente(d);
+      if(ist.length && !segmenteGleich(ist, std)){
+        const erstes = ist.find((s,k)=>!std[k] || s.who!==std[k].who || Math.abs(s.from-std[k].from)>0.1) || ist[0];
+        const stunde = (erstes.from + Math.min(erstes.to, erstes.from+1)) / 2;
+        add({icon:'👪', zeit:'', titel:'Betreuung anders: ' + betreuungText(ist),
+             sub:'normal: ' + betreuungText(std), wichtig:true,
+             klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${stunde}, 'custody')`, sort:-1});
+      }
+    } catch(e){ console.error('Wochenüberblick Betreuung:', e); }
+
+    // Spezielle Tage (Stufensporttag, Elternabend, schulfreie Tage …)
+    getSondertageFuerTag(iso).forEach(sd=>{
+      add({icon:'⭐', zeit: sd.zeitText || '', titel: sd.titel, klick:`wuebZuTag(${jsArg(iso)})`, sort: sd.von!==null ? sd.von : 0});
+    });
+
+    // Feste Termine verschoben/abgesagt
+    Object.keys(window.eventOverrides||{}).forEach(key=>{
+      if(!key.endsWith('_'+iso) || key.startsWith('betreuung_')) return;
+      const ov = window.eventOverrides[key];
+      if(!ov) return;
+      const basis = key.slice(0, -(iso.length+1));
+      const name = WUEB_FIX_LABEL[basis];
+      if(!name) return;
+      if(ov.geloescht){
+        add({icon:'✕', zeit:'', titel: name + ' fällt aus', wichtig:true, klick:`wuebZuTag(${jsArg(iso)})`, sort:0});
+      } else if(ov.von && ov.bis){
+        const h = zeitZuStunden(ov.von);
+        add({icon:'↔', zeit: ov.von + '–' + ov.bis, titel: name + ' verschoben', klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${h!==null?h:12}, ${jsArg(key)})`, sort: h!==null?h:0});
+      }
+    });
+
+    // Frei eingetragene Termine (ohne abgelehnte)
+    (window.customEvents||[]).forEach(ev=>{
+      if(!['info','bestaetigt','schwebend'].includes(ev.status)) return;
+      let zeit = '', h = null;
+      if(ev.mehrtaegig){
+        if(!ev.startDatum || !ev.endDatum || iso < ev.startDatum || iso > ev.endDatum) return;
+        // Mehrtägig: nur am ersten Tag der Woche bzw. am Starttag nennen
+        if(iso !== ev.startDatum && i !== 0) return;
+        zeit = terminZeitText(ev);
+        const r = mehrtaegigTagesbereich(ev, iso); h = r ? r[0] : 0;
+      } else {
+        if(ev.datum !== iso) return;
+        zeit = (ev.von && ev.bis) ? ev.von + '–' + ev.bis : (ev.von || '');
+        h = zeitZuStunden(ev.von);
+      }
+      const warten = ev.status === 'schwebend';
+      const betreuung = ev.beeinflusstBetreuung && ev.betreuungWer;
+      let titel = terminAnzeigeTitel(ev);
+      if(warten) titel += ' ⏳';
+      add({icon: betreuung ? '👪' : '📌', zeit, titel,
+           sub: warten ? 'wartet auf Bestätigung' + (betreuung ? ' · ändert Betreuung' : '') : (betreuung && ev.status==='bestaetigt' ? 'ändert Betreuung' : ''),
+           wichtig: warten,
+           klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${h!==null?h:12}, ${jsArg('custom_'+ev.id)})`, sort: h!==null?h:0});
+    });
+
+    punkte.sort((x,y)=>x.sort-y.sort);
+    tage.push({d, iso, punkte});
+  }
+  return tage;
+}
+
+function renderWochenueberblick(){
+  const mo = wuebWocheStart || wuebZielWoche();
+  const so = new Date(mo); so.setDate(mo.getDate()+6);
+  const fmt = x => x.toLocaleDateString('de-CH',{day:'numeric', month:'short'});
+  document.getElementById('wuebTitel').textContent = 'Woche ' + fmt(mo) + ' – ' + fmt(so);
+  const tage = sammleWochenPunkte(mo);
+  const heuteIso = isoDate(new Date());
+  let html = '';
+  let anzahl = 0;
+  tage.forEach(t=>{
+    if(!t.punkte.length) return;
+    anzahl += t.punkte.length;
+    const tagName = t.d.toLocaleDateString('de-CH',{weekday:'short', day:'numeric', month:'numeric'});
+    html += `<div class="wueb-tag${t.iso===heuteIso?' heute':''}">${escapeHtml(tagName)}${t.iso===heuteIso?' · heute':''}</div>`;
+    t.punkte.forEach(p=>{
+      html += `<div class="wueb-punkt${p.wichtig?' wichtig':''}" onclick="${p.klick}">
+        <span class="wueb-icon">${p.icon}</span>
+        <span class="wueb-text"><span class="wueb-titel">${p.zeit?'<span class="wueb-zeit">'+escapeHtml(p.zeit)+'</span> ':''}${escapeHtml(p.titel)}</span>${p.sub?'<span class="wueb-sub">'+escapeHtml(p.sub)+'</span>':''}</span>
+        <span class="wueb-pfeil">›</span>
+      </div>`;
+    });
+  });
+  if(!anzahl) html = '<div class="wueb-leer">Nichts Besonderes – alles läuft nach dem normalen Plan. 🙂</div>';
+  document.getElementById('wuebInhalt').innerHTML = html;
+}
+function oeffneWochenueberblick(mo){
+  wuebWocheStart = mo || wuebZielWoche();
+  renderWochenueberblick();
+  document.getElementById('wochenueberblickOverlay').classList.add('show');
+}
+function wuebWoche(richtung){
+  const mo = new Date(wuebWocheStart || wuebZielWoche());
+  mo.setDate(mo.getDate() + 7*richtung);
+  wuebWocheStart = mo;
+  renderWochenueberblick();
+}
+function wuebSchliessen(){
+  const ov = document.getElementById('wochenueberblickOverlay');
+  if(!ov || !ov.classList.contains('show')) return;
+  ov.classList.remove('show');
+  // Die automatisch fällige Woche gilt als gesehen, sobald man wegklickt.
+  try{ localStorage.setItem(wuebSpeicherKey(wuebZielWoche()), '1'); }catch(e){}
+}
+function wuebZuTag(iso){
+  wuebSchliessen();
+  jumpToIso(iso);
+  setView('tag');
+}
+function aktualisiereWochenueberblickFallsOffen(){
+  const ov = document.getElementById('wochenueberblickOverlay');
+  if(ov && ov.classList.contains('show')) renderWochenueberblick();
+}
+/* Automatisch zeigen? Nur ab Sonntag 16 Uhr (für die neue Woche) bzw.
+   in der laufenden Woche, solange noch nicht weggeklickt – nicht aber am
+   Sonntag vor 16 Uhr (die alte Woche ist dann praktisch vorbei). */
+function pruefeWochenueberblick(){
+  if(currentRole === 'partner' || window.__chaosIstPartner) return;
+  const cal = document.getElementById('calendarScreen');
+  if(cal && cal.style.display === 'none') return;
+  const jetzt = new Date();
+  if(jetzt.getDay()===0 && jetzt.getHours()<16) return;
+  let gesehen = false;
+  try{ gesehen = localStorage.getItem(wuebSpeicherKey(wuebZielWoche())) === '1'; }catch(e){}
+  if(gesehen) return;
+  const ov = document.getElementById('wochenueberblickOverlay');
+  if(ov && ov.classList.contains('show')) return;
+  oeffneWochenueberblick();
+}
+// Falls die App über Sonntag 16 Uhr hinweg offen bleibt
+setInterval(()=>{ if(window.myUid) pruefeWochenueberblick(); }, 10*60*1000);
+
 /* ====================== MAIN RENDER ====================== */
 function render(){
   checkDesktopSiteMode();
+  aktualisiereWochenueberblickFallsOffen();
   document.getElementById('periodLabel').textContent = fmtPeriodLabel();
   const container = document.getElementById('calContainer');
   if(currentRole==='partner'){
@@ -2560,7 +2863,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v64 · 28.09.2026';
+const APP_VERSION = 'v66 · 29.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -5120,6 +5423,11 @@ onAuthStateChanged(auth, async (user) => {
     if(typeof setAdminUIState === 'function') setAdminUIState(false);
     jumpToToday(); setView('swipe');
   }
+  // Wochenüberblick: Partner-Ansicht zeigt bewusst keine Termindetails
+  window.__chaosIstPartner = isPartner;
+  const wuebBtn = document.getElementById('wuebBtn');
+  if(wuebBtn) wuebBtn.style.display = isPartner ? 'none' : '';
+  if(!isPartner) setTimeout(()=>{ if(typeof pruefeWochenueberblick==='function') pruefeWochenueberblick(); }, 2500);
   // Partnern die Rollen-Umschaltung und Admin-Ansicht verbergen;
   // den Anfragen-Knopf nur für die beiden Elternteile (echter Workflow) zeigen.
   const roleSwitchEl = document.querySelector('.role-switch');
