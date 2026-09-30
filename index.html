@@ -112,6 +112,11 @@
   .multi-label{position:absolute; z-index:5; height:14px; line-height:14px; box-sizing:border-box; padding:0 5px 0 4px; font-size:9.5px; font-weight:700; color:#7A5A00; background:#F8F0DC; border-radius:0 5px 5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;}
   .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
   .multi-label.special{background:#EEE8F6; color:#4F3A75;}
+  .req-klickbar{cursor:pointer;}
+  .req-klickbar:active{filter:brightness(.97);}
+  .req-zeigen{font-size:12px; font-weight:600; color:#8A6D1F; margin:6px 0 8px;}
+  @keyframes zielBlink{0%,100%{box-shadow:none;} 30%,70%{box-shadow:inset 0 0 0 3px var(--pending);}}
+  .swipe-daycol.ziel-blink{animation:zielBlink 1.3s ease-in-out 2;}
   .wueb-tag{font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin:12px 0 4px;}
   .wueb-tag.heute{color:var(--pending);}
   .wueb-punkt{display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; background:#F6F5F1; margin-bottom:5px; cursor:pointer;}
@@ -2226,7 +2231,11 @@ function initSwipeScroll(){
   // eben genau dieses Zieldatum. Vorher wurde hier immer stur das echte
   // Heute erzwungen, wodurch ein Sprung zu einem anderen Datum sofort
   // wieder rückgängig gemacht wurde.
-  requestAnimationFrame(()=> scrollSwipeToToday(false, isoDate(currentDate)));
+  // Nach einem gezielten Sprung (Termin zeigen) kurz dessen Position
+  // beibehalten, auch wenn zwischendurch neu gezeichnet wird.
+  const sz = window.__swipeZiel;
+  const szAktiv = sz && sz.bis > Date.now() && sz.iso === isoDate(currentDate);
+  requestAnimationFrame(()=> scrollSwipeToToday(false, isoDate(currentDate), szAktiv ? sz : undefined));
   attachStickyAutoDetector();
 }
 
@@ -2279,7 +2288,8 @@ function attachStickyAutoDetector(){
 // gerendert wurde und #swipeWrap ein komplett neues Element ist).
 let scrollToTodayGeneration = 0;
 
-function scrollSwipeToToday(smooth, zielIso){
+function scrollSwipeToToday(smooth, zielIso, optionen){
+  optionen = optionen || {};
   const meineGeneration = ++scrollToTodayGeneration;
   const wrap = document.getElementById('swipeWrap');
   // Ohne explizites Ziel: wie bisher die echte heutige Spalte (is-today).
@@ -2299,8 +2309,13 @@ function scrollSwipeToToday(smooth, zielIso){
     });
     return;
   }
-  const target = todayCol.offsetLeft - 6;
-  const vTop = compactMode ? 0 : (8+20/60)*40;
+  // zentriert: Zieltag in die Mitte, damit man Tag davor/danach sieht
+  const target = optionen.zentriert
+    ? Math.max(0, todayCol.offsetLeft - Math.max(6, (wrap.clientWidth - todayCol.offsetWidth)/2))
+    : todayCol.offsetLeft - 6;
+  // zielStunde: senkrecht so, dass der Termin mit etwas Vorlauf sichtbar ist
+  const vTop = compactMode ? 0
+    : (typeof optionen.zielStunde === 'number' ? Math.max(0, optionen.zielStunde - 1.5)*40 : (8+20/60)*40);
   const protokoll = []; // sammelt JEDEN einzelnen Versuch für die Diagnose
 
   // WICHTIG: Logs haben bewiesen, dass wrap.scrollTo({left:...}) auf
@@ -2544,7 +2559,7 @@ function sammleWochenPunkte(mo){
       add({icon: betreuung ? '👪' : '📌', zeit, titel,
            sub: warten ? 'wartet auf Bestätigung' + (betreuung ? ' · ändert Betreuung' : '') : (betreuung && ev.status==='bestaetigt' ? 'ändert Betreuung' : ''),
            wichtig: warten,
-           klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${h!==null?h:12}, ${jsArg('custom_'+ev.id)})`, sort: h!==null?h:0});
+           klick:`oeffneTerminMitChat(${jsArg(ev.id)})`, sort: h!==null?h:0});
     });
 
     punkte.sort((x,y)=>x.sort-y.sort);
@@ -2863,7 +2878,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v66 · 29.09.2026';
+const APP_VERSION = 'v67 · 30.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -4553,15 +4568,16 @@ function renderRequestsUI(){
     html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Eigene Termine – du musst bestätigen</div>';
     myPendingEvents.forEach(ev=>{
       const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
-      html += `<div class="req-card mine-turn">
+      html += `<div class="req-card mine-turn req-klickbar" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
           <div class="req-date">${dateStr}</div>
           <div class="req-status schwebend">Schwebend</div>
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
-        <div class="req-actions">
+        <div class="req-zeigen">📅 Im Kalender zeigen & Chat öffnen ›</div>
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-accept" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button>
           <button class="req-btn-reject" onclick="hiRejectCustom(${jsArg(ev.id)})">✗ Ablehnen</button>
         </div>
@@ -4584,15 +4600,16 @@ function renderRequestsUI(){
         const uid = bestaetiger[idx];
         return bestaetigt.includes(uid) ? `<span style="color:var(--a);">✓ ${escapeHtml(String(n))}</span>` : `<span>⏳ ${escapeHtml(String(n))}</span>`;
       }).join(' · ');
-      html += `<div class="req-card">
+      html += `<div class="req-card req-klickbar" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
           <div class="req-date">${dateStr}</div>
           <div class="req-status schwebend">Schwebend</div>
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">${namen}</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
-        <div class="req-actions">
+        <div class="req-zeigen">📅 Im Kalender zeigen & Chat öffnen ›</div>
+        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-reject" onclick="hiDeleteCustom(${jsArg(ev.id)})">✕ Zurückziehen</button>
         </div>
       </div>`;
@@ -4614,7 +4631,8 @@ function renderRequestsUI(){
     }
     const dateStr = r.datum ? new Date(r.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
     const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
-    html += `<div class="req-card ${isMyTurn?'mine-turn':''}">
+    const zeigeVon = (lastEntry && lastEntry.neuVon) || r.altVon || '';
+    html += `<div class="req-card req-klickbar ${isMyTurn?'mine-turn':''}" onclick="zeigeBetreuungsAnfrage(${jsArg(r.datum||'')}, ${jsArg(zeigeVon)})">
       <div class="req-top">
         <div class="req-date">${dateStr}</div>
         <div class="req-status ${r.status}">${statusLabel}</div>
@@ -4622,13 +4640,14 @@ function renderRequestsUI(){
       <div class="req-times">${zeitZeile}</div>
       ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
       <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
+      ${r.datum ? '<div class="req-zeigen">📅 Tag im Kalender zeigen ›</div>' : ''}
       ${isMyTurn ? `
-        <div class="req-actions">
+        <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-accept" onclick="acceptRequest(${jsArg(r.id)})">✓ Akzeptieren</button>
           <button class="req-btn-counter" onclick="toggleCounterForm(${jsArg(r.id)})">↩ Anders vorschlagen</button>
           <button class="req-btn-reject" onclick="rejectRequest(${jsArg(r.id)})">✗ Ablehnen</button>
         </div>
-        <div class="req-counter-form" id="counterForm-${r.id}">
+        <div class="req-counter-form" id="counterForm-${r.id}" onclick="event.stopPropagation()">
           <div class="time-row">
             <div class="time-field"><label>Von</label><input type="time" id="counterVon-${r.id}" value="${lastEntry?lastEntry.neuVon||'15:00':'15:00'}"></div>
             <div class="time-field"><label>Bis</label><input type="time" id="counterBis-${r.id}" value="${lastEntry?lastEntry.neuBis||'19:00':'19:00'}"></div>
@@ -4637,23 +4656,57 @@ function renderRequestsUI(){
           <button class="req-btn-accept" style="width:100%;" onclick="submitCounter(${jsArg(r.id)})">Gegenvorschlag senden</button>
         </div>
       ` : ''}
-      ${istAdmin ? `<div class="req-actions" style="margin-top:8px;"><button class="req-btn-reject" onclick="adminLoescheAnfrage(${jsArg(r.id)})">🗑️ Löschen (Admin)</button></div>` : ''}
+      ${istAdmin ? `<div class="req-actions" style="margin-top:8px;" onclick="event.stopPropagation()"><button class="req-btn-reject" onclick="adminLoescheAnfrage(${jsArg(r.id)})">🗑️ Löschen (Admin)</button></div>` : ''}
     </div>`;
   });
   listEl.innerHTML = html;
 }
 
+/* Springt im Kalender zu einem Tag, damit man sieht, was davor und
+   danach los ist, und führt danach optional etwas aus (z.B. den Termin
+   aufklappen). Swipe-Ansicht, wenn der Tag dort enthalten ist (7 Tage
+   zurück bis 120 Tage voraus), sonst Wochenansicht. */
+function zeigeTagImKalender(iso, zielStunde, danach){
+  ['requestsOverlay','searchOverlay'].forEach(id=>{ const o=document.getElementById(id); if(o) o.classList.remove('show'); });
+  if(typeof wuebSchliessen === 'function') wuebSchliessen();
+  currentDate = new Date(iso+'T00:00:00');
+  const heute = new Date(); heute.setHours(0,0,0,0);
+  const diff = Math.round((currentDate - heute)/86400000);
+  const imSwipe = diff >= -7 && diff <= 120;
+  window.__swipeZiel = {iso, zielStunde, zentriert:true, bis: Date.now()+4000};
+  setView(imSwipe ? 'swipe' : 'woche');
+  setTimeout(()=>{
+    if(imSwipe){
+      scrollSwipeToToday(true, iso, {zentriert:true, zielStunde});
+      const col = document.querySelector(`.swipe-daycol[data-iso="${iso}"]`);
+      if(col){ col.classList.add('ziel-blink'); setTimeout(()=>col.classList.remove('ziel-blink'), 2600); }
+    }
+    if(danach) danach();
+  }, 250);
+}
+window.zeigeTagImKalender = zeigeTagImKalender;
+
+/* Termin im Kalender zeigen: zum Tag springen und den Termin mit
+   Bestätigen/Ablehnen und Chat gleich aufklappen. */
 window.oeffneTerminMitChat = function(evId){
   const ev = (window.customEvents||[]).find(e=>e.id===evId);
   if(!ev){ alert('Termin nicht gefunden.'); return; }
-  document.getElementById('requestsOverlay').classList.remove('show');
-  let tag = ev.datum, mitte = ev.von && ev.bis ? (parseFloat(ev.von.split(':')[0])+parseFloat(ev.bis.split(':')[0]))/2 : 12;
+  let tag = ev.datum, start = zeitZuStunden(ev.von), mitte = 12;
+  if(start !== null){
+    const ende = zeitZuStunden(ev.bis);
+    mitte = ende !== null && ende > start ? (start+ende)/2 : start;
+  }
   if(ev.mehrtaegig){
     tag = ev.startDatum || ev.datum;
     const r = mehrtaegigTagesbereich(ev, tag);
-    if(r) mitte = (r[0]+r[1])/2;
+    if(r){ start = r[0]; mitte = (r[0]+r[1])/2; }
   }
-  openHourInspector(tag, mitte, 'custom_'+ev.id);
+  zeigeTagImKalender(tag, start !== null ? start : mitte, ()=> openHourInspector(tag, mitte, 'custom_'+ev.id));
+};
+/* Betreuungs-Anfrage: zum Tag springen und die Betreuung aufklappen. */
+window.zeigeBetreuungsAnfrage = function(iso, vonText){
+  const h = zeitZuStunden(vonText);
+  zeigeTagImKalender(iso, h !== null ? h : 8, ()=> openHourInspector(iso, h !== null ? h : 12, 'custody'));
 };
 /* Gemeinsame Aufräum-Logik. Jeder Eintrag einzeln in try/catch: darf
    ein einzelner (nicht erlaubter) Löschversuch nicht den ganzen Rest
@@ -4779,16 +4832,7 @@ window.runSearch = function(qRoh){
 window.springeZuSuchtreffer = function(id){
   const ev = (window.customEvents||[]).find(e=>e.id===id);
   if(!ev) return;
-  document.getElementById('searchOverlay').classList.remove('show');
-  const iso = ev.mehrtaegig ? ev.startDatum : ev.datum;
-  if(!iso) return;
-  currentDate = new Date(iso+'T00:00:00');
-  setView('swipe');
-  setTimeout(()=>{
-    scrollSwipeToToday(true, iso);
-    const stunde = ev.von ? (parseFloat(ev.von.split(':')[0]) + parseFloat(ev.von.split(':')[1])/60) : 10;
-    openHourInspector(iso, stunde, 'custom_'+ev.id);
-  }, 250);
+  oeffneTerminMitChat(id);
 };
 window.openRequestsModal = function(){
   try{
