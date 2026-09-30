@@ -113,6 +113,27 @@
   .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
   .multi-label.special{background:#EEE8F6; color:#4F3A75;}
   .req-klickbar{cursor:pointer;}
+  .auth-check{display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--ink-soft); margin:4px 0 14px; line-height:1.35; cursor:pointer;}
+  .auth-check input{margin-top:2px; flex-shrink:0;}
+  .konto-abschnitt{border-top:1px solid var(--line); padding-top:12px; margin-top:12px;}
+  .konto-abschnitt:first-child{border-top:none; padding-top:0; margin-top:0;}
+  .konto-abschnitt h4{margin:0 0 6px; font-size:13.5px;}
+  .konto-feld{margin:8px 0;}
+  .konto-feld label{display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:3px;}
+  .konto-feld input{width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13.5px;}
+  .push-status{font-size:12.5px; background:#F6F5F1; border-radius:8px; padding:8px 10px; margin:8px 0; line-height:1.45;}
+  .ntfy-kanal{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; background:#fff; border:1px dashed var(--line); border-radius:6px; padding:6px 8px; margin:6px 0 8px; word-break:break-all; user-select:all;}
+  .push-anleitung{margin-top:10px; font-size:12.5px; line-height:1.5;}
+  .push-anleitung summary{cursor:pointer; font-weight:600; color:#8A6D1F;}
+  .push-anleitung > div{margin-top:8px;}
+  .push-anleitung ol{margin:4px 0 4px 18px; padding:0;}
+  .konto-info{font-size:12px; color:var(--ink-soft); line-height:1.45;}
+  .konto-ok{color:var(--b); font-size:12.5px; margin-top:6px;}
+  .konto-fehler{color:var(--holiday-text); font-size:12.5px; margin-top:6px;}
+  .rueckfrage-box{background:#fff; border:1px solid #E3D3A6; border-left:4px solid #C9A54B; border-radius:8px; padding:8px 10px; margin:8px 0 4px;}
+  .rueckfrage-kopf{font-size:11.5px; font-weight:700; color:#8A6D1F;}
+  .rueckfrage-btn{margin-top:8px; border:none; border-radius:8px; background:#2B2B2B; color:#fff; font:inherit; font-size:13px; font-weight:600; padding:7px 14px; cursor:pointer;}
+  .rueckfrage-text{font-size:13px; margin-top:3px; white-space:pre-wrap; word-break:break-word;}
   .req-klickbar:active{filter:brightness(.97);}
   .req-zeigen{font-size:12px; font-weight:600; color:#8A6D1F; margin:6px 0 8px;}
   @keyframes zielBlink{0%,100%{box-shadow:none;} 30%,70%{box-shadow:inset 0 0 0 3px var(--pending);}}
@@ -250,7 +271,7 @@
   .admin-wrap{max-width:640px; margin:0 auto; padding:24px 16px 60px;}
   .admin-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;}
   .admin-header h1{font-size:18px; margin:0;}
-  .admin-nav{display:flex; gap:8px; margin-bottom:20px;}
+  .admin-nav{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
   .admin-nav button{border:1px solid var(--line); background:var(--panel); color:var(--ink-soft); padding:8px 14px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
@@ -405,6 +426,7 @@
     <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
     <button data-admintab="events" onclick="switchAdminTab('events')">🗓️ Alle Termine</button>
     <button data-admintab="chats" onclick="switchAdminTab('chats')">💬 Chats</button>
+    <button data-admintab="konto" onclick="switchAdminTab('konto')">⚙ Mein Konto</button>
     <button onclick="openRequestsAsAdmin()">📥 Änderungs&shy;anfragen</button>
     <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
   </div>
@@ -462,6 +484,13 @@
     </div>
   </div>
 
+  <div id="adminKonto" style="display:none;">
+    <div class="admin-card">
+      <h3>Mein Konto</h3>
+      <div id="adminKontoInhalt"><div class="empty-note">Lade …</div></div>
+    </div>
+  </div>
+
   <div id="adminEvents" style="display:none;">
     <div class="admin-card">
       <h3>Alle eigenen Termine</h3>
@@ -496,6 +525,7 @@
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" title="Suche" onclick="openSearchModal()">🔍</div>
       <div class="gear-btn" id="requestsBtn" title="Änderungsanfragen" onclick="openRequestsModal()" style="position:relative;">📥<span id="requestsBadge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--holiday-text); color:#fff; font-size:9px; font-weight:700; border-radius:50%; width:15px; height:15px; align-items:center; justify-content:center; line-height:15px;">0</span></div>
+      <div class="gear-btn" title="Mein Konto" id="kontoBtn" onclick="oeffneKonto()" style="display:none;">⚙</div>
       <div class="gear-btn" title="Admin-Bereich" id="calGearBtn" onclick="openAdminFromCalendar()" style="display:none;">⚙</div>
       <div class="logout-link" style="margin:0; font-size:10px;" onclick="handleLogout()">Abmelden</div>
     </div>
@@ -589,6 +619,17 @@
       <button class="btn" style="background:var(--holiday-text);" onclick="cancelEventOverride()">Absagen</button>
       <button class="btn" onclick="saveEventOverride()">Speichern</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== MEIN KONTO (Zahnrad) ===== -->
+<div class="overlay" id="kontoOverlay" onclick="if(event.target===this) this.classList.remove('show')">
+  <div class="modal" style="max-width:460px;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0;">⚙ Mein Konto</h3>
+      <span onclick="document.getElementById('kontoOverlay').classList.remove('show')" style="cursor:pointer; font-size:24px; color:var(--ink-soft); line-height:1; padding:0 4px;">×</span>
+    </div>
+    <div id="kontoInhalt" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -1330,6 +1371,9 @@ function setAdminUIState(isAdmin){
   // Zahnrad (Admin-Bereich) nur für echte Admins sichtbar
   const gearEl = document.getElementById('calGearBtn');
   if(gearEl) gearEl.style.display = isAdmin ? 'flex' : 'none';
+  // Zahnrad "Mein Konto" für alle anderen (Admin hat dafür einen Tab im Admin-Bereich)
+  const kontoEl = document.getElementById('kontoBtn');
+  if(kontoEl) kontoEl.style.display = isAdmin ? 'none' : 'flex';
 }
 
 function startOfWeek(d){
@@ -2878,7 +2922,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v67 · 30.09.2026';
+const APP_VERSION = 'v71 · 30.09.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
@@ -2898,7 +2942,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=64').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=71').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -2912,12 +2956,12 @@ if ('serviceWorker' in navigator) {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut
+  onAuthStateChanged, signOut, reauthenticateWithCredential, EmailAuthProvider, updatePassword
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
   collection, query, where, onSnapshot, addDoc, orderBy, limit,
-  arrayUnion, getDocs, runTransaction, writeBatch
+  arrayUnion, getDocs, runTransaction, writeBatch, deleteField
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2973,7 +3017,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v8-2026-09-28';
+const EXPECTED_RULES_VERSION = 'rules-v10-2026-09-30';
 
 /* Schutz vor Protokoll-Flut (Kosten/Kontingent): automatische Diagnose-Meldungen
    (Scroll-/Höhen-Messungen, Ansichtswechsel) werden nur im Debug-Modus geschrieben
@@ -3107,6 +3151,8 @@ window.submitSlotChangeRequest = async function(){
       aktualisiertAm: new Date().toISOString()
     });
     if(window.logEvent) window.logEvent('anfrage_erstellt', {datum:modalCtx.iso});
+    benachrichtige([window.partnerUid], `Betreuungs-Änderung angefragt von ${window.myName||'?'}`,
+      betreuungMailText({datum: modalCtx.iso}, {neuVon, neuBis, nurStreichen: skip, grund}, `${window.myName||'?'} fragt eine Änderung der Betreuung an (bisher ${modalCtx.altVon||'?'}–${modalCtx.altBis||'?'} Uhr):`), 'anfragen');
     closeModal();
     alert('Anfrage an ' + window.partnerName + ' gesendet.');
   } catch(e){
@@ -3527,8 +3573,10 @@ window.hiSaveNewEntry = async function(){
         text: notiz, zeitstempel: new Date().toISOString()
       }];
     }
-    await addDoc(collection(db,'custom_events'), docData);
+    const neuRef = await addDoc(collection(db,'custom_events'), docData);
     if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung});
+    if(mode==='anfrage') benachrichtige(docData.bestaetigerUids, `Terminanfrage von ${window.myName||'?'} – ${titel}`,
+      terminMailText(docData, `${window.myName||'?'} bittet dich, diesen Termin zu bestätigen:`), 'termin='+neuRef.id);
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
   finally{ btn.disabled=false; btn.textContent='Speichern'; }
@@ -3574,6 +3622,8 @@ window.hiSaveCustodyRequest = async function(){
       erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString()
     });
     if(window.logEvent) window.logEvent('anfrage_erstellt', {datum:hiState.iso});
+    benachrichtige([window.partnerUid], `Betreuungs-Änderung angefragt von ${window.myName||'?'}`,
+      betreuungMailText({datum: hiState.iso}, {neueSegmente, grund}, `${window.myName||'?'} fragt eine Änderung der Betreuung an:`), 'anfragen');
     document.getElementById('hourInspectorOverlay').classList.remove('show');
     alert('Anfrage an ' + window.partnerName + ' gesendet.');
   } catch(e){ alert('Fehler beim Senden: ' + e.message); }
@@ -3760,6 +3810,15 @@ window.hiSendChatMsg = async function(coll, key){
     }
     input.value = '';
     hiClearChatPhoto();
+    if(coll==='custom_events'){
+      const evM = (window.customEvents||[]).find(e=>e.id===key);
+      const rf = evM ? rueckfrageStatus(evM) : null;
+      if(rf && rf.letzte.msgId === msg.msgId){
+        const art = window.myUid === evM.erstelltVonUid ? 'Antwort' : 'Nachfrage';
+        benachrichtige(rf.amZug, `${art} von ${window.myName||'?'} zu „${evM.titel||'Termin'}“`,
+          `${window.myName||'?'} hat zum Termin „${evM.titel||'Termin'}“ (${mailDatum(evM.datum)}${evM.von&&evM.bis?' · '+evM.von+'–'+evM.bis+' Uhr':''}) geschrieben:\n\n„${text || '(Foto)'}“\n\nDu kannst in der App direkt antworten.`, 'termin='+key);
+      }
+    }
     if(window.logEvent) window.logEvent('chat_nachricht_gesendet', {coll, key, mitFoto: !!photo, bestaetigungNoetig: bestaetigungNoetigVon.length});
   } catch(e){ alert('Nachricht konnte nicht gesendet werden: '+e.message); }
 };
@@ -3996,9 +4055,10 @@ window.hiSaveEvent = async function(key){
       const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
       if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
       const entry = hiState.entries.find(e=>e.key===key) || {};
-      await addDoc(collection(db,'custom_events'), {
+      const aenderungsTitel = '📝 Änderung: ' + (entry.label || key);
+      const aenderungsRef = await addDoc(collection(db,'custom_events'), {
         datum: hiState.iso, von, bis,
-        titel: '📝 Änderung: ' + (entry.label || key),
+        titel: aenderungsTitel,
         zielTyp: 'event_override', zielKey: key,
         status: 'schwebend',
         bestaetigerUids: checked.map(c=>c.value),
@@ -4008,6 +4068,8 @@ window.hiSaveEvent = async function(key){
         erstelltAm: new Date().toISOString()
       });
       if(window.logEvent) window.logEvent('termin_anfrage_erstellt', {key, von, bis});
+      benachrichtige(checked.map(c=>c.value), `Änderungsanfrage von ${window.myName||'?'} – ${entry.label||key}`,
+        terminMailText({titel: aenderungsTitel, datum: hiState.iso, von, bis}, `${window.myName||'?'} möchte einen festen Termin ändern und bittet um Bestätigung:`), 'termin='+aenderungsRef.id);
     } else {
       await setDoc(doc(db,'event_overrides',key), { von, bis, geloescht:false, geaendertVon: window.myName||'?', geaendertAm: new Date().toISOString() }, {merge:true});
       if(window.logEvent) window.logEvent('termin_verschoben', {key, von, bis});
@@ -4050,7 +4112,7 @@ window.hiSaveCustomEdit = async function(id){
   }
   try{
     if(mode===null){
-      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder});
+      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, geaendertAm: new Date().toISOString()});
     } else if(mode==='anfrage'){
       const checked = Array.from(document.querySelectorAll('.hi-confirmer-cb:checked'));
       if(!checked.length){ alert('Bitte mindestens eine Person auswählen, die bestätigen muss.'); return; }
@@ -4059,10 +4121,14 @@ window.hiSaveCustomEdit = async function(id){
         status: 'schwebend',
         bestaetigerUids: checked.map(c=>c.value),
         bestaetigerNamen: checked.map(c=>c.dataset.name),
-        bestaetigtVon: []
+        bestaetigtVon: [],
+        geaendertAm: new Date().toISOString()
       });
+      const altEv = (window.customEvents||[]).find(e=>e.id===id) || {};
+      benachrichtige(checked.map(c=>c.value), `Geänderte Terminanfrage von ${window.myName||'?'} – ${altEv.titel||'Termin'}`,
+        terminMailText({...altEv, von, bis, ...zusatzFelder}, `${window.myName||'?'} hat diesen Termin geändert und bittet dich erneut um Bestätigung:`), 'termin='+id);
     } else {
-      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[]});
+      await updateDoc(doc(db,'custom_events',id), {von, bis, ...zusatzFelder, status:'info', bestaetigerUids:[], bestaetigerNamen:[], bestaetigtVon:[], geaendertAm: new Date().toISOString()});
     }
     if(window.logEvent) window.logEvent('termin_bearbeitet', {id, mode, mehrtaegig, beeinflusstBetreuung});
     document.getElementById('hourInspectorOverlay').classList.remove('show');
@@ -4124,7 +4190,8 @@ function startAllActiveUsersListener(){
   if(allActiveUsersUnsub) return;
   const q = query(collection(db,'users'), where('status','==','active'));
   allActiveUsersUnsub = onSnapshot(q, snap=>{
-    window.allActiveUsers = snap.docs.filter(d=>idOk(d.id)).map(d=>({uid:d.id, username:String(d.data().username||'?').slice(0,80), role:d.data().role}));
+    window.allActiveUsers = snap.docs.filter(d=>idOk(d.id)).map(d=>({uid:d.id, username:String(d.data().username||'?').slice(0,80), role:d.data().role,
+      ntfyKanal: typeof d.data().ntfyKanal === 'string' ? d.data().ntfyKanal.slice(0,64) : ''}));
   }, err=> console.error('Nutzerliste Fehler:', err));
 }
 
@@ -4133,6 +4200,7 @@ function startCustomEventsListener(){
   customEventsUnsub = onSnapshot(collection(db,'custom_events'), snap=>{
     window.customEvents = snap.docs.filter(d=>idOk(d.id)).map(d=>({id:d.id, ...d.data()}));
     if(typeof render === 'function') render();
+    pruefeDeepLink();
     if(typeof renderAllEventsList === 'function') renderAllEventsList();
     if(typeof renderRequestsUI === 'function') renderRequestsUI();
     checkForNewRejections();
@@ -4531,6 +4599,43 @@ function renderChatNotizenHtml(liste){
   });
   return html;
 }
+/* ====================== RÜCKFRAGEN ZU TERMIN-ANFRAGEN ======================
+   Solange ein Termin auf Bestätigung wartet, ist der Chat ein Hin und Her
+   zwischen Ersteller (z.B. Andi) und den noch fehlenden Bestätigern
+   (z.B. Janine). Wer die letzte Nachricht NICHT geschrieben hat, ist am
+   Zug und sieht das in den Änderungsanfragen. Endet automatisch, sobald
+   bestätigt/abgelehnt, der Termin gelöscht oder vom Ersteller geändert
+   wurde (Nachrichten vor der Änderung zählen dann nicht mehr). */
+function rueckfrageStatus(ev){
+  if(!ev || ev.status !== 'schwebend') return null;
+  const offen = (ev.bestaetigerUids||[]).filter(u=> !(ev.bestaetigtVon||[]).includes(u));
+  if(!offen.length) return null;
+  const beteiligt = new Set([ev.erstelltVonUid, ...offen]);
+  const ab = ev.geaendertAm || '';
+  const relevante = (ev.chat||[]).filter(m=> beteiligt.has(m.vonUid) && String(m.zeitstempel||'') > ab);
+  if(!relevante.length) return null;
+  const letzte = relevante[relevante.length-1];
+  const amZug = letzte.vonUid === ev.erstelltVonUid ? offen : [ev.erstelltVonUid];
+  return {letzte, amZug, anzahl: relevante.length};
+}
+function ichBinBeiRueckfrageAmZug(ev){
+  const r = rueckfrageStatus(ev);
+  return !!(r && r.amZug.includes(window.myUid));
+}
+function rueckfrageHtml(ev){
+  const r = rueckfrageStatus(ev);
+  if(!r || !r.amZug.includes(window.myUid)) return '';
+  const m = r.letzte;
+  const wann = m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  const art = m.vonUid === ev.erstelltVonUid ? 'Antwort' : 'Nachfrage';
+  return `<div class="rueckfrage-box">
+      <div class="rueckfrage-kopf">💬 ${art} von ${escapeHtml(m.vonName||'?')} · ${escapeHtml(wann)}</div>
+      ${m.text ? `<div class="rueckfrage-text">„${escapeHtml(m.text)}“</div>` : ''}
+      ${m.photo ? '<div class="rueckfrage-text">📷 mit Foto</div>' : ''}
+      <button class="rueckfrage-btn" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">↩ Antworten</button>
+    </div>`;
+}
+
 function renderRequestsUI(){
   // Zusammenführen + doppelte (falls je gesendet UND empfangen, kommt
   // theoretisch nicht vor, aber sicherheitshalber) nach id eindeutig machen
@@ -4545,7 +4650,8 @@ function renderRequestsUI(){
 
   // Badge: Anzahl, bei denen ICH am Zug bin (Betreuungs-Anfragen + eigene Termine)
   const chatNotizen = getChatNotizenFuerMich();
-  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length;
+  const meineRueckfragen = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ichBinBeiRueckfrageAmZug(ev));
+  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length;
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -4571,12 +4677,13 @@ function renderRequestsUI(){
       html += `<div class="req-card mine-turn req-klickbar" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
           <div class="req-date">${dateStr}</div>
-          <div class="req-status schwebend">Schwebend</div>
+          <div class="req-status schwebend">${ichBinBeiRueckfrageAmZug(ev)?'Neue Antwort':'Schwebend'}</div>
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
+        ${rueckfrageHtml(ev)}
         <div class="req-zeigen">📅 Im Kalender zeigen & Chat öffnen ›</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        ${ev.chat && ev.chat.length && !ichBinBeiRueckfrageAmZug(ev) ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-accept" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button>
           <button class="req-btn-reject" onclick="hiRejectCustom(${jsArg(ev.id)})">✗ Ablehnen</button>
@@ -4589,7 +4696,7 @@ function renderRequestsUI(){
   // sind – zeigt genau, wer schon zugestimmt hat und wer noch fehlt.
   const mySentPending = (window.customEvents||[]).filter(ev =>
     ev.erstelltVonUid===window.myUid && ev.status==='schwebend'
-  );
+  ).sort((a,b)=> (ichBinBeiRueckfrageAmZug(b)?1:0) - (ichBinBeiRueckfrageAmZug(a)?1:0));
   if(mySentPending.length){
     html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Von mir gesendet – wartet noch</div>';
     mySentPending.forEach(ev=>{
@@ -4600,15 +4707,17 @@ function renderRequestsUI(){
         const uid = bestaetiger[idx];
         return bestaetigt.includes(uid) ? `<span style="color:var(--a);">✓ ${escapeHtml(String(n))}</span>` : `<span>⏳ ${escapeHtml(String(n))}</span>`;
       }).join(' · ');
-      html += `<div class="req-card req-klickbar" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
+      const rfAmZug = ichBinBeiRueckfrageAmZug(ev);
+      html += `<div class="req-card req-klickbar ${rfAmZug?'mine-turn':''}" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
           <div class="req-date">${dateStr}</div>
-          <div class="req-status schwebend">Schwebend</div>
+          <div class="req-status schwebend">${rfAmZug?'Nachfrage – du bist am Zug':'Schwebend'}</div>
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">${namen}</div>
+        ${rueckfrageHtml(ev)}
         <div class="req-zeigen">📅 Im Kalender zeigen & Chat öffnen ›</div>
-        ${ev.chat && ev.chat.length ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
+        ${ev.chat && ev.chat.length && !ichBinBeiRueckfrageAmZug(ev) ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
         <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-reject" onclick="hiDeleteCustom(${jsArg(ev.id)})">✕ Zurückziehen</button>
         </div>
@@ -4874,6 +4983,7 @@ window.acceptRequest = async function(id){
       }
     }
     if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
+
   } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
 window.rejectRequest = async function(id){
@@ -4882,6 +4992,7 @@ window.rejectRequest = async function(id){
     verlauf: arrayUnion({ aktion:'abgelehnt', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
   });
   if(window.logEvent) window.logEvent('anfrage_abgelehnt', {id});
+
 };
 window.submitCounter = async function(id){
   const neuVon = document.getElementById('counterVon-'+id).value;
@@ -4896,6 +5007,8 @@ window.submitCounter = async function(id){
     verlauf: arrayUnion({ aktion:'gegenvorschlag', vonUid:window.myUid, vonName:window.myName, neuVon, neuBis, nurStreichen:false, grund, zeitstempel:new Date().toISOString() })
   });
   if(window.logEvent) window.logEvent('anfrage_gegenvorschlag', {id});
+  benachrichtige([nextTurnUid], `Gegenvorschlag von ${window.myName||'?'} zur Betreuung`,
+    betreuungMailText(r, {neuVon, neuBis, grund}, `${window.myName||'?'} macht einen Gegenvorschlag zur Betreuungs-Änderung:`), 'anfragen');
 };
 
 const screenDisplay = { authScreen:'flex', pendingScreen:'block', adminScreen:'block', calendarScreen:'block' };
@@ -4957,6 +5070,274 @@ window.handleRegister = async function(){
   }
 };
 
+/* ====================== MEIN KONTO ====================== */
+function loginName(){
+  const e = (auth.currentUser && auth.currentUser.email) || '';
+  return e.split('@')[0] || '?';
+}
+window.oeffneKonto = function(){
+  document.getElementById('kontoOverlay').classList.add('show');
+  renderKonto('kontoInhalt');
+};
+async function renderKonto(zielId){
+  const box = document.getElementById(zielId);
+  if(!box || !auth.currentUser) return;
+  // Nur ein Formular gleichzeitig im DOM (gleiche IDs)
+  ['kontoInhalt','adminKontoInhalt'].forEach(id=>{ if(id!==zielId){ const b=document.getElementById(id); if(b) b.innerHTML=''; } });
+  box.innerHTML = '<div class="empty-note">Lade …</div>';
+  let u = {};
+  try{ const s = await getDoc(doc(db,'users',auth.currentUser.uid)); u = s.exists() ? s.data() : {}; }catch(e){}
+  const istAdmin = u.role === 'admin';
+  box.innerHTML = `
+    <div class="konto-abschnitt">
+      <h4>Name</h4>
+      <div class="konto-info">Angezeigter Name: <b>${escapeHtml(u.username||'?')}</b><br>Zum Anmelden weiterhin: <b>${escapeHtml(loginName())}</b> (bleibt gleich)</div>
+      ${u.usernameWunsch ? `<div class="konto-info" style="margin-top:4px;">⏳ Beantragt: <b>${escapeHtml(u.usernameWunsch)}</b> – wartet auf den Admin</div>` : ''}
+      <div class="konto-feld"><label>Neuer angezeigter Name</label><input type="text" id="kontoName" maxlength="60" placeholder="${escapeHtml(u.username||'')}"></div>
+      <button class="cr-save" onclick="kontoNameSpeichern(${istAdmin?'true':'false'})">${istAdmin ? 'Namen ändern' : 'Änderung beantragen'}</button>
+      ${istAdmin ? '' : '<div class="konto-info" style="margin-top:4px;">Der Admin muss die Namensänderung kurz bestätigen (Schutz vor Doppelgängern).</div>'}
+      <div id="kontoNameMeldung"></div>
+    </div>
+    <div class="konto-abschnitt">
+      <h4>📲 Push-Nachrichten <span style="font-weight:400; color:var(--ink-soft);">(freiwillig)</span></h4>
+      <div class="konto-info">Mit der kostenlosen App <b>ntfy</b> bekommst du eine Mitteilung aufs Handy, wenn du etwas tun musst: neue Terminanfragen an dich, Nachfragen/Antworten im Termin-Chat und Betreuungs-Änderungsanfragen – mit den wichtigsten Details. Ohne ntfy funktioniert der Kalender genau gleich, du siehst alles unter 📥.</div>
+      <div id="ntfyBereich" class="push-status">Lade …</div>
+      <div id="pushMeldung"></div>
+      <details class="push-anleitung">
+        <summary>So bekommst du Push-Nachrichten</summary>
+        <div><ol>
+          <li>Die Gratis-App <b>„ntfy“</b> installieren (iPhone: App Store, Android: Google Play). Kein Konto nötig.</li>
+          <li>Hier auf <b>„Push einrichten“</b> tippen und dann auf <b>„Kanal kopieren“</b>.</li>
+          <li>In der ntfy-App auf <b>„+“</b> tippen, den kopierten Kanalnamen einfügen (Server „ntfy.sh“ so lassen) und <b>„Abonnieren“</b> wählen.</li>
+          <li>Wenn ntfy fragt: Mitteilungen <b>erlauben</b>.</li>
+          <li>Zurück in ChaosKalender auf <b>„Test-Push an mich“</b> tippen – die Mitteilung sollte gleich erscheinen.</li>
+        </ol></div>
+        <div>Tippen auf eine Mitteilung öffnet direkt den Termin bzw. die Änderungsanfragen in ChaosKalender. Mehrere Handys? Einfach auf jedem Handy denselben Kanal in ntfy abonnieren.</div>
+        <div><b>Gut zu wissen:</b> Der Kanalname ist wie ein Passwort – nicht weitergeben. Die Mitteilungen laufen über den Dienst ntfy.sh. Zum Beenden hier „Push ausschalten“ und den Kanal in der ntfy-App löschen.</div>
+        <div><b>Kommt nichts an?</b> In den Handy-Einstellungen prüfen, ob Mitteilungen für ntfy erlaubt sind und „Nicht stören“/Fokus aus ist. Auf Android ggf. die Akku-Optimierung für ntfy ausschalten.</div>
+      </details>
+    </div>
+    <div class="konto-abschnitt">
+      <h4>Passwort ändern</h4>
+      <div class="konto-feld"><label>Aktuelles Passwort</label><input type="password" id="kontoPwAlt" autocomplete="current-password"></div>
+      <div class="konto-feld"><label>Neues Passwort (mind. 8 Zeichen)</label><input type="password" id="kontoPwNeu" autocomplete="new-password"></div>
+      <div class="konto-feld"><label>Neues Passwort wiederholen</label><input type="password" id="kontoPwNeu2" autocomplete="new-password"></div>
+      <button class="cr-save" onclick="kontoPasswortAendern()">Passwort ändern</button>
+      <div id="kontoPwMeldung"></div>
+    </div>`;
+  aktualisiereNtfyBereich(u.ntfyKanal || '');
+}
+window.renderKonto = renderKonto;
+function kontoMeldung(id, ok, text){
+  const el = document.getElementById(id);
+  if(el) el.innerHTML = `<div class="${ok?'konto-ok':'konto-fehler'}">${escapeHtml(text)}</div>`;
+}
+window.kontoNameSpeichern = async function(istAdmin){
+  const neu = (document.getElementById('kontoName').value||'').trim();
+  if(!USERNAME_RE.test(neu)){ kontoMeldung('kontoNameMeldung', false, 'Der Name darf 2–60 Zeichen lang sein und nur Buchstaben, Zahlen, Leerzeichen sowie _ . , ! ? ( ) - enthalten.'); return; }
+  const vergeben = (window.allActiveUsers||[]).some(x=> x.uid!==auth.currentUser.uid && String(x.username).trim().toLowerCase()===neu.toLowerCase());
+  if(vergeben){ kontoMeldung('kontoNameMeldung', false, 'Diesen Namen hat schon jemand anderes.'); return; }
+  try{
+    if(istAdmin){
+      await updateDoc(doc(db,'users',auth.currentUser.uid), {username: neu, usernameWunsch: ''});
+      window.myName = neu; window.__chaosUsername = neu;
+      if(window.logEvent) window.logEvent('name_geaendert', {neu});
+    } else {
+      await updateDoc(doc(db,'users',auth.currentUser.uid), {usernameWunsch: neu});
+      if(window.logEvent) window.logEvent('name_beantragt', {neu});
+    }
+    await renderKonto(document.getElementById('adminKontoInhalt').innerHTML ? 'adminKontoInhalt' : 'kontoInhalt');
+    kontoMeldung('kontoNameMeldung', true, istAdmin ? 'Name geändert.' : 'Beantragt – der Admin muss noch bestätigen.');
+  } catch(e){ kontoMeldung('kontoNameMeldung', false, 'Fehler: '+e.message + regelHinweis(e)); }
+};
+window.kontoPasswortAendern = async function(){
+  const alt = document.getElementById('kontoPwAlt').value;
+  const neu = document.getElementById('kontoPwNeu').value;
+  const neu2 = document.getElementById('kontoPwNeu2').value;
+  if(!alt){ kontoMeldung('kontoPwMeldung', false, 'Bitte das aktuelle Passwort eingeben.'); return; }
+  if(neu.length < 8){ kontoMeldung('kontoPwMeldung', false, 'Das neue Passwort muss mindestens 8 Zeichen lang sein.'); return; }
+  if(neu !== neu2){ kontoMeldung('kontoPwMeldung', false, 'Die neuen Passwörter stimmen nicht überein.'); return; }
+  try{
+    const user = auth.currentUser;
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, alt));
+    await updatePassword(user, neu);
+    ['kontoPwAlt','kontoPwNeu','kontoPwNeu2'].forEach(id=> document.getElementById(id).value='');
+    if(window.logEvent) window.logEvent('passwort_geaendert', {});
+    kontoMeldung('kontoPwMeldung', true, 'Passwort geändert. Beim nächsten Anmelden gilt das neue Passwort.');
+  } catch(e){
+    const falsch = /wrong-password|invalid-credential|invalid-login/.test(String(e.code||e.message));
+    kontoMeldung('kontoPwMeldung', false, falsch ? 'Das aktuelle Passwort stimmt nicht.' : (/too-many-requests/.test(String(e.code)) ? 'Zu viele Versuche – bitte später nochmals.' : 'Fehler: '+e.message));
+  }
+};
+window.adminNamenswunsch = async function(uid, uebernehmen){
+  try{
+    const s = await getDoc(doc(db,'users',uid));
+    const wunsch = s.exists() ? s.data().usernameWunsch : '';
+    if(!wunsch) return;
+    if(uebernehmen){
+      if(!USERNAME_RE.test(wunsch)){ alert('Der gewünschte Name enthält ungültige Zeichen.'); return; }
+      await updateDoc(doc(db,'users',uid), {username: wunsch, usernameWunsch: ''});
+    } else {
+      await updateDoc(doc(db,'users',uid), {usernameWunsch: ''});
+    }
+    if(window.logEvent) window.logEvent(uebernehmen ? 'name_wunsch_uebernommen' : 'name_wunsch_abgelehnt', {uid});
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
+
+/* ====================== PUSH-NACHRICHTEN ÜBER ntfy ======================
+   Freiwillig. Wer möchte, richtet unter ⚙ einen persönlichen, zufälligen
+   Kanal ein (Feld ntfyKanal im eigenen Profil) und abonniert ihn in der
+   Gratis-App ntfy. Löst jemand eine Anfrage/Nachfrage aus, schickt dessen
+   Browser die Mitteilung direkt an ntfy.sh – kein eigener Server, keine
+   Kreditkarte. Fehler beim Versand stören die eigentliche Aktion nie. */
+const NTFY_SERVER = 'https://ntfy.sh';
+function appLink(hash){ return location.origin + location.pathname + (hash ? '#'+hash : ''); }
+const NTFY_KANAL_RE = /^[A-Za-z0-9_-]{16,64}$/;
+function neuerNtfyKanal(){
+  const zeichen = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const zufall = new Uint32Array(20);
+  crypto.getRandomValues(zufall);
+  return 'chaoskalender-' + Array.from(zufall, z=> zeichen[z % zeichen.length]).join('');
+}
+async function ntfySenden(kanal, titel, text, hash){
+  if(!NTFY_KANAL_RE.test(kanal||'')) return false;
+  // JSON an die Wurzel-URL: sicher für Umlaute/„“ im Titel; als text/plain
+  // gesendet, damit der Browser keine Vorab-Anfrage (CORS) braucht.
+  const res = await fetch(NTFY_SERVER + '/', {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=UTF-8'},
+    body: JSON.stringify({
+      topic: kanal,
+      title: String(titel||'ChaosKalender').slice(0,120),
+      message: String(text||'').slice(0,1000) || ' ',
+      tags: ['date'],
+      priority: 4,
+      click: appLink(hash)
+    })
+  });
+  if(!res.ok) throw new Error('ntfy ' + res.status);
+  return true;
+}
+async function aktualisiereNtfyBereich(kanal){
+  const box = document.getElementById('ntfyBereich');
+  if(!box) return;
+  if(!kanal){
+    box.innerHTML = `🔔 Push ist für dich <b>aus</b>.
+      <div style="margin-top:8px;"><button class="cr-save" onclick="ntfyEinrichten()">Push einrichten</button></div>`;
+    return;
+  }
+  box.innerHTML = `✅ Push ist <b>eingerichtet</b>. Dein Kanal für die ntfy-App:
+    <div class="ntfy-kanal" id="ntfyKanalText">${escapeHtml(kanal)}</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="cr-save" onclick="ntfyKopieren()">Kanal kopieren</button>
+      <button class="cr-save" onclick="ntfyTest()">Test-Push an mich</button>
+      <button class="cr-del" onclick="ntfyAusschalten()">Push ausschalten</button>
+    </div>`;
+}
+window.ntfyEinrichten = async function(){
+  try{
+    const kanal = neuerNtfyKanal();
+    await updateDoc(doc(db,'users',auth.currentUser.uid), {ntfyKanal: kanal});
+    if(window.logEvent) window.logEvent('ntfy_eingerichtet', {});
+    await aktualisiereNtfyBereich(kanal);
+    kontoMeldung('pushMeldung', true, 'Eingerichtet. Jetzt „Kanal kopieren“ und in der ntfy-App abonnieren (Anleitung unten).');
+  } catch(e){ kontoMeldung('pushMeldung', false, 'Fehler: ' + e.message + regelHinweis(e)); }
+};
+window.ntfyKopieren = async function(){
+  const kanal = (document.getElementById('ntfyKanalText')||{}).textContent || '';
+  try{ await navigator.clipboard.writeText(kanal); kontoMeldung('pushMeldung', true, 'Kopiert: ' + kanal); }
+  catch(e){
+    // Fallback: Text markieren, damit man ihn von Hand kopieren kann
+    const el = document.getElementById('ntfyKanalText');
+    if(el){ const r = document.createRange(); r.selectNodeContents(el); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+    kontoMeldung('pushMeldung', false, 'Automatisches Kopieren ging nicht – der Kanal ist jetzt markiert, bitte von Hand kopieren.');
+  }
+};
+window.ntfyTest = async function(){
+  try{
+    const kanal = (document.getElementById('ntfyKanalText')||{}).textContent || '';
+    await ntfySenden(kanal, 'Test von ChaosKalender', 'Push-Nachrichten funktionieren. 🎉 Tippe hier, um ChaosKalender zu öffnen.', '');
+    kontoMeldung('pushMeldung', true, 'Test-Push verschickt – sollte gleich in ntfy erscheinen.');
+  } catch(e){ kontoMeldung('pushMeldung', false, 'Versand fehlgeschlagen: ' + e.message); }
+};
+window.ntfyAusschalten = async function(){
+  if(!confirm('Push-Nachrichten ausschalten? Danach den Kanal auch in der ntfy-App löschen.')) return;
+  try{
+    await updateDoc(doc(db,'users',auth.currentUser.uid), {ntfyKanal: ''});
+    if(window.logEvent) window.logEvent('ntfy_ausgeschaltet', {});
+    await aktualisiereNtfyBereich('');
+    kontoMeldung('pushMeldung', true, 'Ausgeschaltet.');
+  } catch(e){ kontoMeldung('pushMeldung', false, 'Fehler: ' + e.message + regelHinweis(e)); }
+};
+
+/* Benachrichtigen: an alle Empfänger, die einen ntfy-Kanal eingerichtet
+   haben. Titel = wer + was, Text = Details ohne die Einleitungszeile. */
+async function benachrichtige(uids, titel, text, hash){
+  try{
+    const ziele = [...new Set(uids||[])].filter(u=> u && u !== window.myUid);
+    const zeilen = String(text||'').split('\n').map(z=>z.trim()).filter(z=> z && !/^(Bitte in der App|Du kannst in der App)/.test(z));
+    const details = zeilen.slice(1).join('\n') || zeilen.join('\n');
+    let n = 0;
+    for(const uid of ziele){
+      const u = (window.allActiveUsers||[]).find(x=>x.uid===uid);
+      if(!u || !NTFY_KANAL_RE.test(u.ntfyKanal||'')) continue;
+      if(await ntfySenden(u.ntfyKanal, titel, details, hash)) n++;
+    }
+    if(n && window.logEvent) window.logEvent('push_gesendet', {anzahl:n, titel});
+  } catch(e){
+    console.warn('Push fehlgeschlagen:', e);
+    if(window.logEvent) window.logEvent('push_fehler', {fehler: String(e.message||e).slice(0,300)});
+  }
+}
+window.benachrichtige = benachrichtige;
+
+function mailDatum(iso){
+  if(!iso) return '?';
+  return new Date(iso+'T00:00:00').toLocaleDateString('de-CH',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
+}
+function terminMailText(ev, einleitung){
+  const zeilen = [einleitung, ''];
+  zeilen.push('„' + (ev.titel||'Termin') + '“');
+  if(ev.mehrtaegig) zeilen.push(mailDatum(ev.startDatum) + (ev.von?' '+ev.von:'') + ' bis ' + mailDatum(ev.endDatum) + (ev.bis?' '+ev.bis:''));
+  else zeilen.push(mailDatum(ev.datum) + ((ev.von && ev.bis) ? ' · ' + ev.von + '–' + ev.bis + ' Uhr' : ''));
+  if(ev.beeinflusstBetreuung && ev.betreuungWer) zeilen.push('Betreuung in diesem Zeitraum: ' + (whoLabel(ev.betreuungWer)||ev.betreuungWer));
+  const notiz = (ev.chat||[]).find(m=>m.vonUid===ev.erstelltVonUid && m.text);
+  if(notiz) zeilen.push('', 'Notiz: ' + notiz.text);
+  zeilen.push('', 'Bitte in der App bestätigen oder ablehnen.');
+  return zeilen.join('\n');
+}
+window.terminMailText = terminMailText;
+function betreuungMailText(r, eintrag, einleitung){
+  const nameOf = w => w==='a' ? 'Janine' : (w==='b' ? 'Andi' : (whoLabel(w)||w));
+  const zeilen = [einleitung, '', 'Tag: ' + mailDatum(r.datum)];
+  if(eintrag && eintrag.neueSegmente && eintrag.neueSegmente.length){
+    zeilen.push('Neuer Tagesplan: ' + bereinigeTagesSegmente(eintrag.neueSegmente).map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(', '));
+  } else if(eintrag){
+    zeilen.push('Vorschlag: ' + (eintrag.nurStreichen ? 'nur streichen' : ((eintrag.neuVon||'?') + '–' + (eintrag.neuBis||'?') + ' Uhr')));
+  }
+  if(eintrag && eintrag.grund) zeilen.push('Grund: ' + eintrag.grund);
+  return zeilen.join('\n');
+}
+/* Link aus einer Push-Nachricht (…#termin=ID oder …#anfragen) nach dem Laden öffnen. */
+let deepLinkErledigt = false;
+function pruefeDeepLink(){
+  if(deepLinkErledigt) return;
+  const h = location.hash || '';
+  const mTermin = /^#termin=([A-Za-z0-9_-]{1,120})$/.exec(h);
+  const mAnfragen = h === '#anfragen';
+  deepLinkErledigt = true;
+  if(!mTermin && !mAnfragen) return;
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+  const cal = document.getElementById('calendarScreen');
+  if(cal && cal.style.display === 'none') return; // z.B. Admin-Bereich
+  setTimeout(()=>{
+    if(mTermin){
+      if((window.customEvents||[]).some(e=>e.id===mTermin[1])) oeffneTerminMitChat(mTermin[1]);
+      else alert('Dieser Termin existiert nicht mehr (vermutlich gelöscht).');
+    } else openRequestsModal();
+  }, 700);
+}
+
 window.handleLogout = async function(){
   await signOut(auth);
 };
@@ -4978,6 +5359,8 @@ window.switchAdminTab = function(tab){
   document.getElementById('adminCustody').style.display = tab==='custody' ? 'block' : 'none';
   document.getElementById('adminEvents').style.display = tab==='events' ? 'block' : 'none';
   document.getElementById('adminChats').style.display = tab==='chats' ? 'block' : 'none';
+  document.getElementById('adminKonto').style.display = tab==='konto' ? 'block' : 'none';
+  if(tab==='konto'){ renderKonto('adminKontoInhalt'); }
   if(tab==='qr') renderQrCode();
   if(tab==='log') startLogListener();
   if(tab==='custody'){ window.custodyEditState = null; renderCustodyRulesTable(); }
@@ -5362,7 +5745,10 @@ function startUserListListener(){
         ${roleOptions.map(r=>`<option value="${r}" ${d.role===r?'selected':''}>${roleLabel[r]}</option>`).join('')}
       </select>`;
       html += `<tr ${isOldRole?'style="background:var(--holiday-bg);"':''}>
-        <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}</td>
+        <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}
+          ${d.usernameWunsch ? `<div style="margin-top:4px; font-size:11.5px; background:var(--pending-bg); border-radius:6px; padding:4px 6px;">Möchte heissen: <b>${escapeHtml(d.usernameWunsch)}</b>
+            <button class="cr-save" onclick="adminNamenswunsch(${jsArg(uid)}, true)">Übernehmen</button>
+            <button class="cr-del" onclick="adminNamenswunsch(${jsArg(uid)}, false)">Ablehnen</button></div>` : ''}</td>
         <td style="padding:6px; border-bottom:1px solid var(--line);">${selectHtml}${isOldRole?' <span style="font-size:10px; color:var(--holiday-text);">⚠️ alte Rolle "'+escapeHtml(d.role||'?')+'" – bitte aktualisieren</span>':''}</td>
         <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap;">
           <button class="cr-save" onclick="saveUserRole(${jsArg(uid)})">Speichern</button>

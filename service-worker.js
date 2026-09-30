@@ -1,7 +1,7 @@
 // ChaosKalender Service Worker
 // WICHTIG: CACHE_NAME bei jedem Deployment hochzählen (v5, v6, ...),
 // sonst bleiben alte Dateien im Cache hängen und Updates kommen nicht an.
-const CACHE_NAME = 'chaoskalender-v67';
+const CACHE_NAME = 'chaoskalender-v71';
 const ASSETS = [
   './',
   './index.html',
@@ -32,10 +32,8 @@ self.addEventListener('activate', (event) => {
 //
 // SICHERHEIT/STABILITÄT: Es werden nur GET-Anfragen für die eigene Seite und
 // für die (versionsfesten) Firebase-Skripte und Schriften zwischengespeichert.
-// Alles andere – vor allem der Datenbank- und Login-Verkehr (Firestore, Auth) –
-// läuft unberührt am Service-Worker vorbei. Vorher wurden auch diese
-// Antworten mitgeschnitten: das hat dauerhaft Daten auf dem Gerät abgelegt und
-// konnte langlebige Datenbank-Verbindungen stören.
+// Alles andere – vor allem der Datenbank- und Login-Verkehr (Firestore, Auth,
+// Funktionen) – läuft unberührt am Service-Worker vorbei.
 const CACHEBARE_FREMDE_HOSTS = ['www.gstatic.com', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 function istCachebar(request){
