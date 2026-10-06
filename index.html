@@ -286,6 +286,9 @@
   .auth-btn{width:100%; padding:12px; border-radius:8px; border:none; background:var(--a); color:#fff; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; margin-top:6px;}
   .auth-error{background:var(--pending-bg); color:#7a3a0a; font-size:12.5px; padding:9px 11px; border-radius:8px; margin-bottom:12px; display:none;}
   .auth-error.show{display:block;}
+  .pw-wrap{position:relative;}
+  .pw-wrap input{padding-right:42px !important; width:100%; box-sizing:border-box;}
+  .pw-auge{position:absolute; right:4px; top:50%; transform:translateY(-50%); border:none; background:transparent; font-size:17px; cursor:pointer; padding:4px 6px; line-height:1;}
   .auth-error.ok{background:#E6F2EA; color:#1E5B33; line-height:1.5;}
   .auth-note{font-size:11px; color:var(--ink-soft); text-align:center; margin-top:16px; line-height:1.5;}
 
@@ -3007,7 +3010,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v74 · 06.10.2026';
+const APP_VERSION = 'v75 · 06.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3028,7 +3031,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=74').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=75').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -5123,6 +5126,25 @@ window.switchAuthTab = function(tab){
   document.getElementById('authError').classList.remove('show');
 };
 
+/* 👁 neben jedem Passwortfeld: zeigt das Eingetippte an bzw. versteckt es
+   wieder. Gilt automatisch auch für Felder, die erst später erscheinen
+   (z.B. im ⚙-Fenster). */
+function ergaenzePasswortAugen(root){
+  (root||document).querySelectorAll('input[type=password]:not([data-auge])').forEach(inp=>{
+    inp.dataset.auge = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'pw-wrap';
+    inp.parentNode.insertBefore(wrap, inp);
+    wrap.appendChild(inp);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'pw-auge'; b.textContent = '👁'; b.title = 'Passwort anzeigen';
+    b.onclick = ()=>{ const zu = inp.type === 'password'; inp.type = zu ? 'text' : 'password'; b.textContent = zu ? '🙈' : '👁'; b.title = zu ? 'Passwort verstecken' : 'Passwort anzeigen'; };
+    wrap.appendChild(b);
+  });
+}
+ergaenzePasswortAugen(document);
+new MutationObserver(()=> ergaenzePasswortAugen(document)).observe(document.body, {childList:true, subtree:true});
+
 function showAuthError(msg){
   const el = document.getElementById('authError');
   el.textContent = msg;
@@ -5974,6 +5996,7 @@ function startUserListListener(){
         <td style="padding:6px; border-bottom:1px solid var(--line);">${selectHtml}${isOldRole?' <span style="font-size:10px; color:var(--holiday-text);">⚠️ alte Rolle "'+escapeHtml(d.role||'?')+'" – bitte aktualisieren</span>':''}</td>
         <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap;">
           <button class="cr-save" onclick="saveUserRole(${jsArg(uid)})">Speichern</button>
+          ${((window.__privatDaten||{})[uid]||{}).email ? `<button class="cr-save" onclick="adminResetLink(${jsArg(uid)})" title="Link zum Passwort-Zurücksetzen an die hinterlegte E-Mail schicken">🔑 Reset-Link senden</button>` : ''}
           ${isMe?'':`<button class="cr-del" onclick="deleteUserAccount(${jsArg(uid)},${jsArg(d.username||'?')})">✕ Löschen</button>`}
         </td>
       </tr>`;
@@ -5993,6 +6016,17 @@ window.saveUserRole = async function(uid){
     if(window.logEvent) window.logEvent('rolle_geaendert', {uid, neueRolle: sel.value});
   } catch(e){ alert('Fehler beim Speichern: '+e.message); }
 };
+window.adminResetLink = async function(uid){
+  const pv = (window.__privatDaten||{})[uid] || {};
+  if(!pv.email){ alert('Für diese Person ist keine E-Mail hinterlegt.'); return; }
+  if(!confirm(`Link zum Zurücksetzen des Passworts an ${pv.email} schicken?`)) return;
+  try{
+    await sendPasswordResetEmail(auth, pv.email);
+    if(window.logEvent) window.logEvent('admin_reset_link', {uid});
+    alert(`✉️ Link verschickt an ${pv.email}.\nDie Person öffnet die Mail, setzt dort ein neues Passwort und meldet sich danach mit dieser E-Mail an (auch im Spam-Ordner nachsehen).`);
+  } catch(e){ alert('Fehler: ' + e.message); }
+};
+
 window.deleteUserAccount = async function(uid, username){
   if(!confirm(`"${username}" wirklich löschen? Diese Person verliert den Zugriff auf ChaosKalender und müsste sich neu registrieren, falls sie zurückkehren soll.`)) return;
   try{
