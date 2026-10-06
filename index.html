@@ -196,13 +196,39 @@
   .holiday-block{position:absolute; left:0; right:0; top:0; bottom:0; background:var(--holiday-bg); display:flex; align-items:center; justify-content:center; padding:6px; font-size:10px; color:var(--holiday-text); font-weight:600; text-align:center;}
 
   /* MONTH */
-  .month-grid{display:grid; grid-template-columns:repeat(7,1fr);}
+  .month-grid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr));}
   .month-dow{padding:8px 2px; text-align:center; font-size:10.5px; color:var(--ink-soft);}
   .month-cell{min-height:68px; border-top:1px solid var(--line); padding:5px; position:relative;}
   .month-cell.is-today-cell{border:3px solid var(--pending); border-radius:6px;}
   .month-cell .num{font-size:11px; color:var(--ink-soft); margin-bottom:4px;}
   .month-cell.out .num{color:#D8D5CC;}
   .month-cell.holiday{background:var(--holiday-bg);}
+  .month-cell:not(.out){cursor:pointer; min-width:0;}
+  .month-cell:not(.out):hover{background:#F3F1EA;}
+  .month-cell.holiday:not(.out):hover{background:#F6E2DC;}
+  .m-stripe{position:relative; height:6px; border-radius:3px; background:#ECEAE3; overflow:hidden; margin:2px 0 3px;}
+  .m-stripe.betreuung{height:7px;}
+  .m-stripe > i{position:absolute; top:0; bottom:0;}
+  .m-chips{display:flex; flex-wrap:wrap; gap:2px; margin-bottom:3px;}
+  .m-chip{font-size:10.5px; font-weight:700; padding:1px 5px; border-radius:5px; line-height:1.35; white-space:nowrap;}
+  .m-chip.a{background:var(--a-bg); color:var(--a);}
+  .m-chip.b{background:var(--b-bg); color:var(--b);}
+  .m-chip.omami{background:var(--omami-bg); color:var(--omami);}
+  .m-kurz{display:none;}
+  .month-cell .hol-label{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .m-item{margin-top:2px;}
+  .m-item .m-stripe{height:4px; margin:1px 0;}
+  .m-text{font-size:10px; font-weight:600; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .m-text.gold{color:#8A6D1F;}
+  .m-text.special{color:#4F3A75;}
+  @media (max-width:600px){
+    .month-cell{padding:3px 2px; min-height:60px;}
+    .m-chip{font-size:9.5px; padding:1px 3px;}
+    .m-lang{display:none;}
+    .m-kurz{display:inline;}
+    .m-text{font-size:8.5px;}
+    .month-cell .hol-label{font-size:8.5px;}
+  }
   .pill{font-size:9px; padding:2px 5px; border-radius:4px; margin-bottom:3px; cursor:pointer; display:inline-block; font-weight:600;}
   .pill.a{background:var(--a-bg); color:var(--a);}
   .pill.b{background:var(--b-bg); color:var(--b);}
@@ -416,7 +442,10 @@
 <!-- ===== ADMIN-BEREICH ===== -->
 <div class="admin-wrap" id="adminScreen" style="display:none;">
   <div class="admin-header">
-    <h1>Admin-Bereich</h1>
+    <div>
+      <h1>Admin-Bereich</h1>
+      <div class="brand-sub"><span id="adminVersionTag"></span> <span id="adminLoggedInAs" style="font-weight:600;"></span> <span onclick="sendVerboseDiagnostic()" style="text-decoration:underline; cursor:pointer;">🔍 Diagnose senden</span></div>
+    </div>
     <div class="logout-link" onclick="handleLogout()">Abmelden</div>
   </div>
   <div class="admin-nav">
@@ -1958,12 +1987,30 @@ function eventBlock(who, start, end, startHour, dateObj, note){
 }
 
 /* ====================== RENDER: MONAT ====================== */
+/* Monatsansicht: nutzt dieselbe Betreuungs-Berechnung wie Woche/Swipe
+   (inkl. Ferien, bestätigter Termine und Ausnahmen). Pro Tag:
+   - Farbstreifen über den ganzen Tag (0–24 Uhr), rot = Janine, blau = Andi,
+     so dass Wechsel mitten am Tag sichtbar sind,
+   - Namen mit Uhrzeit ("Andi bis 16", "Janine ab 16"),
+   - lila Streifen für spezielle Tage, goldene für mehrtägige Termine
+     (an der richtigen Tageszeit), dazu einzelne Termine als Text.
+   Klick auf einen Tag springt in die Swipe-Ansicht genau zu diesem Tag. */
+function monatStreifenHtml(teile, klasse){
+  let h = `<div class="m-stripe ${klasse||''}">`;
+  teile.forEach(t=>{
+    const von = Math.max(0, Math.min(24, t.von)), bis = Math.max(0, Math.min(24, t.bis));
+    if(bis <= von) return;
+    h += `<i style="left:${(von/24*100).toFixed(2)}%;width:${((bis-von)/24*100).toFixed(2)}%;background:${t.farbe};"></i>`;
+  });
+  return h + '</div>';
+}
 function renderMonth(){
   const y = currentDate.getFullYear(), m = currentDate.getMonth();
   const firstOfMonth = new Date(y,m,1);
   const firstWeekday = (firstOfMonth.getDay()+6)%7;
   const daysInMonth = new Date(y,m+1,0).getDate();
   const dows = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+  const kidFilter = (currentPerson==='janosch'||currentPerson==='mischa') ? currentPerson : null;
 
   let html = '<div class="month-grid">';
   dows.forEach(d=> html += `<div class="month-dow">${d}</div>`);
@@ -1974,20 +2021,54 @@ function renderMonth(){
     const dayNum = i - firstWeekday + 1;
     const inMonth = dayNum>=1 && dayNum<=daysInMonth;
     const d = new Date(y,m,dayNum);
-    const isTodayCell = inMonth && isoDate(d)===todayIsoM;
+    const iso = isoDate(d);
+    const isTodayCell = inMonth && iso===todayIsoM;
     const hol = inMonth ? (getHolidayName(d) || getSchoolHolidayName(d)) : null;
-    html += `<div class="month-cell ${inMonth?'':'out'} ${hol?'holiday':''} ${isTodayCell?'is-today-cell':''}"><div class="num" ${inMonth?`onclick="jumpToIso('${isoDate(d)}'); setView('tag');" style="cursor:pointer;"`:''}>${inMonth?dayNum:''}</div>`;
-    if(inMonth){
-      if(hol){
-        html += `<div class="hol-label">${hol}</div>`;
-      } else {
-        const assign = getCareAssignment(d);
-        html += `<div class="pill ${assign.who}" onclick="event.stopPropagation(); openModal('Slot ändern','${d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'})}', '${assign.ort}', '${isoDate(d)}', '07:00', '23:00', '${assign.who}')">${personFilteredLabel(assign.who)}</div>`;
-        const iso2 = isoDate(d);
-        if(BAND_DATES_MISCHA.includes(iso2)) html += `<div class="hol-label" style="color:#8C4A6E;">Bandprobe M.</div>`;
-        SCHOOL_EVENTS.filter(ev=>ev.date===iso2).forEach(ev=> html += `<div class="hol-label" style="color:var(--pending);">${ev.title.slice(0,14)}</div>`);
-      }
+    if(!inMonth){ html += `<div class="month-cell out"><div class="num"></div></div>`; continue; }
+
+    html += `<div class="month-cell ${hol?'holiday':''} ${isTodayCell?'is-today-cell':''}" onclick="zeigeTagImKalender('${iso}')" title="Tag in der Swipe-Ansicht öffnen">`;
+    html += `<div class="num">${dayNum}</div>`;
+    if(hol) html += `<div class="hol-label">${escapeHtml(hol)}</div>`;
+
+    // Betreuung: Streifen + Namen mit Uhrzeit
+    let segs = [];
+    try{ segs = bereinigeTagesSegmente(getCustodySegments(d)); }catch(e){ segs = []; }
+    if(segs.length){
+      html += monatStreifenHtml(segs.map(sg=>({von: sg.from!==undefined?sg.from:0, bis: sg.to!==undefined?sg.to:24, farbe: barColorFor(sg.who)})), 'betreuung');
+      html += '<div class="m-chips">';
+      segs.forEach(sg=>{
+        const von = sg.from!==undefined?sg.from:0, bis = sg.to!==undefined?sg.to:24;
+        let zeit = '';
+        if(segs.length > 1){
+          if(von > 0.01 && bis < 23.99) zeit = ` ${fmtHintH(von)}–${fmtHintH(bis)}`;
+          else if(von > 0.01) zeit = ` ab ${fmtHintH(von)}`;
+          else if(bis < 23.99) zeit = ` bis ${fmtHintH(bis)}`;
+        }
+        const name = kidFilter ? whoLabel(sg.who) : personFilteredLabel(sg.who);
+        const kurzName = (String(name||'?').trim().charAt(0) || '?').toUpperCase();
+        html += `<span class="m-chip ${sg.who}"><span class="m-lang">${escapeHtml(name)}${zeit}</span><span class="m-kurz">${escapeHtml(kurzName)}${zeit}</span></span>`;
+      });
+      html += '</div>';
     }
+
+    // Spezielle Tage (lila) und mehrtägige Termine (gold) als Streifen
+    getSondertageFuerTag(iso).forEach(sd=>{
+      const r = sd.von!==null ? [sd.von, sd.bis] : [0,24];
+      html += `<div class="m-item">${monatStreifenHtml([{von:r[0], bis:r[1], farbe:'#7B5EA7'}])}<span class="m-text special">${escapeHtml(sd.titel)}</span></div>`;
+    });
+    getMehrtaegigeTermineFuerTag(iso).forEach(ev=>{
+      const r = mehrtaegigTagesbereich(ev, iso);
+      if(!r) return;
+      const farbe = ev.status==='schwebend' ? '#D8BD73' : '#B58900';
+      html += `<div class="m-item">${monatStreifenHtml([{von:r[0], bis:r[1], farbe}])}<span class="m-text gold">${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</span></div>`;
+    });
+    // Einzelne Termine und Bandprobe als kurzer Text
+    (window.customEvents||[]).filter(ev=> !ev.mehrtaegig && ev.datum===iso && ['info','bestaetigt','schwebend'].includes(ev.status))
+      .sort((a,b)=> String(a.von||'').localeCompare(String(b.von||'')))
+      .forEach(ev=>{
+        html += `<div class="m-text gold">${ev.von?escapeHtml(ev.von)+' ':''}${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</div>`;
+      });
+    if(BAND_DATES_MISCHA.includes(iso)) html += `<div class="m-text" style="color:#8C4A6E;">Bandprobe M.</div>`;
     html += `</div>`;
   }
   html += '</div>';
@@ -2922,8 +3003,9 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v71 · 30.09.2026';
+const APP_VERSION = 'v72 · 06.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
+if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
 setAdminUIState(true);
 updateHolidayButtons();
@@ -2942,7 +3024,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=71').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=72').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -5666,7 +5748,7 @@ function startLogListener(){
 window.copyLogToClipboard = async function(){
   const docs = window.__lastLogDocs || [];
   const text = docs.map(d=>{
-    return `[${d.zeitpunkt||'?'}] ${d.typ||'?'} | ${d.username||'?'} (${d.role||'?'}) | v${d.appVersion||'?'} | Regeln erwartet: ${d.erwarteteRegelVersion||'?'} | ${d.geraet||'?'} | Bildschirm ${d.bildschirmBreite||'?'}x${d.bildschirmHoehe||'?'} | Fenster ${d.fensterBreite||'?'}x${d.fensterHoehe||'?'} | Textskalierung ${d.textSkalierungsVerdacht||'?'} | ${d.details||''}`;
+    return `[${d.zeitpunkt||'?'}] ${d.typ||'?'} | ${d.username||'?'} (${d.role||'?'}) | ${d.appVersion||'?'} | Regeln erwartet: ${d.erwarteteRegelVersion||'?'} | ${d.geraet||'?'} | Bildschirm ${d.bildschirmBreite||'?'}x${d.bildschirmHoehe||'?'} | Fenster ${d.fensterBreite||'?'}x${d.fensterHoehe||'?'} | Textskalierung ${d.textSkalierungsVerdacht||'?'} | ${d.details||''}`;
   }).join('\n');
   try{
     await navigator.clipboard.writeText(text);
@@ -5819,6 +5901,8 @@ onAuthStateChanged(auth, async (user) => {
   // egal in welchem Bereich (Kalender oder Admin) man sich befindet.
   const loggedInEl = document.getElementById('loggedInAs');
   if(loggedInEl) loggedInEl.textContent = '· ' + (data.username || '?');
+  const adminLoggedInEl = document.getElementById('adminLoggedInAs');
+  if(adminLoggedInEl) adminLoggedInEl.textContent = '· ' + (data.username || '?');
 
   if(data.status === 'pending'){
     showScreen('pendingScreen');
