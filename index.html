@@ -286,6 +286,7 @@
   .auth-btn{width:100%; padding:12px; border-radius:8px; border:none; background:var(--a); color:#fff; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; margin-top:6px;}
   .auth-error{background:var(--pending-bg); color:#7a3a0a; font-size:12.5px; padding:9px 11px; border-radius:8px; margin-bottom:12px; display:none;}
   .auth-error.show{display:block;}
+  .auth-error.ok{background:#E6F2EA; color:#1E5B33; line-height:1.5;}
   .auth-note{font-size:11px; color:var(--ink-soft); text-align:center; margin-top:16px; line-height:1.5;}
 
   .pending-wrap{max-width:380px; margin:0 auto; padding:60px 20px; min-height:100vh; box-sizing:border-box; text-align:center;}
@@ -3006,7 +3007,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v73 · 06.10.2026';
+const APP_VERSION = 'v74 · 06.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3027,7 +3028,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=73').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=74').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -5125,7 +5126,14 @@ window.switchAuthTab = function(tab){
 function showAuthError(msg){
   const el = document.getElementById('authError');
   el.textContent = msg;
+  el.classList.remove('ok');
   el.classList.add('show');
+}
+// Erfolgsmeldung (grün) im selben Feld; erlaubt einfache Formatierung
+function showAuthOk(html){
+  const el = document.getElementById('authError');
+  el.innerHTML = html;
+  el.classList.add('show', 'ok');
 }
 
 const PSEUDO_DOMAIN = '@chaoskalender.local';
@@ -5162,7 +5170,9 @@ window.handlePasswortVergessen = async function(){
     if(/too-many-requests/.test(String(e.code))){ showAuthError('Zu viele Versuche – bitte später nochmals.'); return; }
     // Andere Fehler (z.B. unbekannte Adresse) bewusst nicht verraten
   }
-  showAuthError('Falls ein Konto mit dieser E-Mail existiert, ist jetzt ein Link zum Zurücksetzen unterwegs (auch im Spam-Ordner nachsehen). Hast du noch keine E-Mail hinterlegt, wende dich bitte an den Admin.');
+  showAuthOk(`✉️ <b>Link zum Zurücksetzen verschickt</b> an <b>${escapeHtml(email)}</b>.<br>
+    Öffne die Mail, klicke auf den Link und setze dort ein neues Passwort. Danach hier mit der E-Mail und dem neuen Passwort anmelden.<br>
+    <span style="font-size:11.5px;">Keine Mail da? Auch im Spam-/„Unbekannt“-Ordner nachsehen. Kommt gar nichts, ist diese Adresse nicht hinterlegt – dann bitte beim Admin melden.</span>`);
 };
 
 window.handleRegister = async function(){
