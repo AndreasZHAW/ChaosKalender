@@ -1,7 +1,12 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v10-2026-09-30
+// REGEL-VERSION: rules-v11-2026-10-06
+//
+// Neu in v11 (gegenüber v10):
+//  * users_privat/{uid}: E-Mail und Telefonnummer für den Fall eines
+//           vergessenen Passworts – nur die Person selbst und der Admin
+//           können sie lesen; schreiben nur die Person selbst.
 //
 // Neu in v10 (gegenüber v8):
 //  * users: jede Person darf selbst NUR zwei Felder ändern:
@@ -236,6 +241,18 @@ service cloud.firestore {
     match /custody_exceptions/{datum} {
       allow read: if isActive();
       allow write: if isAdmin();
+    }
+
+    // --- users_privat: Kontaktdaten (nur selbst + Admin) ---------------
+    match /users_privat/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+                            && request.resource.data.keys().hasOnly(['email', 'telefon', 'geaendertAm'])
+                            && okStr(request.resource.data.get('email', ''), 254)
+                            && request.resource.data.get('telefon', '') is string
+                            && request.resource.data.get('telefon', '').matches('[0-9 +()/.-]{0,30}')
+                            && okStr(request.resource.data.get('geaendertAm', ''), 40);
+      allow delete: if isAdmin();
     }
 
     // --- alles andere: komplett gesperrt -------------------------------

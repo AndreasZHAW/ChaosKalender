@@ -417,13 +417,16 @@
   <div class="auth-error" id="authError"></div>
 
   <div id="loginForm">
-    <div class="auth-field"><label>Benutzername</label><input type="text" id="loginUsername" autocomplete="username" maxlength="60" placeholder="z. B. Andi"></div>
+    <div class="auth-field"><label>E-Mail (oder bisheriger Benutzername)</label><input type="text" id="loginUsername" autocomplete="username" maxlength="254" placeholder="name@beispiel.ch"></div>
     <div class="auth-field"><label>Passwort</label><input type="password" id="loginPassword" autocomplete="current-password"></div>
     <button class="auth-btn" onclick="handleLogin()">Anmelden</button>
+    <div class="auth-note"><span onclick="handlePasswortVergessen()" style="text-decoration:underline; cursor:pointer;">Passwort vergessen?</span></div>
   </div>
 
   <div id="registerForm" style="display:none;">
-    <div class="auth-field"><label>Gewünschter Benutzername</label><input type="text" id="regUsername" autocomplete="username" maxlength="60" placeholder="frei wählbar (Buchstaben, Zahlen, Leerzeichen)"></div>
+    <div class="auth-field"><label>Name (wird im Kalender angezeigt)</label><input type="text" id="regUsername" autocomplete="nickname" maxlength="60" placeholder="z. B. Andi"></div>
+    <div class="auth-field"><label>E-Mail (zum Anmelden)</label><input type="email" id="regEmail" autocomplete="email" maxlength="254" placeholder="name@beispiel.ch"></div>
+    <div class="auth-field"><label>Telefonnummer (freiwillig, nur für den Admin)</label><input type="tel" id="regTelefon" autocomplete="tel" maxlength="30" placeholder="z. B. 079 123 45 67"></div>
     <div class="auth-field"><label>Passwort</label><input type="password" id="regPassword" autocomplete="new-password"></div>
     <div class="auth-field"><label>Passwort wiederholen</label><input type="password" id="regPassword2" autocomplete="new-password"></div>
     <button class="auth-btn" onclick="handleRegister()">Registrierung anfragen</button>
@@ -3003,7 +3006,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v72 · 06.10.2026';
+const APP_VERSION = 'v73 · 06.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3024,7 +3027,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=72').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=73').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3038,7 +3041,8 @@ if ('serviceWorker' in navigator) {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  onAuthStateChanged, signOut, reauthenticateWithCredential, EmailAuthProvider, updatePassword
+  onAuthStateChanged, signOut, reauthenticateWithCredential, EmailAuthProvider, updatePassword,
+  verifyBeforeUpdateEmail, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc,
@@ -3057,6 +3061,7 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
+auth.languageCode = 'de'; // Firebase-Mails (Passwort vergessen, E-Mail bestätigen) auf Deutsch
 const db = getFirestore(fbApp);
 
 // Benutzername -> interne "E-Mail", da Firebase Auth intern E-Mail-Adressen
@@ -3099,7 +3104,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v10-2026-09-30';
+const EXPECTED_RULES_VERSION = 'rules-v11-2026-10-06';
 
 /* Schutz vor Protokoll-Flut (Kosten/Kontingent): automatische Diagnose-Meldungen
    (Scroll-/Höhen-Messungen, Ansichtswechsel) werden nur im Debug-Modus geschrieben
@@ -3175,7 +3180,7 @@ async function writeLoginLog(user, userData){
     // Admin zur Übersicht/Aufräumen alles sehen kann.
     startAdminRequestListener();
   }
-  if(userData.status === 'active') { startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startCustodyExceptionsListener(); startAllActiveUsersListener(); autoCleanupVergangeneTermine(); }
+  if(userData.status === 'active') { setTimeout(()=>pruefeWiederherstellung(), 1500); startEventOverrideListener(); startCustomEventsListener(); startCustodyRulesListener(); startCustodyExceptionsListener(); startAllActiveUsersListener(); autoCleanupVergangeneTermine(); }
 }
 
 /* Sucht die/den jeweils andere/n Elternteil (role=='janine' oder 'andi',
@@ -4733,7 +4738,9 @@ function renderRequestsUI(){
   // Badge: Anzahl, bei denen ICH am Zug bin (Betreuungs-Anfragen + eigene Termine)
   const chatNotizen = getChatNotizenFuerMich();
   const meineRueckfragen = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ichBinBeiRueckfrageAmZug(ev));
-  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length;
+  const wf = window.__wiederherstellungFehlt || {};
+  const hinweisKontakt = !!(wf.email || wf.telefon);
+  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -4744,12 +4751,20 @@ function renderRequestsUI(){
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
   const istAdmin = window.__chaosRole === 'admin';
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin){
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin && !hinweisKontakt){
     listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
     return;
   }
 
   let html = '';
+  if(hinweisKontakt){
+    const fehlt = [wf.email ? 'E-Mail-Adresse' : '', wf.telefon ? 'Telefonnummer' : ''].filter(Boolean).join(' und ');
+    html += `<div class="req-card mine-turn req-klickbar" onclick="document.getElementById('requestsOverlay').classList.remove('show'); ${istAdmin ? "showScreen('adminScreen'); switchAdminTab('konto');" : 'oeffneKonto();'}">
+      <div class="req-top"><div class="req-date">🔐 Für den Fall, dass du dein Passwort vergisst</div><div class="req-status schwebend">Bitte erledigen</div></div>
+      <div class="req-meta" style="font-size:12.5px;">Bitte hinterlege unter ⚙ <b>${fehlt}</b>. Mit der E-Mail kannst du ein vergessenes Passwort selbst zurücksetzen und dich künftig damit anmelden – alle deine Daten bleiben erhalten.</div>
+      <div class="req-zeigen">⚙ Jetzt hinterlegen ›</div>
+    </div>`;
+  }
   html += `<div style="margin-bottom:14px;"><button class="cr-del" onclick="adminAufraeumenAlteAnfragen()">🧹 Akzeptierte/abgelehnte Anfragen &amp; vergangene Termine löschen${istAdmin?'':' (nur meine)'}</button></div>`;
   if(chatNotizen.length) html += renderChatNotizenHtml(chatNotizen);
   if(myPendingEvents.length){
@@ -5113,33 +5128,68 @@ function showAuthError(msg){
   el.classList.add('show');
 }
 
+const PSEUDO_DOMAIN = '@chaoskalender.local';
+const EMAIL_RE = /^[^@\s]{1,64}@[^@\s]{1,185}\.[^@\s]{2,}$/;
+const TEL_RE = /^[0-9 +()\/.-]{6,30}$/;
+function hatEchteEmail(){
+  const e = (auth.currentUser && auth.currentUser.email) || '';
+  return !!e && !e.endsWith(PSEUDO_DOMAIN);
+}
 window.handleLogin = async function(){
-  const username = document.getElementById('loginUsername').value.trim();
+  const eingabe = document.getElementById('loginUsername').value.trim();
   const password = document.getElementById('loginPassword').value;
-  if(!username || !password){ showAuthError('Bitte Benutzername und Passwort eingeben.'); return; }
+  if(!eingabe || !password){ showAuthError('Bitte E-Mail (oder Benutzername) und Passwort eingeben.'); return; }
+  const mitEmail = eingabe.includes('@');
   try{
-    await signInWithEmailAndPassword(auth, usernameToEmail(username), password);
+    await signInWithEmailAndPassword(auth, mitEmail ? eingabe : usernameToEmail(eingabe), password);
     // Weiterleitung übernimmt onAuthStateChanged
   } catch(err){
-    showAuthError('Anmeldung fehlgeschlagen: Benutzername oder Passwort falsch.');
+    if(/too-many-requests/.test(String(err.code))) { showAuthError('Zu viele Versuche – bitte in ein paar Minuten nochmals.'); return; }
+    showAuthError(mitEmail
+      ? 'Anmeldung fehlgeschlagen: E-Mail oder Passwort falsch.'
+      : 'Anmeldung fehlgeschlagen: Benutzername oder Passwort falsch. Hast du schon eine E-Mail hinterlegt? Dann melde dich mit der E-Mail-Adresse an.');
   }
+};
+window.handlePasswortVergessen = async function(){
+  let email = document.getElementById('loginUsername').value.trim();
+  if(!email.includes('@')) email = (prompt('Deine E-Mail-Adresse, die du in ChaosKalender hinterlegt hast:') || '').trim();
+  if(!email) return;
+  if(!EMAIL_RE.test(email)){ showAuthError('Das sieht nicht wie eine E-Mail-Adresse aus.'); return; }
+  try{
+    await sendPasswordResetEmail(auth, email);
+  } catch(e){
+    if(/invalid-email/.test(String(e.code))){ showAuthError('Das sieht nicht wie eine E-Mail-Adresse aus.'); return; }
+    if(/too-many-requests/.test(String(e.code))){ showAuthError('Zu viele Versuche – bitte später nochmals.'); return; }
+    // Andere Fehler (z.B. unbekannte Adresse) bewusst nicht verraten
+  }
+  showAuthError('Falls ein Konto mit dieser E-Mail existiert, ist jetzt ein Link zum Zurücksetzen unterwegs (auch im Spam-Ordner nachsehen). Hast du noch keine E-Mail hinterlegt, wende dich bitte an den Admin.');
 };
 
 window.handleRegister = async function(){
   const username = document.getElementById('regUsername').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const telefon = document.getElementById('regTelefon').value.trim();
   const password = document.getElementById('regPassword').value;
   const password2 = document.getElementById('regPassword2').value;
-  if(!username || username.length < 2){ showAuthError('Bitte einen Benutzernamen (mind. 2 Zeichen) eingeben.'); return; }
-  if(!USERNAME_RE.test(username)){ showAuthError('Der Benutzername darf 2–60 Zeichen lang sein und nur Buchstaben, Zahlen, Leerzeichen sowie _ . , ! ? ( ) - enthalten.'); return; }
+  if(!username || username.length < 2){ showAuthError('Bitte einen Namen (mind. 2 Zeichen) eingeben.'); return; }
+  if(!USERNAME_RE.test(username)){ showAuthError('Der Name darf 2–60 Zeichen lang sein und nur Buchstaben, Zahlen, Leerzeichen sowie _ . , ! ? ( ) - enthalten.'); return; }
+  if(!EMAIL_RE.test(email)){ showAuthError('Bitte eine gültige E-Mail-Adresse eingeben – damit meldest du dich an.'); return; }
+  if(telefon && !TEL_RE.test(telefon)){ showAuthError('Die Telefonnummer darf nur Ziffern, Leerzeichen und + ( ) / . - enthalten.'); return; }
   if(password.length < 8){ showAuthError('Das Passwort muss mindestens 8 Zeichen lang sein.'); return; }
   if(password !== password2){ showAuthError('Die Passwörter stimmen nicht überein.'); return; }
   try{
-    const cred = await createUserWithEmailAndPassword(auth, usernameToEmail(username), password);
+    let cred;
+    try{ cred = await createUserWithEmailAndPassword(auth, email, password); }
+    catch(e){
+      if(/email-already-in-use/.test(String(e.code))){ showAuthError('Mit dieser E-Mail gibt es schon ein Konto. Bitte anmelden (oder „Passwort vergessen?“).'); return; }
+      throw e;
+    }
     await setDoc(doc(db,'users',cred.user.uid), {
       username: username,
       status: 'pending',
       createdAt: new Date().toISOString()
     });
+    try{ await setDoc(doc(db,'users_privat',cred.user.uid), {email, telefon, geaendertAm: new Date().toISOString()}); }catch(e){ console.warn('Kontaktdaten:', e); }
     // Weiterleitung auf "wartet auf Freischaltung" übernimmt onAuthStateChanged
   } catch(err){
     if(err.code === 'auth/email-already-in-use'){
@@ -5155,7 +5205,7 @@ window.handleRegister = async function(){
 /* ====================== MEIN KONTO ====================== */
 function loginName(){
   const e = (auth.currentUser && auth.currentUser.email) || '';
-  return e.split('@')[0] || '?';
+  return hatEchteEmail() ? e : (e.split('@')[0] || '?');
 }
 window.oeffneKonto = function(){
   document.getElementById('kontoOverlay').classList.add('show');
@@ -5170,10 +5220,27 @@ async function renderKonto(zielId){
   let u = {};
   try{ const s = await getDoc(doc(db,'users',auth.currentUser.uid)); u = s.exists() ? s.data() : {}; }catch(e){}
   const istAdmin = u.role === 'admin';
+  let pv = {};
+  try{ const ps = await getDoc(doc(db,'users_privat',auth.currentUser.uid)); pv = ps.exists() ? ps.data() : {}; }catch(e){}
+  const echteMail = hatEchteEmail();
   box.innerHTML = `
     <div class="konto-abschnitt">
+      <h4>🔐 Anmeldung &amp; Passwort vergessen</h4>
+      ${echteMail
+        ? `<div class="konto-info">Du meldest dich an mit: <b>${escapeHtml(auth.currentUser.email)}</b>. Bei „Passwort vergessen?“ kommt der Link an diese Adresse.</div>`
+        : `<div class="push-status">⚠️ Du meldest dich noch mit dem Benutzernamen <b>${escapeHtml(loginName())}</b> an. Bitte hinterlege eine E-Mail-Adresse – nur dann kannst du ein vergessenes Passwort selbst zurücksetzen.</div>`}
+      <div class="konto-feld"><label>${echteMail ? 'Neue E-Mail-Adresse (falls ändern)' : 'E-Mail-Adresse'}</label><input type="email" id="kontoLoginEmail" maxlength="254" placeholder="name@beispiel.ch"></div>
+      <div class="konto-feld"><label>Aktuelles Passwort (zur Bestätigung)</label><input type="password" id="kontoLoginPw" autocomplete="current-password"></div>
+      <button class="cr-save" onclick="kontoEmailHinterlegen()">Bestätigungslink senden</button>
+      <div class="konto-info" style="margin-top:4px;">Du bekommst eine Mail mit einem Link. Erst nach dem Klick gilt die neue Adresse – danach meldest du dich <b>mit der E-Mail</b> an (Passwort bleibt gleich). Alle deine Termine und Daten bleiben erhalten.</div>
+      <div id="kontoLoginMeldung"></div>
+      <div class="konto-feld" style="margin-top:12px;"><label>Telefonnummer (nur für den Admin sichtbar)</label><input type="tel" id="kontoTelefon" maxlength="30" value="${escapeHtml(pv.telefon||'')}" placeholder="z. B. 079 123 45 67"></div>
+      <button class="cr-save" onclick="kontoTelefonSpeichern()">Telefonnummer speichern</button>
+      <div id="kontoTelMeldung"></div>
+    </div>
+    <div class="konto-abschnitt">
       <h4>Name</h4>
-      <div class="konto-info">Angezeigter Name: <b>${escapeHtml(u.username||'?')}</b><br>Zum Anmelden weiterhin: <b>${escapeHtml(loginName())}</b> (bleibt gleich)</div>
+      <div class="konto-info">Angezeigter Name: <b>${escapeHtml(u.username||'?')}</b><br>Der Name ändert nichts an der Anmeldung.</div>
       ${u.usernameWunsch ? `<div class="konto-info" style="margin-top:4px;">⏳ Beantragt: <b>${escapeHtml(u.usernameWunsch)}</b> – wartet auf den Admin</div>` : ''}
       <div class="konto-feld"><label>Neuer angezeigter Name</label><input type="text" id="kontoName" maxlength="60" placeholder="${escapeHtml(u.username||'')}"></div>
       <button class="cr-save" onclick="kontoNameSpeichern(${istAdmin?'true':'false'})">${istAdmin ? 'Namen ändern' : 'Änderung beantragen'}</button>
@@ -5232,6 +5299,58 @@ window.kontoNameSpeichern = async function(istAdmin){
     kontoMeldung('kontoNameMeldung', true, istAdmin ? 'Name geändert.' : 'Beantragt – der Admin muss noch bestätigen.');
   } catch(e){ kontoMeldung('kontoNameMeldung', false, 'Fehler: '+e.message + regelHinweis(e)); }
 };
+window.kontoEmailHinterlegen = async function(){
+  const email = (document.getElementById('kontoLoginEmail').value||'').trim();
+  const pw = document.getElementById('kontoLoginPw').value;
+  if(!EMAIL_RE.test(email)){ kontoMeldung('kontoLoginMeldung', false, 'Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
+  if(!pw){ kontoMeldung('kontoLoginMeldung', false, 'Bitte zur Bestätigung dein aktuelles Passwort eingeben.'); return; }
+  try{
+    const user = auth.currentUser;
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, pw));
+    await verifyBeforeUpdateEmail(user, email);
+    document.getElementById('kontoLoginPw').value = '';
+    if(window.logEvent) window.logEvent('email_bestaetigung_gesendet', {});
+    kontoMeldung('kontoLoginMeldung', true, 'Link verschickt an ' + email + ' (auch im Spam-Ordner nachsehen). Nach dem Klick meldest du dich mit dieser E-Mail an. Eventuell wirst du danach einmal abgemeldet – das ist normal.');
+  } catch(e){
+    const c = String(e.code||e.message);
+    kontoMeldung('kontoLoginMeldung', false,
+      /wrong-password|invalid-credential|invalid-login/.test(c) ? 'Das aktuelle Passwort stimmt nicht.' :
+      /email-already-in-use/.test(c) ? 'Diese E-Mail wird schon für ein anderes Konto verwendet.' :
+      /invalid-email|invalid-new-email/.test(c) ? 'Diese E-Mail-Adresse wird nicht akzeptiert.' :
+      /too-many-requests/.test(c) ? 'Zu viele Versuche – bitte später nochmals.' :
+      /operation-not-allowed/.test(c) ? 'Firebase erlaubt das Ändern der E-Mail gerade nicht (Admin: Einstellung in Firebase prüfen).' :
+      'Fehler: ' + e.message);
+  }
+};
+window.kontoTelefonSpeichern = async function(){
+  const telefon = (document.getElementById('kontoTelefon').value||'').trim();
+  if(telefon && !TEL_RE.test(telefon)){ kontoMeldung('kontoTelMeldung', false, 'Bitte nur Ziffern, Leerzeichen und + ( ) / . - verwenden.'); return; }
+  try{
+    await setDoc(doc(db,'users_privat',auth.currentUser.uid), {
+      telefon, email: hatEchteEmail() ? auth.currentUser.email : '', geaendertAm: new Date().toISOString()
+    }, {merge:true});
+    await pruefeWiederherstellung();
+    kontoMeldung('kontoTelMeldung', true, 'Gespeichert.');
+  } catch(e){ kontoMeldung('kontoTelMeldung', false, 'Fehler: ' + e.message + regelHinweis(e)); }
+};
+
+/* Prüft beim Anmelden, ob E-Mail + Telefon hinterlegt sind. Fehlt etwas,
+   erscheint ein Hinweis unter 📥 (zählt im Zähler mit) und im ⚙-Fenster.
+   Gleicht ausserdem die bestätigte Login-E-Mail in users_privat ab, damit
+   der Admin sieht, wer schon abgesichert ist. */
+async function pruefeWiederherstellung(){
+  if(!auth.currentUser) return;
+  let pv = {};
+  try{ const ps = await getDoc(doc(db,'users_privat',auth.currentUser.uid)); pv = ps.exists() ? ps.data() : {}; }catch(e){}
+  const echteMail = hatEchteEmail() ? auth.currentUser.email : '';
+  if(echteMail && pv.email !== echteMail){
+    try{ await setDoc(doc(db,'users_privat',auth.currentUser.uid), {email: echteMail, telefon: pv.telefon||'', geaendertAm: new Date().toISOString()}, {merge:true}); }catch(e){}
+  }
+  window.__wiederherstellungFehlt = { email: !echteMail, telefon: !pv.telefon };
+  if(typeof renderRequestsUI === 'function') renderRequestsUI();
+}
+window.pruefeWiederherstellung = pruefeWiederherstellung;
+
 window.kontoPasswortAendern = async function(){
   const alt = document.getElementById('kontoPwAlt').value;
   const neu = document.getElementById('kontoPwNeu').value;
@@ -5800,11 +5919,20 @@ function startPendingListener(){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-let userListUnsub = null;
+let userListUnsub = null, privatUnsub = null;
 function startUserListListener(){
+  if(!privatUnsub){
+    // Kontaktdaten (E-Mail/Telefon) – nur der Admin darf sie lesen
+    privatUnsub = onSnapshot(collection(db,'users_privat'), snap=>{
+      const m = {}; snap.forEach(ds=>{ if(idOk(ds.id)) m[ds.id] = ds.data(); });
+      window.__privatDaten = m;
+      if(window.__zeichneUserListe) window.__zeichneUserListe();
+    }, err=> console.warn('users_privat:', err));
+  }
   if(userListUnsub) return;
   const q = query(collection(db,'users'), where('status','==','active'));
-  userListUnsub = onSnapshot(q, (snap)=>{
+  userListUnsub = onSnapshot(q, function zeichneUserListe(snap){
+    window.__zeichneUserListe = ()=> zeichneUserListe(snap);
     const list = document.getElementById('userList');
     if(!list) return;
     if(snap.empty){
@@ -5828,6 +5956,8 @@ function startUserListListener(){
       </select>`;
       html += `<tr ${isOldRole?'style="background:var(--holiday-bg);"':''}>
         <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}
+          ${(()=>{ const pv = (window.__privatDaten||{})[uid] || {};
+            return `<div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">${pv.email ? '📧 '+escapeHtml(pv.email) : '<span style="color:var(--holiday-text);">📧 keine E-Mail</span>'}${pv.telefon ? ' · 📞 '+escapeHtml(pv.telefon) : ' · <span style="color:var(--holiday-text);">📞 fehlt</span>'}</div>`; })()}
           ${d.usernameWunsch ? `<div style="margin-top:4px; font-size:11.5px; background:var(--pending-bg); border-radius:6px; padding:4px 6px;">Möchte heissen: <b>${escapeHtml(d.usernameWunsch)}</b>
             <button class="cr-save" onclick="adminNamenswunsch(${jsArg(uid)}, true)">Übernehmen</button>
             <button class="cr-del" onclick="adminNamenswunsch(${jsArg(uid)}, false)">Ablehnen</button></div>` : ''}</td>
