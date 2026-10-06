@@ -286,6 +286,10 @@
   .auth-btn{width:100%; padding:12px; border-radius:8px; border:none; background:var(--a); color:#fff; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer; margin-top:6px;}
   .auth-error{background:var(--pending-bg); color:#7a3a0a; font-size:12.5px; padding:9px 11px; border-radius:8px; margin-bottom:12px; display:none;}
   .auth-error.show{display:block;}
+  .email-aendern{margin-top:4px; font-size:12.5px;}
+  .email-aendern summary{cursor:pointer; color:var(--ink-soft); display:inline-block; list-style:none;}
+  .email-aendern summary::-webkit-details-marker{display:none;}
+  .email-aendern[open] summary{margin-bottom:4px;}
   .pw-wrap{position:relative;}
   .pw-wrap input{padding-right:42px !important; width:100%; box-sizing:border-box;}
   .pw-auge{position:absolute; right:4px; top:50%; transform:translateY(-50%); border:none; background:transparent; font-size:17px; cursor:pointer; padding:4px 6px; line-height:1;}
@@ -3010,7 +3014,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v75 · 06.10.2026';
+const APP_VERSION = 'v77 · 06.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3031,7 +3035,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=75').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=77').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4743,7 +4747,7 @@ function renderRequestsUI(){
   const chatNotizen = getChatNotizenFuerMich();
   const meineRueckfragen = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ichBinBeiRueckfrageAmZug(ev));
   const wf = window.__wiederherstellungFehlt || {};
-  const hinweisKontakt = !!(wf.email || wf.telefon);
+  const hinweisKontakt = !!wf.email; // Telefonnummer ist freiwillig (Hinweis nur unter ⚙)
   const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
   const badge = document.getElementById('requestsBadge');
   if(badge){
@@ -4762,10 +4766,9 @@ function renderRequestsUI(){
 
   let html = '';
   if(hinweisKontakt){
-    const fehlt = [wf.email ? 'E-Mail-Adresse' : '', wf.telefon ? 'Telefonnummer' : ''].filter(Boolean).join(' und ');
     html += `<div class="req-card mine-turn req-klickbar" onclick="document.getElementById('requestsOverlay').classList.remove('show'); ${istAdmin ? "showScreen('adminScreen'); switchAdminTab('konto');" : 'oeffneKonto();'}">
       <div class="req-top"><div class="req-date">🔐 Für den Fall, dass du dein Passwort vergisst</div><div class="req-status schwebend">Bitte erledigen</div></div>
-      <div class="req-meta" style="font-size:12.5px;">Bitte hinterlege unter ⚙ <b>${fehlt}</b>. Mit der E-Mail kannst du ein vergessenes Passwort selbst zurücksetzen und dich künftig damit anmelden – alle deine Daten bleiben erhalten.</div>
+      <div class="req-meta" style="font-size:12.5px;">Bitte hinterlege unter ⚙ deine <b>E-Mail-Adresse</b>. Damit kannst du ein vergessenes Passwort selbst zurücksetzen und dich künftig damit anmelden – alle deine Daten bleiben erhalten.</div>
       <div class="req-zeigen">⚙ Jetzt hinterlegen ›</div>
     </div>`;
   }
@@ -5258,15 +5261,20 @@ async function renderKonto(zielId){
   box.innerHTML = `
     <div class="konto-abschnitt">
       <h4>🔐 Anmeldung &amp; Passwort vergessen</h4>
-      ${echteMail
-        ? `<div class="konto-info">Du meldest dich an mit: <b>${escapeHtml(auth.currentUser.email)}</b>. Bei „Passwort vergessen?“ kommt der Link an diese Adresse.</div>`
-        : `<div class="push-status">⚠️ Du meldest dich noch mit dem Benutzernamen <b>${escapeHtml(loginName())}</b> an. Bitte hinterlege eine E-Mail-Adresse – nur dann kannst du ein vergessenes Passwort selbst zurücksetzen.</div>`}
-      <div class="konto-feld"><label>${echteMail ? 'Neue E-Mail-Adresse (falls ändern)' : 'E-Mail-Adresse'}</label><input type="email" id="kontoLoginEmail" maxlength="254" placeholder="name@beispiel.ch"></div>
-      <div class="konto-feld"><label>Aktuelles Passwort (zur Bestätigung)</label><input type="password" id="kontoLoginPw" autocomplete="current-password"></div>
-      <button class="cr-save" onclick="kontoEmailHinterlegen()">Bestätigungslink senden</button>
-      <div class="konto-info" style="margin-top:4px;">Du bekommst eine Mail mit einem Link. Erst nach dem Klick gilt die neue Adresse – danach meldest du dich <b>mit der E-Mail</b> an (Passwort bleibt gleich). Alle deine Termine und Daten bleiben erhalten.</div>
-      <div id="kontoLoginMeldung"></div>
-      <div class="konto-feld" style="margin-top:12px;"><label>Telefonnummer (nur für den Admin sichtbar)</label><input type="tel" id="kontoTelefon" maxlength="30" value="${escapeHtml(pv.telefon||'')}" placeholder="z. B. 079 123 45 67"></div>
+      ${(()=>{
+        const felder = `
+          <div class="konto-feld"><label>${echteMail ? 'Neue E-Mail-Adresse' : 'E-Mail-Adresse'}</label><input type="email" id="kontoLoginEmail" maxlength="254" placeholder="name@beispiel.ch"></div>
+          <div class="konto-feld"><label>Aktuelles Passwort (zur Bestätigung)</label><input type="password" id="kontoLoginPw" autocomplete="current-password"></div>
+          <button class="cr-save" onclick="kontoEmailHinterlegen()">Bestätigungslink senden</button>
+          <div class="konto-info" style="margin-top:4px;">Du bekommst eine Mail mit einem Link. Erst nach dem Klick gilt die ${echteMail?'neue ':''}Adresse – danach meldest du dich damit an (Passwort bleibt gleich). Alle deine Daten bleiben erhalten.</div>
+          <div id="kontoLoginMeldung"></div>`;
+        return echteMail
+          ? `<div class="konto-info">✅ Anmeldung &amp; „Passwort vergessen?“ über <b>${escapeHtml(auth.currentUser.email)}</b></div>
+             <details class="email-aendern"><summary title="E-Mail-Adresse ändern">✏️ ändern</summary>${felder}</details>`
+          : `<div class="push-status">⚠️ Du meldest dich noch mit dem Benutzernamen <b>${escapeHtml(loginName())}</b> an. Bitte hinterlege eine E-Mail-Adresse – nur dann kannst du ein vergessenes Passwort selbst zurücksetzen.</div>${felder}`;
+      })()}
+      ${pv.telefon ? '' : '<div class="konto-info" style="margin-top:12px;">📞 Freiwillig: Mit einer Telefonnummer kann der Admin dich erreichen, falls es Probleme mit dem Konto gibt.</div>'}
+      <div class="konto-feld" style="margin-top:${pv.telefon?'12':'4'}px;"><label>Telefonnummer (nur für den Admin sichtbar)</label><input type="tel" id="kontoTelefon" maxlength="30" value="${escapeHtml(pv.telefon||'')}" placeholder="z. B. 079 123 45 67"></div>
       <button class="cr-save" onclick="kontoTelefonSpeichern()">Telefonnummer speichern</button>
       <div id="kontoTelMeldung"></div>
     </div>
@@ -5335,6 +5343,7 @@ window.kontoEmailHinterlegen = async function(){
   const email = (document.getElementById('kontoLoginEmail').value||'').trim();
   const pw = document.getElementById('kontoLoginPw').value;
   if(!EMAIL_RE.test(email)){ kontoMeldung('kontoLoginMeldung', false, 'Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
+  if(hatEchteEmail() && email.toLowerCase() === String(auth.currentUser.email).toLowerCase()){ kontoMeldung('kontoLoginMeldung', true, 'Das ist bereits deine Anmelde-Adresse – nichts zu tun.'); return; }
   if(!pw){ kontoMeldung('kontoLoginMeldung', false, 'Bitte zur Bestätigung dein aktuelles Passwort eingeben.'); return; }
   try{
     const user = auth.currentUser;
@@ -5957,9 +5966,13 @@ function startUserListListener(){
     // Kontaktdaten (E-Mail/Telefon) – nur der Admin darf sie lesen
     privatUnsub = onSnapshot(collection(db,'users_privat'), snap=>{
       const m = {}; snap.forEach(ds=>{ if(idOk(ds.id)) m[ds.id] = ds.data(); });
-      window.__privatDaten = m;
+      window.__privatDaten = m; window.__privatFehler = '';
       if(window.__zeichneUserListe) window.__zeichneUserListe();
-    }, err=> console.warn('users_privat:', err));
+    }, err=>{
+      console.warn('users_privat:', err);
+      window.__privatFehler = String(err.code||err.message||err);
+      if(window.__zeichneUserListe) window.__zeichneUserListe();
+    });
   }
   if(userListUnsub) return;
   const q = query(collection(db,'users'), where('status','==','active'));
@@ -5989,6 +6002,7 @@ function startUserListListener(){
       html += `<tr ${isOldRole?'style="background:var(--holiday-bg);"':''}>
         <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(d.username||'?')}${isMe?' <span style="color:var(--ink-soft);">(du)</span>':''}
           ${(()=>{ const pv = (window.__privatDaten||{})[uid] || {};
+            if(window.__privatFehler) return `<div style="font-size:11px; color:var(--holiday-text); margin-top:2px;">⚠️ Kontaktdaten nicht lesbar – sind die Firestore-Regeln v11 veröffentlicht?</div>`;
             return `<div style="font-size:11px; color:var(--ink-soft); margin-top:2px;">${pv.email ? '📧 '+escapeHtml(pv.email) : '<span style="color:var(--holiday-text);">📧 keine E-Mail</span>'}${pv.telefon ? ' · 📞 '+escapeHtml(pv.telefon) : ' · <span style="color:var(--holiday-text);">📞 fehlt</span>'}</div>`; })()}
           ${d.usernameWunsch ? `<div style="margin-top:4px; font-size:11.5px; background:var(--pending-bg); border-radius:6px; padding:4px 6px;">Möchte heissen: <b>${escapeHtml(d.usernameWunsch)}</b>
             <button class="cr-save" onclick="adminNamenswunsch(${jsArg(uid)}, true)">Übernehmen</button>
