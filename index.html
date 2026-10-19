@@ -113,6 +113,7 @@
   .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
   .multi-label.special{background:#EEE8F6; color:#4F3A75;}
   .req-klickbar{cursor:pointer;}
+  .vorschlag-linie{position:absolute; left:4px; width:3px; z-index:4; pointer-events:none;}
   .auth-check{display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--ink-soft); margin:4px 0 14px; line-height:1.35; cursor:pointer;}
   .auth-check input{margin-top:2px; flex-shrink:0;}
   .konto-abschnitt{border-top:1px solid var(--line); padding-top:12px; margin-top:12px;}
@@ -869,7 +870,7 @@ function hatDieserTagFixeBloecke(d, iso){
   const dowIdx1to7 = (dow===0)?7:dow;
   const janoschSchule = isSchoolDayForKid(d,'janosch') && SCHOOL_TIMES['janosch'][dowIdx1to7];
   const mischaSchule = isSchoolDayForKid(d,'mischa') && SCHOOL_TIMES['mischa'][dowIdx1to7];
-  const hort = dow===4; // Donnerstag
+  const hort = dow===4 || !!getKidClub(d,'janosch') || !!getKidClub(d,'mischa'); // Donnerstag (Hort) bzw. Club
   const volleyball = dow===3;
   const bandprobeM = BAND_DATES_MISCHA.includes(iso);
   return !!(janoschSchule || mischaSchule || hort || volleyball || bandprobeM);
@@ -997,11 +998,36 @@ const SCHOOL_TIMES = {
 };
 /* Hort Donnerstag-Mittag (Lücke zwischen Vor- und Nachmittagsunterricht) */
 const HORT_THU = { janosch:[11.75,13.5], mischa:[11.83,14] };
-/* Freitags-Clubs, nur an Schul-Freitagen */
+/* Angebote der Jugendarbeit Rüschlikon (jarü.ch), Stand 19.10.2026:
+   - Mischa (6. Klasse): Fridays Club, jeden Schul-Freitag 19–22 Uhr.
+     Auf dem Flyer Aug–Okt 2026 bestätigt bis 30.10. (Halloweenparty);
+     danach laut Monatsflyer "jeden Freitag".
+   - Janosch (4. Klasse): Kidstreff, jeden zweiten Donnerstag 15:30–17:30
+     (4./5. Klasse, nicht in den Schulferien). Bestätigt sind nur die Daten
+     vom Flyer Aug/Sep; die weiteren sind im Zweiwochen-Rhythmus
+     hochgerechnet und als "vorauss." markiert, bis ein neuer Flyer da ist.
+   Der Schlüssel "club_kidsclub_<Datum>" für Mischa bleibt gleich, damit
+   bereits gespeicherte Verschiebungen/Absagen weiter gelten. */
 const FRIDAY_CLUBS = {
-  mischa:  {label:'KidsClub', start:18, end:22},
-  janosch: {label:'BoysClub', start:16, end:18}
+  mischa:  {label:'Fridays Club', start:19, end:22}
 };
+const FRIDAYS_CLUB_TITEL = { '2026-10-30':'Fridays Club: Halloweenparty' };
+const KIDSTREFF = { label:'Kidstreff', start:15.5, end:17.5 };
+const KIDSTREFF_BESTAETIGT = ['2026-08-27','2026-09-10','2026-09-24'];
+const KIDSTREFF_VORAUSS   = ['2026-10-22','2026-11-05','2026-11-19','2026-12-03','2026-12-17'];
+/* Club eines Kindes an einem Tag (oder null): {label,start,end,key} */
+function getKidClub(d, kid){
+  const iso = isoDate(d);
+  if(kid==='mischa' && d.getDay()===5 && isSchoolDayForKid(d,'mischa')){
+    const c = FRIDAY_CLUBS.mischa;
+    return {label: FRIDAYS_CLUB_TITEL[iso] || c.label, start:c.start, end:c.end, key:'club_kidsclub_'+iso};
+  }
+  if(kid==='janosch' && (KIDSTREFF_BESTAETIGT.includes(iso) || KIDSTREFF_VORAUSS.includes(iso)) && !getSchoolHolidayName(d)){
+    const vorauss = KIDSTREFF_VORAUSS.includes(iso);
+    return {label: KIDSTREFF.label + (vorauss?' (vorauss.)':''), start:KIDSTREFF.start, end:KIDSTREFF.end, key:'club_kidstreff_'+iso};
+  }
+  return null;
+}
 
 /* Echte Fächer pro Lektion (für die Kinder-Kalenderansicht), aus den
    Stundenplan-Fotos abgelesen. [start, ende, Fach] pro Wochentag. */
@@ -1030,6 +1056,7 @@ const SCHOOL_SUBJECTS = {
 window.SCHOOL_TIMES = SCHOOL_TIMES;
 window.HORT_THU = HORT_THU;
 window.FRIDAY_CLUBS = FRIDAY_CLUBS;
+window.getKidClub = getKidClub;
 window.BAND_DATES_MISCHA = BAND_DATES_MISCHA;
 window.SCHOOL_SUBJECTS = SCHOOL_SUBJECTS;
 
@@ -1295,6 +1322,34 @@ function buildColorBarSegments(d, kidFilter){
     if(cursor<seg.end) out.push({start:cursor, end:seg.end, color:seg.color});
   });
   return out;
+}
+/* Offene Betreuungs-Anfrage (Regler) eines Tages: der vorgeschlagene
+   Tagesplan als gestrichelte Linie direkt neben der bisherigen (soliden)
+   Betreuungs-Linie. Verschwindet, sobald die Anfrage angenommen,
+   abgelehnt oder zurückgezogen ist. Sichtbar für die beiden Beteiligten. */
+function offeneBetreuungsVorschlaege(iso){
+  const alle = [...(window.__reqSent||[]), ...(window.__reqReceived||[])];
+  const gesehen = new Set();
+  return alle.filter(r=>{
+    if(gesehen.has(r.id)) return false; gesehen.add(r.id);
+    if(r.datum !== iso || r.status==='akzeptiert' || r.status==='abgelehnt') return false;
+    const l = (r.verlauf||[]).slice(-1)[0];
+    return !!(l && l.neueSegmente && l.neueSegmente.length);
+  });
+}
+function vorschlagLinieHtml(iso, startHour, px){
+  let html = '';
+  offeneBetreuungsVorschlaege(iso).forEach(r=>{
+    const l = r.verlauf[r.verlauf.length-1];
+    bereinigeTagesSegmente(l.neueSegmente).forEach(sg=>{
+      const von = sg.from!==undefined?sg.from:0, bis = sg.to!==undefined?sg.to:24;
+      const top = (Math.max(von,startHour)-startHour)*px, height = (bis-Math.max(von,startHour))*px;
+      if(height<=0) return;
+      const f = barColorFor(sg.who);
+      html += `<div class="vorschlag-linie" title="Vorgeschlagen (wartet auf Antwort)" style="top:${top}px;height:${height}px;background:repeating-linear-gradient(to bottom, ${f} 0 6px, transparent 6px 10px);"></div>`;
+    });
+  });
+  return html;
 }
 function renderColorBarHtml(segments, startHour, px){
   let html = '';
@@ -1785,7 +1840,7 @@ function renderWeek(){
     const hol = getHolidayName(d) || getSchoolHolidayName(d);
     body += `<div class="day-col" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${PXH})" onpointerup="handleDayColPointerUp(event)">`;
     for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${PXH}px;"></div>`;
-    body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, PXH);
+    body += renderColorBarHtml(buildColorBarSegments(d, null), startHour, PXH) + vorschlagLinieHtml(iso, startHour, PXH);
     body += renderMehrtaegigLinienHtml(iso, startHour, PXH);
 
     // Feiertag: kein Riesenblock mehr, Betreuung läuft normal weiter,
@@ -1830,11 +1885,11 @@ function renderWeek(){
     // (kein eigener Hintergrund-Block mehr nötig). Ein Klick auf den
     // Tag öffnet trotzdem das Änderungsfenster über handleDayColClick.
 
-    if(dow===5){
+    {
       ['mischa','janosch'].forEach(kid=>{
-        if(isSchoolDayForKid(d, kid)){
-          const c = FRIDAY_CLUBS[kid];
-          const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
+        const c = getKidClub(d, kid);
+        if(c){
+          const key = c.key;
           const ov = window.getEventOverride ? window.getEventOverride(key) : null;
           if(ov && ov.geloescht) return;
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
@@ -1948,8 +2003,8 @@ function renderKidWeek(kid){
       const top=(s-startHour)*44, height=(e-s)*44-2;
       body += `<div class="school-block" style="top:${top}px;height:${height}px;left:2px;right:2px;z-index:1;background:var(--school);">Hort</div>`;
     }
-    if(dow===5 && isSchoolDayForKid(d, kid)){
-      const c = FRIDAY_CLUBS[kid];
+    if(getKidClub(d, kid)){
+      const c = getKidClub(d, kid);
       const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
       body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;">${c.label}</div>`;
     }
@@ -2119,7 +2174,7 @@ function renderDay(){
   for(let h=startHour; h<endHour; h++) body += `<div class="slot-h" style="height:${px}px;">${h}</div>`;
   body += `</div><div class="day-col" style="position:relative;" onpointerdown="handleDayColPointerDown(event,'${iso}',${startHour},${px})" onpointerup="handleDayColPointerUp(event)">`;
   for(let h=startHour; h<endHour; h++) body += `<div class="hour-row" style="height:${px}px;"></div>`;
-  body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
+  body += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px) + vorschlagLinieHtml(iso, startHour, px);
   body += renderMehrtaegigLinienHtml(iso, startHour, px);
 
   function block(s,e,label,bgVar,colorVar,clickable,z){
@@ -2143,8 +2198,8 @@ function renderDay(){
       const [s,e] = HORT_THU[kid];
       body += block(s,e,'Hort','var(--school)',null,false,1);
     }
-    if(dow===5 && isSchoolDayForKid(d, kid)){
-      const c = FRIDAY_CLUBS[kid];
+    if(getKidClub(d, kid)){
+      const c = getKidClub(d, kid);
       body += block(c.start,c.end,c.label,'var(--school)','#6B5B3A',false,2);
     }
     if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
@@ -2183,10 +2238,10 @@ function renderDay(){
       if(showFullDetailFor('a')) body += block(startHour,16,'Janine','var(--a-bg)','var(--a)','a',2);
       if(showFullDetailFor('b')) body += block(16,endHour,'Andi (ab 16)','var(--b-bg)','var(--b)','b',2);
     }
-    if(dow===5){
+    {
       ['mischa','janosch'].forEach(k=>{
-        if(isSchoolDayForKid(d, k)){
-          const c = FRIDAY_CLUBS[k];
+        const c = getKidClub(d, k);
+        if(c){
           body += block(c.start,c.end,`${c.label} (${k==='mischa'?'Mischa':'Janosch'})`,'var(--school)','#6B5B3A',false,3);
         }
       });
@@ -2245,7 +2300,7 @@ function renderSwipeView(){
     daysHtml += `</div>`;
     daysHtml += `<div class="swipe-body">`;
     for(let h=startHour; h<endHour; h++) daysHtml += `<div class="hour-row" style="height:${px}px;"></div>`;
-    daysHtml += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px);
+    daysHtml += renderColorBarHtml(buildColorBarSegments(d, (currentPerson==='janosch'||currentPerson==='mischa')?currentPerson:null), startHour, px) + vorschlagLinieHtml(iso, startHour, px);
     daysHtml += renderMehrtaegigLinienHtml(iso, startHour, px);
 
     if(currentPerson==='janosch' || currentPerson==='mischa'){
@@ -2297,11 +2352,11 @@ function renderSwipeView(){
       // (kein eigener Hintergrund-Block mehr), analog zur Wochenansicht.
       // Ein Klick auf die Spalte öffnet trotzdem das Änderungsfenster
       // über handleDayColClick.
-      if(dow===5){
+      {
         ['mischa','janosch'].forEach(kid=>{
-          if(isSchoolDayForKid(d, kid)){
-            const c = FRIDAY_CLUBS[kid];
-            const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
+          const c = getKidClub(d, kid);
+          if(c){
+            const key = c.key;
             const ov = window.getEventOverride ? window.getEventOverride(key) : null;
             if(ov && ov.geloescht) return;
             const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
@@ -2610,7 +2665,7 @@ function betreuungText(segs){
 const WUEB_FIX_LABEL = {
   schule_janosch:'Schule Janosch', schule_mischa:'Schule Mischa',
   hort_janosch:'Hort Janosch', hort_mischa:'Hort Mischa',
-  club_kidsclub:'KidsClub (Mischa)', club_boysclub:'BoysClub (Janosch)',
+  club_kidsclub:'Fridays Club (Mischa)', club_kidstreff:'Kidstreff (Janosch)',
   bandprobe_janine:'Bandprobe Janine', bandprobe_mischa:'Bandprobe Mischa',
   volleyball_andi:'Volleyball Andi'
 };
@@ -2990,11 +3045,11 @@ function renderAllColumns(){
 
     // Clubs & Bandprobe
     let clubCell = '';
-    if(dow===5){
+    {
       ['mischa','janosch'].forEach(kid=>{
-        if(isSchoolDayForKid(d, kid)){
-          const c = FRIDAY_CLUBS[kid];
-          clubCell += `<span class="chip club">${c.label} (${kid==='mischa'?'Mischa':'Janosch'}) ${c.start}–${c.end}</span>`;
+        const c = getKidClub(d, kid);
+        if(c){
+          clubCell += `<span class="chip club">${c.label} (${kid==='mischa'?'Mischa':'Janosch'}) ${fmtHintH(c.start)}–${fmtHintH(c.end)}</span>`;
         }
       });
     }
@@ -3014,7 +3069,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v77 · 06.10.2026';
+const APP_VERSION = 'v78 · 19.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3035,7 +3090,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=77').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=78').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3362,11 +3417,11 @@ function buildHourEntries(iso, hourDec){
       }
     });
   }
-  if(dow===5){
+  {
     ['mischa','janosch'].forEach(kid=>{
-      if(isSchoolDayForKid(d,kid)){
-        const c = FRIDAY_CLUBS[kid];
-        const key = 'club_'+(kid==='mischa'?'kidsclub':'boysclub')+'_'+iso;
+      const c = getKidClub(d, kid);
+      if(c){
+        const key = c.key;
         const r = getOverrideRange(key, c.start, c.end);
         if(r && hourDec>=r[0] && hourDec<r[1]) entries.push({id:key, label:c.label+' ('+(kid==='mischa'?'Mischa':'Janosch')+')', type:'event', key, defS:c.start, defE:c.end});
       }
@@ -4642,8 +4697,16 @@ function startAdminRequestListener(){
     window.__reqSent = [];
     window.__reqReceived = snap.docs.filter(d=>idOk(d.id)).map(d=>({id:d.id, ...d.data()})); // Admin sieht alle als "empfangen" (rein zur Anzeige)
     renderRequestsUI();
+    if(typeof render === 'function') render();
   }, err=> console.error('Admin-Anfragen Fehler:', err));
 }
+window.zurueckziehenBetreuungsAnfrage = async function(id){
+  if(!confirm('Diese Betreuungs-Anfrage zurückziehen? Sie wird für beide gelöscht.')) return;
+  try{
+    await deleteDoc(doc(db,'slot_changes',id));
+    if(window.logEvent) window.logEvent('anfrage_zurueckgezogen', {id});
+  } catch(e){ alert('Zurückziehen fehlgeschlagen: ' + e.message + regelHinweis(e)); }
+};
 function startRequestListeners(){
   if(reqUnsub1 || !window.myUid) return; // schon aktiv
   const q1 = query(collection(db,'slot_changes'), where('angefragtVonUid','==', window.myUid));
@@ -4651,12 +4714,14 @@ function startRequestListeners(){
     window.__reqSent = [];
     snap.forEach(d=>{ if(idOk(d.id)) window.__reqSent.push({id:d.id, ...d.data()}); });
     renderRequestsUI();
+    if(typeof render === 'function') render();
   }, err=> console.error('Anfragen (gesendet) Fehler:', err));
   const q2 = query(collection(db,'slot_changes'), where('angefragtAnUid','==', window.myUid));
   reqUnsub2 = onSnapshot(q2, snap=>{
     window.__reqReceived = [];
     snap.forEach(d=>{ if(idOk(d.id)) window.__reqReceived.push({id:d.id, ...d.data()}); });
     renderRequestsUI();
+    if(typeof render === 'function') render();
   }, err=> console.error('Anfragen (empfangen) Fehler:', err));
 }
 
@@ -4869,6 +4934,7 @@ function renderRequestsUI(){
           <button class="req-btn-accept" style="width:100%;" onclick="submitCounter(${jsArg(r.id)})">Gegenvorschlag senden</button>
         </div>
       ` : ''}
+      ${(r.angefragtVonUid===window.myUid && r.status!=='akzeptiert' && r.status!=='abgelehnt') ? `<div class="req-actions" style="margin-top:8px;" onclick="event.stopPropagation()"><button class="req-btn-reject" onclick="zurueckziehenBetreuungsAnfrage(${jsArg(r.id)})">✕ Zurückziehen</button></div>` : ''}
       ${istAdmin ? `<div class="req-actions" style="margin-top:8px;" onclick="event.stopPropagation()"><button class="req-btn-reject" onclick="adminLoescheAnfrage(${jsArg(r.id)})">🗑️ Löschen (Admin)</button></div>` : ''}
     </div>`;
   });
