@@ -3069,7 +3069,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v78 · 19.10.2026';
+const APP_VERSION = 'v79 · 19.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3090,7 +3090,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=78').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=79').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4322,6 +4322,10 @@ window.hiRejectCustom = async function(id){
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
+window.ablehnungGesehen = async function(id){
+  try{ await updateDoc(doc(db,'custom_events',id), {ablehnungGesehen: true}); }
+  catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
 window.hiDeleteCustom = async function(id){
   if(!confirm('Termin wirklich löschen?')) return;
   try{ await deleteDoc(doc(db,'custom_events',id)); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
@@ -4373,10 +4377,9 @@ let rejectionPopupShown = new Set();
 function checkForNewRejections(){
   (window.customEvents||[]).forEach(ev=>{
     if(ev.erstelltVonUid === window.myUid && ev.status === 'abgelehnt' && ev.ablehnungGesehen === false && !rejectionPopupShown.has(ev.id)){
-      rejectionPopupShown.add(ev.id); // verhindert Doppel-Popup während dieser Sitzung
-      const grundText = ev.ablehnungsGrund ? `\n\nBegründung: "${ev.ablehnungsGrund}"` : '\n\n(keine Begründung angegeben)';
-      alert(`❌ Dein Termin "${ev.titel||'?'}" (${ev.datum||'?'}, ${ev.von||''}–${ev.bis||''} Uhr) wurde abgelehnt.${grundText}`);
-      updateDoc(doc(db,'custom_events',ev.id), {ablehnungGesehen: true}).catch(()=>{});
+      // Kein Popup mehr: die Ablehnung erscheint als Notiz unter 📥
+      // (Änderungsanfragen), bis sie dort zur Kenntnis genommen wird.
+      rejectionPopupShown.add(ev.id);
     }
   });
 }
@@ -4813,7 +4816,8 @@ function renderRequestsUI(){
   const meineRueckfragen = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ichBinBeiRueckfrageAmZug(ev));
   const wf = window.__wiederherstellungFehlt || {};
   const hinweisKontakt = !!wf.email; // Telefonnummer ist freiwillig (Hinweis nur unter ⚙)
-  const myTurnCount = all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
+  const abgelehntFuerMich = (window.customEvents||[]).filter(ev=> ev.erstelltVonUid===window.myUid && ev.status==='abgelehnt' && ev.ablehnungGesehen===false);
+  const myTurnCount = abgelehntFuerMich.length + all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -4824,7 +4828,7 @@ function renderRequestsUI(){
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
   const istAdmin = window.__chaosRole === 'admin';
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin && !hinweisKontakt){
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin && !hinweisKontakt && !abgelehntFuerMich.length){
     listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
     return;
   }
@@ -4836,6 +4840,27 @@ function renderRequestsUI(){
       <div class="req-meta" style="font-size:12.5px;">Bitte hinterlege unter ⚙ deine <b>E-Mail-Adresse</b>. Damit kannst du ein vergessenes Passwort selbst zurücksetzen und dich künftig damit anmelden – alle deine Daten bleiben erhalten.</div>
       <div class="req-zeigen">⚙ Jetzt hinterlegen ›</div>
     </div>`;
+  }
+  if(abgelehntFuerMich.length){
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Abgelehnte Termine</div>';
+    abgelehntFuerMich.forEach(ev=>{
+      const dateStr = ev.mehrtaegig ? terminZeitText(ev)
+        : (ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?') + (ev.von&&ev.bis ? ' · '+ev.von+'–'+ev.bis+' Uhr' : '');
+      // Wer abgelehnt hat: wer von den Bestätigern noch nicht bestätigt hatte
+      const uids = ev.bestaetigerUids||[], namen = ev.bestaetigerNamen||[];
+      const wer = uids.map((u,i)=> (ev.bestaetigtVon||[]).includes(u) ? null : (namen[i]||null)).filter(Boolean);
+      html += `<div class="req-card mine-turn req-klickbar req-abgelehnt" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
+        <div class="req-top"><div class="req-date">❌ ${escapeHtml(dateStr)}</div><div class="req-status abgelehnt">Abgelehnt</div></div>
+        <div class="req-times">${escapeHtml(terminAnzeigeTitel(ev))}</div>
+        ${ev.ablehnungsGrund ? `<div class="req-reason">„${escapeHtml(ev.ablehnungsGrund)}“</div>` : '<div class="req-meta">(keine Begründung angegeben)</div>'}
+        <div class="req-meta">${wer.length ? 'Abgelehnt von '+escapeHtml(wer.join(' / ')) : 'Dein Termin wurde abgelehnt'}</div>
+        <div class="req-zeigen">📅 Im Kalender zeigen & Chat öffnen ›</div>
+        <div class="req-actions" onclick="event.stopPropagation()">
+          <button class="req-btn-accept" onclick="ablehnungGesehen(${jsArg(ev.id)})">✓ Zur Kenntnis genommen</button>
+          <button class="req-btn-reject" onclick="hiDeleteCustom(${jsArg(ev.id)})">🗑️ Termin löschen</button>
+        </div>
+      </div>`;
+    });
   }
   html += `<div style="margin-bottom:14px;"><button class="cr-del" onclick="adminAufraeumenAlteAnfragen()">🧹 Akzeptierte/abgelehnte Anfragen &amp; vergangene Termine löschen${istAdmin?'':' (nur meine)'}</button></div>`;
   if(chatNotizen.length) html += renderChatNotizenHtml(chatNotizen);
