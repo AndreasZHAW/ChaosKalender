@@ -24,8 +24,8 @@
     --line: #E8E4DC;
     --a: #C0392B; --a-bg: #FBEAE8;
     --b: #2B6CC0; --b-bg: #E8EFFB;
-    --janosch: #C99A00; --janosch-bg: #FBF3D9;
-    --mischa: #2F9B5B; --mischa-bg: #E7F5ED;
+    --janosch: #7E93A8; --janosch-bg: #E9EDF1;
+    --mischa: #A68B6D; --mischa-bg: #F1ECE5;
     --omami: #9B7CA8; --omami-bg: #F1E9F3;
     --pending: #C9A54B; --pending-bg: #F8F0DC;
     --holiday-bg: #FBEEE9; --holiday-text: #C17356;
@@ -145,7 +145,7 @@
   .hi-weitere summary{cursor:pointer; font-size:12.5px; color:var(--ink-soft); padding:4px 0; list-style:none;}
   .hi-weitere summary::-webkit-details-marker{display:none;}
   .hi-leise{font-size:12px; color:var(--ink-soft);}
-  .hi-an{margin:6px 0 0;}
+  .hi-vonan{margin:-4px 0 8px; font-size:13px;}
   .hi-unter{display:flex; align-items:center; gap:12px; margin:-2px 0 10px 26px;}
   .hi-radio{font-size:14px; display:inline-flex; gap:4px; align-items:center;}
   .hi-chat{margin-top:6px;}
@@ -352,7 +352,17 @@
   .admin-nav button{border:1px solid var(--line); background:var(--panel); color:var(--ink-soft); padding:8px 14px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
-  #logList{overflow-x:auto; -webkit-overflow-scrolling:touch;}
+  #logList{overflow-x:hidden;}
+  .log-liste{display:flex; flex-direction:column;}
+  .log-zeile{border-bottom:1px solid var(--line); padding:7px 4px; font-size:12.5px;}
+  .log-zeile.fehler{background:var(--holiday-bg);}
+  .log-kopf{display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline;}
+  .log-zeit{font-variant-numeric:tabular-nums; color:var(--ink-soft); white-space:nowrap;}
+  .log-typ{font-weight:700; word-break:break-word;}
+  .log-meta{font-size:11px; color:var(--ink-soft); margin-top:2px;}
+  .log-details{margin-top:3px; font-size:11px; color:var(--ink-soft);}
+  .log-details summary{cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .log-details pre{white-space:pre-wrap; word-break:break-word; max-height:260px; overflow:auto; background:#F6F5F1; border-radius:6px; padding:8px; margin:4px 0 0; font-size:10.5px;}
   #custodyRulesTable{overflow-x:auto; -webkit-overflow-scrolling:touch;}
   .custody-track{position:relative; height:40px; background:var(--line); border-radius:8px; margin:20px 0 4px;}
   .custody-seg{position:absolute; top:0; height:100%; cursor:pointer;}
@@ -498,7 +508,7 @@
   <div class="admin-header">
     <div>
       <h1>Admin-Bereich</h1>
-      <div class="brand-sub"><span id="adminVersionTag"></span> <span id="adminLoggedInAs" style="font-weight:600;"></span> <span onclick="sendVerboseDiagnostic()" style="text-decoration:underline; cursor:pointer;">🔍 Diagnose senden</span></div>
+      <div class="brand-sub"><span id="adminVersionTag"></span> <span id="adminLoggedInAs" style="font-weight:600;"></span> <span onclick="sendVerboseDiagnostic()" title="Diagnose senden" style="cursor:pointer;">🩺</span></div>
     </div>
     <div class="logout-link" onclick="handleLogout()">Abmelden</div>
   </div>
@@ -603,7 +613,7 @@
   <header class="top">
     <div>
       <div class="brand-title">ChaosKalender</div>
-      <div class="brand-sub"><span id="versionTag"></span> <span id="loggedInAs"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" title="Diagnose senden" style="cursor:pointer;">🔍</span></div>
+      <div class="brand-sub"><span id="versionTag"></span> <span id="loggedInAs"></span> <span id="verboseDiagBtn" onclick="sendVerboseDiagnostic()" title="Diagnose an den Admin senden (bei Problemen)" style="cursor:pointer;">🩺</span></div>
     </div>
     <div style="display:flex; align-items:center; gap:6px;">
       <div class="gear-btn" title="Suche" onclick="openSearchModal()">🔍</div>
@@ -1760,7 +1770,7 @@ async function sendVerboseDiagnostic(){
     })()
   };
   if(window.logEvent) await window.logEvent('verbose_diagnose', payload);
-  if(btn){ btn.textContent = '✓ Gesendet – siehe Admin-Protokoll'; setTimeout(()=>{btn.textContent='🔍 Diagnose senden'; btn.disabled=false;}, 3000); }
+  if(btn){ btn.textContent = '✓ Gesendet – siehe Admin-Protokoll'; setTimeout(()=>{btn.textContent='🩺'; btn.disabled=false;}, 3000); }
 }
 
 function jumpToToday(){
@@ -2571,9 +2581,14 @@ function scrollSwipeToToday(smooth, zielIso, optionen){
     return;
   }
   // zentriert: Zieltag in die Mitte, damit man Tag davor/danach sieht
+  // Die Zeitspalte links (ca. 34px) liegt über dem Band – sonst wäre die
+  // Betreuungs-Linie am linken Tagesrand verdeckt.
+  const tc = wrap.querySelector('.swipe-timecol');
+  const zeitBreite = tc ? tc.offsetWidth : 34;
+  const sichtbar = wrap.clientWidth - zeitBreite;
   const target = optionen.zentriert
-    ? Math.max(0, todayCol.offsetLeft - Math.max(6, (wrap.clientWidth - todayCol.offsetWidth)/2))
-    : todayCol.offsetLeft - 6;
+    ? Math.max(0, todayCol.offsetLeft - zeitBreite - Math.max(4, (sichtbar - todayCol.offsetWidth)/2))
+    : Math.max(0, todayCol.offsetLeft - zeitBreite - 4);
   // zielStunde: senkrecht so, dass der Termin mit etwas Vorlauf sichtbar ist
   const vTop = compactMode ? 0
     : (typeof optionen.zielStunde === 'number' ? Math.max(0, optionen.zielStunde - 1.5)*40 : (8+20/60)*40);
@@ -3139,7 +3154,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v80 · 21.10.2026';
+const APP_VERSION = 'v82 · 21.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3160,7 +3175,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=80').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=82').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3606,7 +3621,7 @@ function hiDatumText(iso){
 }
 function hiBetreuungChip(){
   const w = hiState && hiState.custodySeg ? hiState.custodySeg.who : null;
-  return w ? `<span class="hi-chip ${w}" title="Betreuung zu dieser Zeit">👪 ${escapeHtml(whoLabel(w))}</span>` : '';
+  return w ? `<span class="hi-chip ${w}" title="Wer zu dieser Zeit die Kinder betreut">👪 Betreuung: ${escapeHtml(whoLabel(w))}</span>` : '';
 }
 function hiAbbrechenBtn(text){
   return `<button class="btn secondary" onclick="document.getElementById('hourInspectorOverlay').classList.remove('show')">${text||'Schliessen'}</button>`;
@@ -3841,7 +3856,7 @@ function renderCustodyForm(){
       ${hilfe('Regler ziehen = neue Übergabezeit. Am Rand (0/24 Uhr) ziehen = zusätzliche Übergabe. Auf ein Stück tippen = Farbe wechseln. Gilt erst nach Bestätigung.')}</div>
     <div style="margin:14px 0 6px;">${renderDaySliderTrack(trackId, hiState.custodyDaySegs)}</div>
     <textarea id="hiCustodyGrund" class="hi-nachricht" rows="3" placeholder="💬 Grund (optional)"></textarea>
-    <div class="hi-leise" style="margin:6px 0 2px;">An: <b>${escapeHtml(window.partnerName || whoLabel(seg.who==='a'?'b':'a'))}</b></div>
+    <div class="hi-leise" style="margin:6px 0 2px;">von dir an <b>${escapeHtml(window.partnerName || whoLabel(seg.who==='a'?'b':'a'))}</b></div>
     <div class="modal-actions">
       ${hiAbbrechenBtn('Abbrechen')}
       <button class="btn" id="hiCustodySaveBtn" onclick="hiSaveCustodyRequest()">Anfragen</button>
@@ -4186,17 +4201,18 @@ function renderExistingEntryForm(entry){
   }
 
   let chip;
-  if(ev.status==='info') chip = `<span class="hi-chip st-info">${ev.privat?'🔒 privat':'Info'}</span>`;
+  if(ev.status==='info') chip = ev.privat ? `<span class="hi-chip st-info">🔒 privat</span>` : '';
   else if(ev.status==='bestaetigt') chip = `<span class="hi-chip st-ok">✓ bestätigt</span>`;
   else if(ev.status==='abgelehnt') chip = `<span class="hi-chip st-no">✕ abgelehnt</span>`;
   else chip = `<span class="hi-chip st-pending">⏳ offen</span>`;
 
   // An wen (Status pro Person) – unter dem Chat
-  const anZeile = bestaetiger.length && ev.status!=='info'
-    ? `<div class="hi-leise hi-an">An: ${(ev.bestaetigerNamen || bestaetiger).map((n,idx)=> escapeHtml(String(n)) + (bestaetigt.includes(bestaetiger[idx]) ? ' ✓' : (ev.status==='abgelehnt' ? ' ✕' : ' ⏳'))).join(' · ')}</div>` : '';
+  const anText = bestaetiger.length && ev.status!=='info'
+    ? ' an ' + (ev.bestaetigerNamen || bestaetiger).map((n,idx)=> (bestaetiger[idx]===window.myUid ? 'dich' : escapeHtml(String(n))) + (bestaetigt.includes(bestaetiger[idx]) ? ' ✓' : (ev.status==='abgelehnt' ? ' ✕' : ' ⏳'))).join(', ') : '';
+  const vonText = ev.erstelltVonUid===window.myUid ? 'dir' : escapeHtml(ev.erstelltVonName||'?');
   const grundZeile = ev.status==='abgelehnt' && ev.ablehnungsGrund ? `<div class="req-reason">„${escapeHtml(ev.ablehnungsGrund)}“</div>` : '';
   const betreuungZeile = (ev.beeinflusstBetreuung && ev.betreuungWer)
-    ? `<span class="hi-chip ${ev.betreuungWer}">👪 ${escapeHtml(whoLabel(ev.betreuungWer))}</span>` : '';
+    ? `<span class="hi-chip ${ev.betreuungWer}" title="Wer in dieser Zeit die Kinder betreut">👪 Betreuung: ${escapeHtml(whoLabel(ev.betreuungWer))}</span>` : '';
 
   // Bearbeiten (nur Ersteller/Admin) – gleiche Reihenfolge wie beim Anlegen
   let editPanel = '';
@@ -4221,7 +4237,7 @@ function renderExistingEntryForm(entry){
 
   const aktionen = mussIchBestaetigen
     ? `<button class="btn secondary" onclick="hiRejectCustom(${jsArg(ev.id)})">Ablehnen</button><button class="btn" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button>`
-    : `${darfZeitAendern ? '' : `<button class="btn secondary" title="Löschanfrage stellen" onclick="hiRequestDelete(${jsArg(ev.id)})">🗑️</button>`}${hiAbbrechenBtn()}`;
+    : `${darfLoeschen ? `<button class="btn secondary" title="Termin löschen" onclick="hiDeleteCustom(${jsArg(ev.id)})">🗑️ Löschen</button>` : `<button class="btn secondary" title="Löschanfrage stellen" onclick="hiRequestDelete(${jsArg(ev.id)})">🗑️</button>`}${hiAbbrechenBtn()}`;
 
   return `
     <div class="hi-datumzeile">
@@ -4230,10 +4246,9 @@ function renderExistingEntryForm(entry){
     </div>
     ${editPanel}
     <div class="hi-titel">${escapeHtml(terminAnzeigeTitel(ev))}</div>
-    ${ev.erstelltVonName ? `<div class="hi-leise" style="margin:-4px 0 6px;">von ${escapeHtml(ev.erstelltVonName)}</div>` : ''}
+    <div class="hi-leise hi-vonan">von ${vonText}${anText}</div>
     ${grundZeile}
     ${renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen)}
-    ${anZeile}
     <div class="modal-actions" style="margin-top:12px;">${aktionen}</div>`;
 }
 
@@ -4381,10 +4396,18 @@ window.ablehnungGesehen = async function(id){
   try{ await updateDoc(doc(db,'custom_events',id), {ablehnungGesehen: true}); }
   catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
+async function loescheTerminSicher(id){
+  await deleteDoc(doc(db,'custom_events',id));
+  window.customEvents = (window.customEvents||[]).filter(e=>e.id!==id);
+  if(window.logEvent) window.logEvent('termin_geloescht', {id});
+  if(typeof render === 'function') render();
+  if(typeof renderAllEventsList === 'function') renderAllEventsList();
+  if(typeof renderRequestsUI === 'function') renderRequestsUI();
+}
 window.hiDeleteCustom = async function(id){
   if(!confirm('Termin wirklich löschen?')) return;
-  try{ await deleteDoc(doc(db,'custom_events',id)); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
-  catch(e){ alert('Fehler: '+e.message); }
+  try{ await loescheTerminSicher(id); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
+  catch(e){ alert('Löschen fehlgeschlagen: '+e.message + regelHinweis(e)); if(window.logEvent) window.logEvent('termin_loeschen_fehler', {id, fehler:String(e.message||e).slice(0,200)}); }
 };
 
 /* Custom Events live laden (für alle aktiven Rollen) */
@@ -4477,7 +4500,8 @@ function renderAllEventsList(){
 }
 window.deleteAnyCustomEvent = async function(id){
   if(!confirm('Diesen Termin wirklich löschen?')) return;
-  try{ await deleteDoc(doc(db,'custom_events',id)); } catch(e){ alert('Fehler: '+e.message); }
+  try{ await loescheTerminSicher(id); }
+  catch(e){ alert('Löschen fehlgeschlagen: '+e.message + regelHinweis(e)); if(window.logEvent) window.logEvent('termin_loeschen_fehler', {id, fehler:String(e.message||e).slice(0,200)}); }
 };
 
 /* Standard-Betreuungsregeln (Admin-editierbare Wochen-Vorlage) – für
@@ -4908,7 +4932,7 @@ function renderRequestsUI(){
         <div class="req-top"><div class="req-date">❌ ${escapeHtml(dateStr)}</div><div class="req-status abgelehnt">Abgelehnt</div></div>
         <div class="req-times">${escapeHtml(terminAnzeigeTitel(ev))}</div>
         ${ev.ablehnungsGrund ? `<div class="req-reason">„${escapeHtml(ev.ablehnungsGrund)}“</div>` : '<div class="req-meta">(keine Begründung angegeben)</div>'}
-        <div class="req-meta">${wer.length ? 'Abgelehnt von '+escapeHtml(wer.join(' / ')) : 'Dein Termin wurde abgelehnt'}</div>
+        <div class="req-meta">von dir an ${wer.length ? escapeHtml(wer.join(', '))+' ✕' : '…'}</div>
         <div class="req-zeigen">📅 öffnen ›</div>
         <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-accept" onclick="ablehnungGesehen(${jsArg(ev.id)})">✓ Zur Kenntnis genommen</button>
@@ -4929,7 +4953,7 @@ function renderRequestsUI(){
           <div class="req-status schwebend">${ichBinBeiRueckfrageAmZug(ev)?'Neue Antwort':'Schwebend'}</div>
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
-        <div class="req-meta">Von ${escapeHtml(ev.erstelltVonName||'?')} · du bist eine der noch fehlenden Bestätigungen</div>
+        <div class="req-meta">von ${escapeHtml(ev.erstelltVonName||'?')} an dich ⏳</div>
         ${rueckfrageHtml(ev)}
         <div class="req-zeigen">📅 öffnen ›</div>
         ${ev.chat && ev.chat.length && !ichBinBeiRueckfrageAmZug(ev) ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
@@ -4952,10 +4976,10 @@ function renderRequestsUI(){
       const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
       const bestaetiger = ev.bestaetigerUids || [];
       const bestaetigt = ev.bestaetigtVon || [];
-      const namen = (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
+      const namen = 'von dir an ' + (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
         const uid = bestaetiger[idx];
-        return bestaetigt.includes(uid) ? `<span style="color:var(--a);">✓ ${escapeHtml(String(n))}</span>` : `<span>⏳ ${escapeHtml(String(n))}</span>`;
-      }).join(' · ');
+        return escapeHtml(String(n)) + (bestaetigt.includes(uid) ? ' ✓' : ' ⏳');
+      }).join(', ');
       const rfAmZug = ichBinBeiRueckfrageAmZug(ev);
       html += `<div class="req-card req-klickbar ${rfAmZug?'mine-turn':''}" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
@@ -4997,7 +5021,7 @@ function renderRequestsUI(){
       </div>
       <div class="req-times">${zeitZeile}</div>
       ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
-      <div class="req-meta">Von ${escapeHtml(r.angefragtVonName)} an ${escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?` · wartet auf ${escapeHtml(r.aktuellAmZugUid===r.angefragtVonUid?r.angefragtVonName:r.angefragtAnName)}`:''}</div>
+      <div class="req-meta">von ${r.angefragtVonUid===window.myUid?'dir':escapeHtml(r.angefragtVonName)} an ${r.angefragtAnUid===window.myUid?'dich':escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?' ⏳':''}</div>
       ${r.datum ? '<div class="req-zeigen">📅 öffnen ›</div>' : ''}
       ${isMyTurn ? `
         <div class="req-actions" onclick="event.stopPropagation()">
@@ -5973,6 +5997,11 @@ window.adminDeleteChatMsg = async function(coll, key, msgId){
       if(coll==='custom_events') tx.update(ref, {chat: neueChat}); else tx.set(ref, {chat: neueChat}, {merge:true});
     });
     if(window.logEvent) window.logEvent('admin_chat_nachricht_geloescht', {coll,key,msgId});
+    // Sofort sichtbar machen (nicht erst beim nächsten Öffnen)
+    const quelle = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : (window.eventOverrides||{})[key];
+    if(quelle && quelle.chat) quelle.chat = String(msgId).startsWith('__idx') ? quelle.chat.filter((_,i)=>i!==parseInt(String(msgId).slice(5),10)) : quelle.chat.filter(m=>m.msgId!==msgId);
+    const offenTab = document.querySelector('#hiTabs .hi-tab.active');
+    if(offenTab && document.getElementById('hourInspectorOverlay').classList.contains('show')) hiSwitchTab(offenTab.dataset.tab);
     if(typeof renderChatsOverview === 'function' && document.getElementById('adminChats') && document.getElementById('adminChats').style.display !== 'none') renderChatsOverview();
   } catch(e){ alert('Fehler: '+e.message); }
 };
@@ -6026,37 +6055,41 @@ function startLogListener(){
       <button class="cr-save" onclick="copyLogToClipboard()">📋 Ganzes Protokoll kopieren</button>
       <span id="copyLogStatus" style="font-size:10.5px; color:var(--a);"></span>
     </div>`;
-    html += '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
-    html += '<tr style="text-align:left; color:var(--ink-soft); border-bottom:2px solid var(--line);"><th style="padding:4px 6px;">Zeit</th><th style="padding:4px 6px;">Typ</th><th style="padding:4px 6px;">Wer</th><th style="padding:4px 6px;">Version</th><th style="padding:4px 6px;">Regeln erwartet</th><th style="padding:4px 6px;">Gerät</th><th style="padding:4px 6px;">Bildschirm</th><th style="padding:4px 6px;">Fenster</th><th style="padding:4px 6px;">Textskalierung?</th><th style="padding:4px 6px;">Details</th></tr>';
     let rowErrors = 0;
+    html += '<div class="log-liste">';
     snap.forEach(docSnap=>{
       try{
         const d = docSnap.data();
         window.__lastLogDocs.push(d);
         const dt = d.zeitpunkt ? new Date(d.zeitpunkt) : null;
         const zeitStr = dt ? dt.toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '–';
-        const isError = d.typ === 'error' || d.typ === 'sticky_problem' || d.typ === 'sticky_problem_auto';
+        const isError = /error|fehler|sticky_problem/.test(String(d.typ||''));
         const scaleRatio = d.textSkalierungsVerdacht;
         const scaleWarn = (typeof scaleRatio === 'number' && (scaleRatio > 1.15 || scaleRatio < 0.85));
-        html += `<tr style="border-bottom:1px solid var(--line); line-height:1.3; ${isError?'background:var(--holiday-bg);':''}">
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${zeitStr}</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${typLabel[d.typ]||escapeHtml(d.typ||'?')}</td>
-          <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.username||'?')} <span style="color:var(--ink-soft);">(${escapeHtml(d.role||'?')})</span></td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.appVersion||'?')}</td>
-          <td style="padding:4px 6px; white-space:nowrap; font-size:10.5px; vertical-align:top;">${escapeHtml(d.erwarteteRegelVersion||'?')}</td>
-          <td style="padding:4px 6px; vertical-align:top;">${escapeHtml(d.geraet||'?')}</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.bildschirmBreite||'?')}×${escapeHtml(d.bildschirmHoehe||'?')}px</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top;">${escapeHtml(d.fensterBreite||'?')}×${escapeHtml(d.fensterHoehe||'?')}px</td>
-          <td style="padding:4px 6px; white-space:nowrap; vertical-align:top; ${scaleWarn?'color:var(--holiday-text); font-weight:700;':''}">${scaleRatio!==undefined?escapeHtml(String(scaleRatio))+'×'+(scaleWarn?' ⚠️':''):'?'}</td>
-          <td style="padding:4px 6px; max-width:260px; font-size:10px; color:var(--ink-soft); word-break:break-word; vertical-align:top;">${escapeHtml(d.details||'')}</td>
-        </tr>`;
+        const regelAlt = d.erwarteteRegelVersion && d.erwarteteRegelVersion !== EXPECTED_RULES_VERSION;
+        let detailsHtml = '';
+        if(d.details){
+          let txt = String(d.details);
+          try{ txt = JSON.stringify(JSON.parse(txt), null, 2); }catch(e){}
+          const kurz = String(d.details).replace(/[{}"]/g,'').slice(0,90);
+          detailsHtml = `<details class="log-details"><summary>${escapeHtml(kurz)}${String(d.details).length>90?' …':''}</summary><pre>${escapeHtml(txt)}</pre></details>`;
+        }
+        html += `<div class="log-zeile${isError?' fehler':''}">
+          <div class="log-kopf">
+            <span class="log-zeit">${zeitStr}</span>
+            <span class="log-typ">${typLabel[d.typ]||escapeHtml(d.typ||'?')}</span>
+            <span class="log-wer">${escapeHtml(d.username||'?')} <span class="hi-leise">${escapeHtml(d.role||'?')}</span></span>
+          </div>
+          <div class="log-meta">${escapeHtml(d.geraet||'?')} · ${escapeHtml(d.fensterBreite||'?')}×${escapeHtml(d.fensterHoehe||'?')} · ${escapeHtml(d.appVersion||'?')}${regelAlt?` · <span style="color:var(--holiday-text);">Regeln ${escapeHtml(d.erwarteteRegelVersion)}</span>`:''}${scaleWarn?` · <span style="color:var(--holiday-text);">Text ${escapeHtml(String(scaleRatio))}× ⚠️</span>`:''}</div>
+          ${detailsHtml}
+        </div>`;
       } catch(rowErr){
         rowErrors++;
         console.error('Log-Zeile fehlerhaft, übersprungen:', docSnap.id, rowErr);
       }
     });
-    if(rowErrors>0) html = html.replace('</table>', '') + `<tr><td colspan="9" style="padding:6px 8px; color:var(--holiday-text); font-size:10.5px;">⚠️ ${rowErrors} Zeile(n) konnten nicht angezeigt werden (Fehler in Browser-Konsole).</td></tr></table>`;
-    html += rowErrors>0 ? '' : '</table>';
+    html += '</div>';
+    if(rowErrors>0) html += `<div style="padding:6px 8px; color:var(--holiday-text); font-size:10.5px;">⚠️ ${rowErrors} Zeile(n) konnten nicht angezeigt werden (Fehler in Browser-Konsole).</div>`;
     console.log('ChaosKalender Log-Rendering fertig:', snap.size, 'geladen,', snap.size-rowErrors, 'gerendert');
     list.innerHTML = html;
    } catch(outerErr){
