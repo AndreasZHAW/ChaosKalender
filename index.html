@@ -135,6 +135,18 @@
   .hi-pill input{display:none;}
   .hi-pill::before{content:'📅';}
   .hi-pill:has(input:checked){background:var(--ink); color:#fff; border-color:var(--ink);}
+  .hi-pill.serie{margin-left:0; font-family:inherit;}
+  .hi-pill.serie::before{content:'🔁';}
+  .hi-pill.serie.an{background:var(--ink); color:#fff; border-color:var(--ink); max-width:100%; white-space:normal; text-align:left;}
+  .se-zeile{display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:8px 0; font-size:14px;}
+  .se-zeile input[type=number]{width:58px; padding:6px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:14px;}
+  .se-zeile input[type=date], .se-zeile select{padding:6px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:14px; background:#fff;}
+  .se-wt{display:flex; gap:4px; flex-wrap:wrap; margin:6px 0;}
+  .se-wt button{width:40px; padding:7px 0; border:1px solid var(--line); border-radius:8px; background:var(--panel); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; color:var(--ink-soft);}
+  .se-wt button.an{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .se-vorschau{font-size:12.5px; color:var(--ink-soft); background:#F2F1EC; border-radius:8px; padding:8px 10px; margin:10px 0 4px; line-height:1.5;}
+  .se-ausnahme{display:flex; align-items:center; gap:8px; font-size:12.5px; padding:3px 0;}
+  .se-ausnahme button{border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:2px 9px; font-size:12px; cursor:pointer;}
   .hi-aendern-btn{margin-left:auto; border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:3px 10px; font-size:13px; cursor:pointer;}
   .hi-aendern-btn.on{background:var(--ink); border-color:var(--ink);}
   .hi-titel-input{width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-family:inherit; font-size:17px; font-weight:700; margin:4px 0 8px;}
@@ -597,6 +609,8 @@
     <div class="admin-card">
       <h3>Alle eigenen Termine</h3>
       <div class="muted">Übersicht über alle frei eingetragenen Termine, unabhängig vom Datum – zum Aufräumen von Test- oder Fehleinträgen, die im Kalender selbst schwer zu treffen sind.</div>
+      <div style="margin:10px 0 12px;"><button class="btn secondary" style="width:auto; padding:7px 12px; font-size:13px;" onclick="adminFesteInSerien()">🔁 Feste Termine in Serien umwandeln</button>
+        <div class="muted" style="margin-top:4px;">Volleyball, Bandproben, Fridays Club und Kidstreff werden zu normalen Serienterminen, die man selbst ändern, verschieben oder beenden kann. Bereits umgewandelte werden übersprungen.</div></div>
       <div id="allEventsList"><div class="empty-note">Lade …</div></div>
     </div>
   </div>
@@ -769,6 +783,17 @@
     </div>
     <h3 id="hiTitle" style="display:none;"></h3><div id="hiSub" style="display:none;"></div>
     <div id="hiContent"></div>
+  </div>
+</div>
+
+<!-- ===== SERIEN-EDITOR (wie in Outlook) ===== -->
+<div class="overlay" id="serieOverlay" style="z-index:60;">
+  <div class="modal" style="max-width:400px;">
+    <div class="hi-kopf">
+      <div style="flex:1; font-weight:700; font-size:17px;">🔁 Serientermin</div>
+      <span class="hi-zu" onclick="serieEditorZu()" title="Schliessen">×</span>
+    </div>
+    <div id="serieInhalt"></div>
   </div>
 </div>
 
@@ -954,8 +979,8 @@ function hatDieserTagFixeBloecke(d, iso){
   const janoschSchule = isSchoolDayForKid(d,'janosch') && SCHOOL_TIMES['janosch'][dowIdx1to7];
   const mischaSchule = isSchoolDayForKid(d,'mischa') && SCHOOL_TIMES['mischa'][dowIdx1to7];
   const hort = dow===4 || !!getKidClub(d,'janosch') || !!getKidClub(d,'mischa'); // Donnerstag (Hort) bzw. Club
-  const volleyball = dow===3;
-  const bandprobeM = BAND_DATES_MISCHA.includes(iso);
+  const volleyball = dow===3 && festAktiv('volleyball_andi', iso);
+  const bandprobeM = bandMischaAm(iso);
   return !!(janoschSchule || mischaSchule || hort || volleyball || bandprobeM);
 }
 
@@ -963,11 +988,145 @@ function hatDieserTagFixeBloecke(d, iso){
    Startdatum+Uhrzeit bis Enddatum+Uhrzeit). */
 function terminZeitText(ev){
   const fmtD = iso => iso ? (iso.slice(8,10)+'.'+iso.slice(5,7)+'.') : '?';
+  if(ev.serie && !ev._serie){
+    return '🔁 ' + serieKurzText(ev.serie) + ((ev.von && ev.bis) ? ` · ${ev.von}–${ev.bis} Uhr` : '');
+  }
   if(ev.mehrtaegig){
     return `${fmtD(ev.startDatum)}${ev.von?' '+ev.von:''} – ${fmtD(ev.endDatum)}${ev.bis?' '+ev.bis:''}`;
   }
   return (ev.von && ev.bis) ? `${ev.von}–${ev.bis} Uhr` : '';
 }
+/* ====================== SERIEN (wiederkehrende Termine) ======================
+   Ein Serientermin ist EIN Dokument in custom_events mit
+     datum  = erster Termin der Serie (Beginn)
+     serie  = {typ:'taeglich'|'woechentlich'|'monatlich'|'monatlichNter',
+               intervall, wochentage:[1..7], monatTag, nter (1–4, -1 = letzter),
+               nterWochentag (1..7), ende:{art:'nie'|'datum'|'anzahl', datum, anzahl},
+               nichtInFerien}
+     serieAusnahmen = {'JJJJ-MM-TT': {geloescht:true} | {von,bis,titel,verschobenAuf}}
+   Im Kalender wird jeder einzelne Termin als "Ansicht" (Kopie mit datum =
+   Tag) erzeugt – die Datenbank enthält nur die Serie. */
+const SERIE_WT = ['','Mo','Di','Mi','Do','Fr','Sa','So'];
+const SERIE_WT_LANG = ['','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'];
+function serieWt(d){ const x = d.getDay(); return x===0 ? 7 : x; }
+function serieMontag(d){ const m = new Date(d); m.setDate(d.getDate() - (serieWt(d)-1)); m.setHours(0,0,0,0); return m; }
+function serieGiltAm(ev, iso){
+  const s = ev && ev.serie;
+  if(!s || !ev.datum || iso < ev.datum) return false;
+  const en = s.ende || {};
+  if(en.art && en.art !== 'nie' && en.datum && iso > en.datum) return false;
+  const d0 = new Date(ev.datum+'T00:00:00'), d = new Date(iso+'T00:00:00');
+  const n = Math.max(1, parseInt(s.intervall,10) || 1);
+  let passt = false;
+  if(s.typ === 'taeglich'){
+    passt = Math.round((d - d0)/864e5) % n === 0;
+  } else if(s.typ === 'woechentlich'){
+    const wt = (s.wochentage && s.wochentage.length) ? s.wochentage : [serieWt(d0)];
+    if(!wt.includes(serieWt(d))) return false;
+    passt = Math.round((serieMontag(d) - serieMontag(d0))/(7*864e5)) % n === 0;
+  } else if(s.typ === 'monatlich' || s.typ === 'monatlichNter'){
+    const monate = (d.getFullYear()-d0.getFullYear())*12 + d.getMonth() - d0.getMonth();
+    if(monate % n !== 0) return false;
+    const letzter = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    if(s.typ === 'monatlich'){
+      const tag = parseInt(s.monatTag,10) || d0.getDate();
+      passt = d.getDate() === Math.min(tag, letzter);
+    } else {
+      const wt = parseInt(s.nterWochentag,10) || serieWt(d0);
+      if(serieWt(d) !== wt) return false;
+      const nter = parseInt(s.nter,10) || 1;
+      passt = nter === -1 ? (d.getDate() + 7 > letzter) : (Math.ceil(d.getDate()/7) === nter);
+    }
+  }
+  if(!passt) return false;
+  if(s.nichtInFerien && (getSchoolHolidayName(d) || getHolidayName(d))) return false;
+  return true;
+}
+function serieAnsicht(ev, iso, orig, a){
+  const v = Object.assign({}, ev, {datum: iso, mehrtaegig:false, startDatum: iso, endDatum: iso,
+    _serie: true, _vorkommen: orig, _serieStart: ev.datum});
+  if(a){
+    if(a.von) v.von = a.von;
+    if(a.bis) v.bis = a.bis;
+    if(a.titel) v.titel = a.titel;
+    v._ausnahme = true;
+  }
+  return v;
+}
+/* Ein Termin (einzeln oder Serie) an einem bestimmten Tag – oder null. */
+function vorkommenAm(ev, iso){
+  if(!ev) return null;
+  if(!ev.serie) return (!ev.mehrtaegig && ev.datum === iso) ? ev : null;
+  const aus = ev.serieAusnahmen || {};
+  if(serieGiltAm(ev, iso)){
+    const a = aus[iso];
+    if(!(a && (a.geloescht || (a.verschobenAuf && a.verschobenAuf !== iso)))) return serieAnsicht(ev, iso, iso, a);
+  }
+  for(const k in aus){
+    const a = aus[k];
+    if(a && !a.geloescht && a.verschobenAuf === iso && k !== iso && serieGiltAm(ev, k)) return serieAnsicht(ev, iso, k, a);
+  }
+  return null;
+}
+/* Alle eintägigen Termine eines Tages, Serien als einzelne Ansichten. */
+function termineAmTag(iso){
+  const out = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.mehrtaegig && !ev.serie) return;
+    const v = vorkommenAm(ev, iso);
+    if(v) out.push(v);
+  });
+  return out;
+}
+function serieIsoPlus(iso, tage){ const d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()+tage); return isoDate(d); }
+/* Nächster Termin einer Serie ab einem Tag (oder null). */
+function naechstesVorkommen(ev, abIso){
+  let iso = (abIso && abIso > ev.datum) ? abIso : ev.datum;
+  for(let i=0; i<800; i++){
+    if(vorkommenAm(ev, iso)) return iso;
+    iso = serieIsoPlus(iso, 1);
+  }
+  return null;
+}
+/* Datum des n-ten Termins (für "Ende nach n Terminen"). */
+function serieEndeNachAnzahl(datum, serie, anzahl){
+  const ev = {datum, serie: Object.assign({}, serie, {ende:{art:'nie'}})};
+  let iso = datum, gefunden = 0, letzter = datum;
+  for(let i=0; i<366*6 && gefunden < anzahl; i++){
+    if(serieGiltAm(ev, iso)){ gefunden++; letzter = iso; }
+    iso = serieIsoPlus(iso, 1);
+  }
+  return letzter;
+}
+function serieKurzText(s, mitEnde){
+  if(!s) return '';
+  const n = Math.max(1, parseInt(s.intervall,10) || 1);
+  let t = '';
+  if(s.typ === 'taeglich') t = n===1 ? 'täglich' : `alle ${n} Tage`;
+  else if(s.typ === 'woechentlich'){
+    const tage = (s.wochentage||[]).slice().sort((a,b)=>a-b).map(x=>SERIE_WT[x]).join(', ');
+    t = (n===1 ? 'jeden ' : `alle ${n} Wochen `) + (tage || '');
+  } else if(s.typ === 'monatlich') t = (n===1 ? 'monatlich' : `alle ${n} Monate`) + ` am ${s.monatTag}.`;
+  else if(s.typ === 'monatlichNter'){
+    const nt = parseInt(s.nter,10) === -1 ? 'letzten' : (s.nter + '.');
+    t = `jeden ${nt} ${SERIE_WT[s.nterWochentag]||''}` + (n===1 ? ' im Monat' : ` alle ${n} Monate`);
+  }
+  if(mitEnde !== false){
+    const en = s.ende || {};
+    if(en.art === 'datum' && en.datum) t += ' bis ' + en.datum.slice(8,10)+'.'+en.datum.slice(5,7)+'.'+en.datum.slice(2,4);
+    if(en.art === 'anzahl' && en.anzahl) t += ` (${en.anzahl}×)`;
+    if(s.nichtInFerien) t += ' · nicht in Ferien';
+  }
+  return t;
+}
+/* Feste (früher im Code hinterlegte) Termine, die in eine Serie
+   umgewandelt wurden: ab dem Beginn der Serie zeigt nur noch die Serie
+   den Termin – davor (Vergangenheit) bleibt der alte Eintrag sichtbar. */
+function festAktiv(herkunft, iso){
+  return !(window.customEvents||[]).some(e=> e.herkunft === herkunft && e.datum && (!iso || iso >= e.datum));
+}
+function bandMischaAm(iso){ return BAND_DATES_MISCHA.includes(iso) && festAktiv('bandprobe_mischa', iso); }
+
 /* Zeitfenster [von,bis] (Stunden), das ein mehrtägiger Termin an einem
    bestimmten Tag belegt: Starttag ab "von", Endtag bis "bis", dazwischen
    der ganze Tag. Gibt null zurück, wenn der Tag nicht betroffen ist. */
@@ -1103,11 +1262,11 @@ const KIDSTREFF_VORAUSS   = ['2026-10-22','2026-11-05','2026-11-19','2026-12-03'
 /* Club eines Kindes an einem Tag (oder null): {label,start,end,key} */
 function getKidClub(d, kid){
   const iso = isoDate(d);
-  if(kid==='mischa' && d.getDay()===5 && isSchoolDayForKid(d,'mischa')){
+  if(kid==='mischa' && d.getDay()===5 && isSchoolDayForKid(d,'mischa') && festAktiv('club_kidsclub', iso)){
     const c = FRIDAY_CLUBS.mischa;
     return {label: FRIDAYS_CLUB_TITEL[iso] || c.label, start:c.start, end:c.end, key:'club_kidsclub_'+iso, bg:'var(--mischa-bg)', fg:'#6E5539', rand:'var(--mischa)'};
   }
-  if(kid==='janosch' && (KIDSTREFF_BESTAETIGT.includes(iso) || KIDSTREFF_VORAUSS.includes(iso)) && !getSchoolHolidayName(d)){
+  if(kid==='janosch' && (KIDSTREFF_BESTAETIGT.includes(iso) || KIDSTREFF_VORAUSS.includes(iso)) && !getSchoolHolidayName(d) && festAktiv('club_kidstreff', iso)){
     const vorauss = KIDSTREFF_VORAUSS.includes(iso);
     return {label: KIDSTREFF.label + (vorauss?' (vorauss.)':''), start:KIDSTREFF.start, end:KIDSTREFF.end, key:'club_kidstreff_'+iso, bg:'var(--janosch-bg)', fg:'#46596D', rand:'var(--janosch)'};
   }
@@ -1309,6 +1468,8 @@ function terminErstellerRolle(ev){
   return (n==='andi' || n==='janine') ? n : '';
 }
 function terminFarbe(ev){
+  if(ev && ev.kind === 'mischa') return {bg:'var(--mischa-bg)', fg:'#6E5539', rand:'var(--mischa)', linie:'#A68B6D'};
+  if(ev && ev.kind === 'janosch') return {bg:'var(--janosch-bg)', fg:'#46596D', rand:'var(--janosch)', linie:'#7E93A8'};
   const r = terminErstellerRolle(ev);
   if(r==='andi')   return {bg:'var(--b-bg)', fg:'var(--b)', rand:'#8DB0E0', linie:'#7FA6DC'};
   if(r==='janine') return {bg:'var(--a-bg)', fg:'var(--a)', rand:'#E5A79F', linie:'#E08E83'};
@@ -1333,8 +1494,9 @@ function getEventBetreuungsOverlays(iso){
       if(!r) return;
       a = r[0]; b = r[1];
     } else {
-      if(ev.datum !== iso) return;
-      a = zeitZuStunden(ev.von); b = zeitZuStunden(ev.bis);
+      const v = vorkommenAm(ev, iso);
+      if(!v) return;
+      a = zeitZuStunden(v.von); b = zeitZuStunden(v.bis);
       if(a === null) a = 0;
       if(b === null) b = 24;
       if(b <= a) return;
@@ -2014,7 +2176,7 @@ function renderWeek(){
         }
       });
     }
-    if(dow===4 && showFullDetailFor('a')){
+    if(dow===4 && festAktiv('bandprobe_janine', iso) && showFullDetailFor('a')){
       const key = 'bandprobe_janine_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
@@ -2024,7 +2186,7 @@ function renderWeek(){
         body += `<div class="event" style="background:var(--a-bg);color:var(--a);top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
-    if(dow===3 && !hol && showFullDetailFor('b')){
+    if(dow===3 && !hol && festAktiv('volleyball_andi', iso) && showFullDetailFor('b')){
       const key = 'volleyball_andi_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
@@ -2034,7 +2196,7 @@ function renderWeek(){
         body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--b-bg);color:var(--b);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--b);cursor:pointer;" onclick="openHourInspector('${iso}', 19, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
       }
     }
-    if(BAND_DATES_MISCHA.includes(iso)){
+    if(bandMischaAm(iso)){
       const key = 'bandprobe_mischa_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
       if(!(ov && ov.geloescht)){
@@ -2046,7 +2208,7 @@ function renderWeek(){
       }
     }
     const tagHatFixeBloecke = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
+    termineAmTag(iso).filter(ev=>ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
@@ -2122,10 +2284,16 @@ function renderKidWeek(kid){
       const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
       body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:${c.bg};color:${c.fg};border-left:3px solid ${c.rand};left:2px;right:2px;font-size:9.5px;">${c.label}</div>`;
     }
-    if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
+    if(kid==='mischa' && bandMischaAm(iso)){
       const top=(16.5-startHour)*44, height=(17.5-16.5)*44-3;
       body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--mischa-bg);color:#6E5539;border-left:3px solid var(--mischa);left:2px;right:2px;font-size:9.5px;">Bandprobe</div>`;
     }
+    termineAmTag(iso).filter(ev=> ev.kind===kid && ev.von && ev.bis && ev.status!=='abgelehnt').forEach(ev=>{
+      const s = zeitZuStunden(ev.von), e = zeitZuStunden(ev.bis);
+      if(s===null || e===null || e<=s) return;
+      const f = terminFarbe(ev);
+      body += `<div class="event" style="top:${(s-startHour)*44}px;height:${(e-s)*44-3}px;z-index:2;background:${f.bg};color:${f.fg};border-left:3px solid ${f.rand};left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${(s+e)/2}, ${jsArg('custom_'+ev.id)})">${escapeHtml(terminAnzeigeTitel(ev))}</div>`;
+    });
 
     body += `</div>`;
   }
@@ -2243,12 +2411,12 @@ function renderMonth(){
       html += `<div class="m-item">${monatStreifenHtml([{von:r[0], bis:r[1], farbe}])}<span class="m-text gold">${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</span></div>`;
     });
     // Einzelne Termine und Bandprobe als kurzer Text
-    (window.customEvents||[]).filter(ev=> !ev.mehrtaegig && ev.datum===iso && ['info','bestaetigt','schwebend'].includes(ev.status))
+    termineAmTag(iso).filter(ev=> ['info','bestaetigt','schwebend'].includes(ev.status))
       .sort((a,b)=> String(a.von||'').localeCompare(String(b.von||'')))
       .forEach(ev=>{
         html += `<div class="m-text" style="color:${terminFarbe(ev).fg};">${ev.von?escapeHtml(ev.von)+' ':''}${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</div>`;
       });
-    if(BAND_DATES_MISCHA.includes(iso)) html += `<div class="m-text" style="color:#6E5539;">Bandprobe M.</div>`;
+    if(bandMischaAm(iso)) html += `<div class="m-text" style="color:#6E5539;">Bandprobe M.</div>`;
     html += `</div>`;
   }
   html += '</div>';
@@ -2316,9 +2484,15 @@ function renderDay(){
       const c = getKidClub(d, kid);
       body += block(c.start,c.end,c.label,c.bg,c.fg,false,2);
     }
-    if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
+    if(kid==='mischa' && bandMischaAm(iso)){
       body += block(16.5,17.5,'Bandprobe','var(--mischa-bg)','#6E5539',false,2);
     }
+    termineAmTag(iso).filter(ev=> ev.kind===kid && ev.von && ev.bis && ev.status!=='abgelehnt').forEach(ev=>{
+      const s = zeitZuStunden(ev.von), e = zeitZuStunden(ev.bis);
+      if(s===null || e===null || e<=s) return;
+      const f = terminFarbe(ev);
+      body += block(s,e,escapeHtml(terminAnzeigeTitel(ev)),f.bg,f.fg,false,2);
+    });
   } else {
     ['janosch','mischa'].forEach(k=>{
       if(isSchoolDayForKid(d, k) && SCHOOL_TIMES[k][dowIdx1to7]){
@@ -2360,11 +2534,11 @@ function renderDay(){
         }
       });
     }
-    if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--a-bg)','var(--a)',false,3);
-    if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--b-bg)','var(--b)',false,3);
-    if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--mischa-bg)','#6E5539',false,3);
+    if(dow===4 && festAktiv('bandprobe_janine', iso) && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--a-bg)','var(--a)',false,3);
+    if(dow===3 && !hol && festAktiv('volleyball_andi', iso) && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--b-bg)','var(--b)',false,3);
+    if(bandMischaAm(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--mischa-bg)','#6E5539',false,3);
     const tagHatFixeBloecke2 = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
+    termineAmTag(iso).filter(ev=>ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const top=(s-startHour)*px, height=(e-s)*px-2;
@@ -2480,7 +2654,7 @@ function renderSwipeView(){
           }
         });
       }
-      if(dow===4 && showFullDetailFor('a')){
+      if(dow===4 && festAktiv('bandprobe_janine', iso) && showFullDetailFor('a')){
         const key = 'bandprobe_janine_'+iso;
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(!(ov && ov.geloescht)){
@@ -2489,7 +2663,7 @@ function renderSwipeView(){
           daysHtml += `<div class="event" style="background:var(--a-bg);color:var(--a);top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       }
-      if(dow===3 && !hol && showFullDetailFor('b')){
+      if(dow===3 && !hol && festAktiv('volleyball_andi', iso) && showFullDetailFor('b')){
         const key = 'volleyball_andi_'+iso;
         const ov = window.getEventOverride ? window.getEventOverride(key) : null;
         if(!(ov && ov.geloescht)){
@@ -2502,7 +2676,7 @@ function renderSwipeView(){
     {
       const key = 'bandprobe_mischa_'+iso;
       const ov = window.getEventOverride ? window.getEventOverride(key) : null;
-      if(BAND_DATES_MISCHA.includes(iso) && !(ov && ov.geloescht)){
+      if(bandMischaAm(iso) && !(ov && ov.geloescht)){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
@@ -2510,7 +2684,7 @@ function renderSwipeView(){
       }
     }
     const tagHatFixeBloecke3 = hatDieserTagFixeBloecke(d, iso);
-    (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
+    termineAmTag(iso).filter(ev=>ev.von && ev.bis).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
       const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
       const statusMark = ev.status==='schwebend' ? ' ⏳' : ev.status==='abgelehnt' ? ' ✕' : '';
@@ -2848,17 +3022,19 @@ function sammleWochenPunkte(mo){
     });
 
     // Frei eingetragene Termine (ohne abgelehnte)
-    (window.customEvents||[]).forEach(ev=>{
+    (window.customEvents||[]).forEach(ev0=>{
+      let ev = ev0;
       if(!['info','bestaetigt','schwebend'].includes(ev.status)) return;
       let zeit = '', h = null;
-      if(ev.mehrtaegig){
+      if(ev.mehrtaegig && !ev.serie){
         if(!ev.startDatum || !ev.endDatum || iso < ev.startDatum || iso > ev.endDatum) return;
         // Mehrtägig: nur am ersten Tag der Woche bzw. am Starttag nennen
         if(iso !== ev.startDatum && i !== 0) return;
         zeit = terminZeitText(ev);
         const r = mehrtaegigTagesbereich(ev, iso); h = r ? r[0] : 0;
       } else {
-        if(ev.datum !== iso) return;
+        ev = vorkommenAm(ev0, iso);
+        if(!ev) return;
         zeit = (ev.von && ev.bis) ? ev.von + '–' + ev.bis : (ev.von || '');
         h = zeitZuStunden(ev.von);
       }
@@ -2869,7 +3045,7 @@ function sammleWochenPunkte(mo){
       add({icon: betreuung ? '👪' : '📌', zeit, titel,
            sub: warten ? 'wartet auf Bestätigung' + (betreuung ? ' · ändert Betreuung' : '') : (betreuung && ev.status==='bestaetigt' ? 'ändert Betreuung' : ''),
            wichtig: warten,
-           klick:`oeffneTerminMitChat(${jsArg(ev.id)})`, sort: h!==null?h:0});
+           klick:`oeffneTerminMitChat(${jsArg(ev.id)}, ${jsArg(iso)})`, sort: h!==null?h:0});
     });
 
     punkte.sort((x,y)=>x.sort-y.sort);
@@ -3158,8 +3334,8 @@ function renderAllColumns(){
       janineCell += `<span class="chip a">bis 16:00</span>`;
       andiCell += `<span class="chip b">ab 16:00</span>`;
     }
-    if(dow===4) janineCell += `<span class="chip band">Bandprobe 20–24</span>`;
-    if(dow===3 && !hol) andiCell += `<span class="chip club">Volleyball 19–21?</span>`;
+    if(dow===4 && festAktiv('bandprobe_janine', iso)) janineCell += `<span class="chip band">Bandprobe 20–24</span>`;
+    if(dow===3 && !hol && festAktiv('volleyball_andi', iso)) andiCell += `<span class="chip club">Volleyball 19–21?</span>`;
     html += `<td>${janineCell}</td><td>${andiCell}</td>`;
 
     // Clubs & Bandprobe
@@ -3172,7 +3348,7 @@ function renderAllColumns(){
         }
       });
     }
-    if(BAND_DATES_MISCHA.includes(iso)) clubCell += `<span class="chip band">Bandprobe Mischa 16:30–17:30</span>`;
+    if(bandMischaAm(iso)) clubCell += `<span class="chip band">Bandprobe Mischa 16:30–17:30</span>`;
     html += `<td>${clubCell||'–'}</td>`;
 
     // Sondertermine
@@ -3188,7 +3364,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v83 · 23.10.2026';
+const APP_VERSION = 'v84 · 23.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3209,7 +3385,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=83').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=84').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3286,7 +3462,7 @@ function detectTextScaling(){
 // an firestore.rules hochgezählt (siehe passender Kommentar ganz oben in
 // der Regel-Datei). So lässt sich im Protokoll auf einen Blick prüfen,
 // ob die tatsächlich veröffentlichten Regeln zum App-Stand passen.
-const EXPECTED_RULES_VERSION = 'rules-v11-2026-10-06';
+const EXPECTED_RULES_VERSION = 'rules-v12-2026-10-23';
 
 /* Schutz vor Protokoll-Flut (Kosten/Kontingent): automatische Diagnose-Meldungen
    (Scroll-/Höhen-Messungen, Ansichtswechsel) werden nur im Debug-Modus geschrieben
@@ -3502,15 +3678,17 @@ function getCustomEventsForIsoHour(iso, hourDec){
   return (window.customEvents||[]).filter(ev=>{
     // Mehrtägige Termine: an JEDEM betroffenen Tag auffindbar (nicht nur
     // am Starttag) – sonst konnte man sie ab dem 2. Tag nicht mehr öffnen.
-    if(ev.mehrtaegig){
+    if(ev.mehrtaegig && !ev.serie){
       const r = mehrtaegigTagesbereich(ev, iso);
       return !!r && hourDec >= r[0] && hourDec < r[1];
     }
-    if(ev.datum!==iso || !ev.von || !ev.bis) return false;
+    return false;
+  }).concat(termineAmTag(iso).filter(ev=>{
+    if(!ev.von || !ev.bis) return false;
     const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
     const e = parseFloat(ev.bis.split(':')[0])+parseFloat(ev.bis.split(':')[1])/60;
     return hourDec>=s && hourDec<e;
-  });
+  }));
 }
 function buildHourEntries(iso, hourDec){
   const d = new Date(iso+'T00:00:00');
@@ -3546,17 +3724,17 @@ function buildHourEntries(iso, hourDec){
       }
     });
   }
-  if(dow===4){
+  if(dow===4 && festAktiv('bandprobe_janine', iso)){
     const key='bandprobe_janine_'+iso;
     const r = getOverrideRange(key,20,24);
     if(r && hourDec>=r[0] && hourDec<r[1]) entries.push({id:key,label:'Bandprobe Janine',type:'event',key,defS:20,defE:24});
   }
-  if(dow===3 && !hol){
+  if(dow===3 && !hol && festAktiv('volleyball_andi', iso)){
     const key='volleyball_andi_'+iso;
     const r = getOverrideRange(key,19,21);
     if(r && hourDec>=r[0] && hourDec<r[1]) entries.push({id:key,label:'Volleyball Andi',type:'event',key,defS:19,defE:21});
   }
-  if(BAND_DATES_MISCHA.includes(iso)){
+  if(bandMischaAm(iso)){
     const key='bandprobe_mischa_'+iso;
     const r = getOverrideRange(key,16.5,17.5);
     if(r && hourDec>=r[0] && hourDec<r[1]) entries.push({id:key,label:'Bandprobe Mischa',type:'event',key,defS:16.5,defE:17.5});
@@ -3662,15 +3840,19 @@ function hiAbbrechenBtn(text){
 }
 /* Datum (+ Mehrtägig-Schalter) und darunter die Zeiten. Mehrtägig: Von/Bis-
    Datum, die Uhrzeiten gelten am Start- bzw. Endtag. */
+window.__serieEntwurf = {};
 function renderZeitBlockHtml(prefix, ev, vonId, bisId, vonVal, bisVal, chips){
-  const mehrtaegig = !!(ev && ev.mehrtaegig);
+  const serie = ev && ev.serie ? Object.assign(JSON.parse(JSON.stringify(ev.serie)), {beginn: ev._serieStart || ev.datum}) : null;
+  window.__serieEntwurf[prefix] = serie;
+  const mehrtaegig = !!(ev && ev.mehrtaegig && !ev.serie);
   const startD = (ev && ev.startDatum) || hiState.iso;
   const endD = (ev && ev.endDatum) || hiState.iso;
   const datum = (ev && !ev.mehrtaegig && ev.datum) || hiState.iso;
   return `
     <div class="hi-datumzeile">
-      <span class="hi-datum">📅 ${escapeHtml(hiDatumText(datum))}</span>${chips||''}
-      <label class="hi-pill" title="Über mehrere Tage"><input type="checkbox" id="${prefix}Mehrtaegig" ${mehrtaegig?'checked':''} onchange="toggleMehrtaegigFields('${prefix}')">Mehrtägig</label>
+      <span class="hi-datum" id="${prefix}DatumText">📅 ${escapeHtml(serie ? 'ab '+hiDatumText(serie.beginn) : hiDatumText(datum))}</span>${chips||''}
+      <label class="hi-pill" id="${prefix}MehrtaegigPill" title="Über mehrere Tage" style="${serie?'display:none;':''}"><input type="checkbox" id="${prefix}Mehrtaegig" ${mehrtaegig?'checked':''} onchange="toggleMehrtaegigFields('${prefix}')">Mehrtägig</label>
+      <button type="button" class="hi-pill serie ${serie?'an':''}" id="${prefix}SeriePill" title="Wiederkehrender Termin (Serie)" style="${mehrtaegig?'display:none;':''}${serie?'margin-left:auto;':''}" onclick="oeffneSerienEditor('${prefix}')">${serie ? escapeHtml(serieKurzText(serie)) : 'Serie'}</button>
     </div>
     <div id="${prefix}MehrtaegigFields" style="${mehrtaegig?'':'display:none;'}">
       <div class="time-row">
@@ -3683,6 +3865,141 @@ function renderZeitBlockHtml(prefix, ev, vonId, bisId, vonVal, bisVal, chips){
       <div class="time-field"><label id="${prefix}BisLbl">${mehrtaegig?'End-Uhrzeit':'Bis'}</label><input type="time" id="${bisId}" value="${bisVal||''}"></div>
     </div>`;
 }
+/* ====================== SERIEN-EDITOR ====================== */
+let serieEd = null; // {prefix, s}
+function serieStandard(beginn){
+  const d = new Date(beginn+'T00:00:00');
+  const nter = Math.ceil(d.getDate()/7);
+  return {typ:'woechentlich', intervall:1, wochentage:[serieWt(d)], monatTag:d.getDate(),
+    nter: nter>4 ? -1 : nter, nterWochentag: serieWt(d), ende:{art:'nie'}, nichtInFerien:false, beginn};
+}
+window.oeffneSerienEditor = function(prefix){
+  const vorhanden = window.__serieEntwurf[prefix];
+  const beginn = (vorhanden && vorhanden.beginn) || hiState.iso;
+  const s = vorhanden ? JSON.parse(JSON.stringify(vorhanden)) : serieStandard(beginn);
+  if(!s.monatTag) s.monatTag = new Date(beginn+'T00:00:00').getDate();
+  if(!s.nterWochentag) Object.assign(s, {nter: serieStandard(beginn).nter, nterWochentag: serieStandard(beginn).nterWochentag});
+  if(!s.wochentage || !s.wochentage.length) s.wochentage = serieStandard(beginn).wochentage;
+  serieEd = {prefix, s, warVorhanden: !!vorhanden};
+  renderSerienEditor();
+  document.getElementById('serieOverlay').classList.add('show');
+};
+window.serieEditorZu = function(){ document.getElementById('serieOverlay').classList.remove('show'); serieEd = null; };
+function renderSerienEditor(){
+  const s = serieEd.s;
+  const grundTyp = s.typ === 'monatlichNter' ? 'monatlich' : s.typ;
+  const einheit = {taeglich:'Tag(e)', woechentlich:'Woche(n)', monatlich:'Monat(e)'}[grundTyp];
+  const en = s.ende || {art:'nie'};
+  const wtOpt = sel => SERIE_WT_LANG.slice(1).map((n,i)=>`<option value="${i+1}" ${sel===i+1?'selected':''}>${n}</option>`).join('');
+  const nterOpt = [1,2,3,4,-1].map(n=>`<option value="${n}" ${parseInt(s.nter,10)===n?'selected':''}>${n===-1?'letzten':n+'.'}</option>`).join('');
+  document.getElementById('serieInhalt').innerHTML = `
+    <div class="hi-sec" style="margin-top:0;">Wiederholen</div>
+    <div class="hi-toggle" id="seTyp">
+      ${['taeglich','woechentlich','monatlich'].map(t=>`<button type="button" class="${grundTyp===t?'active':''}" onclick="serieSetzeTyp('${t}')">${{taeglich:'Täglich',woechentlich:'Wöchentlich',monatlich:'Monatlich'}[t]}</button>`).join('')}
+    </div>
+    <div class="se-zeile">Alle <input type="number" id="seIntervall" min="1" max="99" value="${s.intervall||1}" oninput="serieLies(); serieVorschau()"> ${einheit}</div>
+    ${grundTyp==='woechentlich' ? `<div class="se-wt" id="seWt">${SERIE_WT.slice(1).map((n,i)=>`<button type="button" data-wt="${i+1}" class="${(s.wochentage||[]).includes(i+1)?'an':''}" onclick="this.classList.toggle('an'); serieLies(); serieVorschau()">${n}</button>`).join('')}</div>` : ''}
+    ${grundTyp==='monatlich' ? `
+      <label class="se-zeile"><input type="radio" name="seMonArt" value="tag" ${s.typ==='monatlich'?'checked':''} onchange="serieLies(); serieVorschau()"> Am <input type="number" id="seMonTag" min="1" max="31" value="${s.monatTag}" oninput="serieLies(); serieVorschau()"> . Tag</label>
+      <label class="se-zeile"><input type="radio" name="seMonArt" value="nter" ${s.typ==='monatlichNter'?'checked':''} onchange="serieLies(); serieVorschau()"> Am <select id="seNter" onchange="serieLies(); serieVorschau()">${nterOpt}</select><select id="seNterWt" onchange="serieLies(); serieVorschau()">${wtOpt(parseInt(s.nterWochentag,10))}</select></label>` : ''}
+    <div class="hi-sec">Beginn</div>
+    <div class="se-zeile"><input type="date" id="seBeginn" value="${s.beginn}" onchange="serieLies(); serieVorschau()"></div>
+    <div class="hi-sec">Ende</div>
+    <label class="se-zeile"><input type="radio" name="seEnde" value="nie" ${en.art==='nie'||!en.art?'checked':''} onchange="serieLies(); serieVorschau()"> Kein Enddatum</label>
+    <label class="se-zeile"><input type="radio" name="seEnde" value="datum" ${en.art==='datum'?'checked':''} onchange="serieLies(); serieVorschau()"> Endet am <input type="date" id="seEndeDatum" value="${en.art==='datum'&&en.datum?en.datum:''}" onchange="document.querySelector('input[name=seEnde][value=datum]').checked=true; serieLies(); serieVorschau()"></label>
+    <label class="se-zeile"><input type="radio" name="seEnde" value="anzahl" ${en.art==='anzahl'?'checked':''} onchange="serieLies(); serieVorschau()"> Endet nach <input type="number" id="seAnzahl" min="1" max="500" value="${en.anzahl||10}" oninput="document.querySelector('input[name=seEnde][value=anzahl]').checked=true; serieLies(); serieVorschau()"> Terminen</label>
+    <label class="hi-check" style="margin-top:8px;"><input type="checkbox" id="seFerien" ${s.nichtInFerien?'checked':''} onchange="serieLies(); serieVorschau()"> 🏖️ Nicht in den Schulferien und an Feiertagen</label>
+    <div class="se-vorschau" id="seVorschau"></div>
+    <div class="modal-actions">
+      ${serieEd.warVorhanden ? `<button class="btn secondary" onclick="serieEntfernen()">Keine Serie</button>` : `<button class="btn secondary" onclick="serieEditorZu()">Abbrechen</button>`}
+      <button class="btn" onclick="serieUebernehmen()">Übernehmen</button>
+    </div>`;
+  serieVorschau();
+}
+window.serieSetzeTyp = function(t){
+  serieLies();
+  const s = serieEd.s;
+  s.typ = t === 'monatlich' ? (s.typ==='monatlichNter' ? 'monatlichNter' : 'monatlich') : t;
+  renderSerienEditor();
+};
+/* Formular -> serieEd.s */
+window.serieLies = function(){
+  const s = serieEd.s, g = id => document.getElementById(id);
+  if(g('seIntervall')) s.intervall = Math.max(1, Math.min(99, parseInt(g('seIntervall').value,10) || 1));
+  if(g('seWt')) s.wochentage = Array.from(document.querySelectorAll('#seWt button.an')).map(b=>parseInt(b.dataset.wt,10));
+  const monArt = document.querySelector('input[name=seMonArt]:checked');
+  if(monArt){
+    s.typ = monArt.value === 'nter' ? 'monatlichNter' : 'monatlich';
+    s.monatTag = Math.max(1, Math.min(31, parseInt(g('seMonTag').value,10) || 1));
+    s.nter = parseInt(g('seNter').value,10);
+    s.nterWochentag = parseInt(g('seNterWt').value,10);
+  }
+  if(g('seBeginn') && g('seBeginn').value) s.beginn = g('seBeginn').value;
+  const ea = (document.querySelector('input[name=seEnde]:checked')||{}).value || 'nie';
+  s.ende = {art: ea};
+  if(ea === 'datum') s.ende.datum = g('seEndeDatum').value || '';
+  if(ea === 'anzahl') s.ende.anzahl = Math.max(1, Math.min(500, parseInt(g('seAnzahl').value,10) || 1));
+  s.nichtInFerien = !!(g('seFerien') && g('seFerien').checked);
+};
+function serieFertig(s){
+  const out = JSON.parse(JSON.stringify(s));
+  delete out.beginn;
+  if(out.typ !== 'woechentlich') delete out.wochentage;
+  if(out.typ !== 'monatlich') delete out.monatTag;
+  if(out.typ !== 'monatlichNter'){ delete out.nter; delete out.nterWochentag; }
+  if(out.ende.art === 'anzahl') out.ende.datum = serieEndeNachAnzahl(s.beginn, out, out.ende.anzahl);
+  return out;
+}
+function serieFehler(s){
+  if(!s.beginn) return 'Bitte einen Beginn wählen.';
+  if(s.typ==='woechentlich' && !(s.wochentage||[]).length) return 'Bitte mindestens einen Wochentag wählen.';
+  if(s.ende.art==='datum' && (!s.ende.datum || s.ende.datum < s.beginn)) return 'Das Enddatum muss nach dem Beginn liegen.';
+  return '';
+}
+window.serieVorschau = function(){
+  const box = document.getElementById('seVorschau');
+  if(!box || !serieEd) return;
+  const s = serieEd.s, f = serieFehler(s);
+  if(f){ box.innerHTML = '⚠️ ' + escapeHtml(f); return; }
+  const fertig = serieFertig(s);
+  const ev = {datum: s.beginn, serie: fertig};
+  const liste = []; let iso = s.beginn;
+  for(let i=0; i<366*3 && liste.length<4; i++){ if(serieGiltAm(ev, iso)) liste.push(iso); iso = serieIsoPlus(iso,1); }
+  box.innerHTML = `<b>${escapeHtml(serieKurzText(fertig))}</b><br>` + (liste.length
+    ? 'Nächste: ' + liste.map(x=>escapeHtml(hiDatumText(x))).join(' · ') + (liste.length===4 ? ' …' : '')
+    : 'Mit diesen Einstellungen gibt es keinen Termin.');
+};
+window.serieUebernehmen = function(){
+  serieLies();
+  const s = serieEd.s, f = serieFehler(s);
+  if(f){ alert(f); return; }
+  window.__serieEntwurf[serieEd.prefix] = JSON.parse(JSON.stringify(s));
+  serieKnopfAktualisieren(serieEd.prefix);
+  serieEditorZu();
+};
+window.serieEntfernen = function(){
+  window.__serieEntwurf[serieEd.prefix] = null;
+  serieKnopfAktualisieren(serieEd.prefix);
+  serieEditorZu();
+};
+function serieKnopfAktualisieren(prefix){
+  const s = window.__serieEntwurf[prefix];
+  const pill = document.getElementById(prefix+'SeriePill');
+  if(pill){
+    pill.classList.toggle('an', !!s);
+    pill.textContent = s ? serieKurzText(serieFertig(s)) : 'Serie';
+    pill.style.marginLeft = s ? 'auto' : '';
+  }
+  const mp = document.getElementById(prefix+'MehrtaegigPill');
+  if(mp) mp.style.display = s ? 'none' : '';
+  if(s){
+    const cb = document.getElementById(prefix+'Mehrtaegig');
+    if(cb && cb.checked){ cb.checked = false; toggleMehrtaegigFields(prefix); }
+  }
+  const dt = document.getElementById(prefix+'DatumText');
+  if(dt) dt.textContent = '📅 ' + (s ? 'ab ' + hiDatumText(s.beginn) : hiDatumText(hiState.iso));
+}
+
 /* "Senden als": Nur Info / Anfrage */
 function hiModusHtml(defaultMode){
   return `
@@ -3721,6 +4038,8 @@ function renderPrivatBlockHtml(prefix, checked, sichtbar){
 }
 window.toggleMehrtaegigFields = function(prefix){
   const checked = document.getElementById(prefix+'Mehrtaegig').checked;
+  const sp = document.getElementById(prefix+'SeriePill');
+  if(sp) sp.style.display = checked ? 'none' : '';
   const fields = document.getElementById(prefix+'MehrtaegigFields');
   if(fields) fields.style.display = checked ? 'block' : 'none';
   // Uhrzeiten bleiben sichtbar: bei mehrtägigen Terminen gilt "Von" am
@@ -3817,7 +4136,8 @@ window.hiSetMode = function(m){
 window.hiSaveNewEntry = async function(){
   const titel = document.getElementById('hiNewTitel').value.trim().slice(0,120);
   if(!titel){ alert('Bitte einen Titel eingeben.'); return; }
-  const mehrtaegig = document.getElementById('hiNewMehrtaegig').checked;
+  const serieE = window.__serieEntwurf.hiNew || null;
+  const mehrtaegig = !serieE && document.getElementById('hiNewMehrtaegig').checked;
   const von = document.getElementById('hiNewVon').value || null;
   const bis = document.getElementById('hiNewBis').value || null;
   const startDatum = mehrtaegig ? document.getElementById('hiNewStartDatum').value : hiState.iso;
@@ -3841,6 +4161,7 @@ window.hiSaveNewEntry = async function(){
     const docData = {
       datum: mehrtaegig ? startDatum : hiState.iso, von, bis, titel,
       mehrtaegig, startDatum, endDatum,
+      ...(serieE ? {datum: serieE.beginn, startDatum: serieE.beginn, endDatum: serieE.beginn, serie: serieFertig(serieE)} : {}),
       beeinflusstBetreuung, betreuungWer, privat,
       erstelltVonUid: window.myUid||'?', erstelltVonName: window.myName||'?',
       erstelltAm: new Date().toISOString()
@@ -3864,7 +4185,7 @@ window.hiSaveNewEntry = async function(){
       }];
     }
     const neuRef = await addDoc(collection(db,'custom_events'), docData);
-    if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung});
+    if(window.logEvent) window.logEvent('termin_erstellt', {titel, datum:hiState.iso, mode, mehrtaegig, beeinflusstBetreuung, serie: serieE ? serieE.typ : ''});
     if(mode==='anfrage') benachrichtige(docData.bestaetigerUids, `Terminanfrage von ${window.myName||'?'} – ${titel}`,
       terminMailText(docData, `${window.myName||'?'} bittet dich, diesen Termin zu bestätigen:`), 'termin='+neuRef.id);
     document.getElementById('hourInspectorOverlay').classList.remove('show');
@@ -4219,12 +4540,17 @@ function renderExistingEntryForm(entry){
   const bestaetiger = ev.bestaetigerUids || [];
   const bestaetigt = ev.bestaetigtVon || [];
   const mussIchBestaetigen = ev.status==='schwebend' && bestaetiger.includes(window.myUid) && !bestaetigt.includes(window.myUid);
-  const darfLoeschen = isMine || isAdminUser;
-  const darfZeitAendern = isMine || isAdminUser;
+  const gemeinsamElternteil = !!ev.gemeinsam && ['janine','andi'].includes(window.__chaosRole);
+  const darfLoeschen = isMine || isAdminUser || gemeinsamElternteil;
+  const darfZeitAendern = isMine || isAdminUser || gemeinsamElternteil;
+  const istSerie = !!ev._serie;
+  const rohEv = istSerie ? ((window.customEvents||[]).find(e=>e.id===ev.id) || ev) : ev;
 
-  const wann = ev.mehrtaegig
+  const wann = (ev.mehrtaegig && !istSerie)
     ? terminZeitText(ev)
     : (hiDatumText(ev.datum) + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis : ''));
+  const serieChip = istSerie
+    ? `<span class="hi-chip" title="Wiederkehrender Termin">🔁 ${escapeHtml(serieKurzText(ev.serie, false))}</span>${ev._ausnahme ? '<span class="hi-chip st-pending">✎ nur dieser geändert</span>' : ''}` : '';
 
   // Privater Info-Termin einer anderen Person: nur "Gebucht" zeigen.
   if(terminIstPrivatFuerMich(ev)){
@@ -4254,28 +4580,54 @@ function renderExistingEntryForm(entry){
     const iAmCustodian = window.currentPerson && (window.currentPerson === hiState.custodySeg.who);
     const defaultMode = ev.status==='info' ? 'info' : ((ev.status==='bestaetigt' || ev.status==='schwebend') ? 'anfrage' : (iAmCustodian ? 'info' : 'anfrage'));
     const modus = mussIchBestaetigen ? 'anfrage' : defaultMode;
+    const serieZeitEv = istSerie ? Object.assign({}, rohEv, {_serieStart: rohEv.datum}) : ev;
+    const ausnahmen = istSerie ? Object.entries(rohEv.serieAusnahmen||{}).sort((a,b)=>a[0].localeCompare(b[0])) : [];
+    const ausnahmenHtml = ausnahmen.length ? `<div class="hi-sec">Ausnahmen</div>` + ausnahmen.map(([k,a])=>
+      `<div class="se-ausnahme"><span>${escapeHtml(hiDatumText(k))}: ${a.geloescht ? 'abgesagt' : escapeHtml((a.verschobenAuf && a.verschobenAuf!==k ? '→ '+hiDatumText(a.verschobenAuf)+' ' : '') + (a.von&&a.bis ? a.von+'–'+a.bis : '') + (a.titel ? ' „'+a.titel+'“' : ''))}</span><button type="button" title="Wieder wie in der Serie" onclick="hiSerieAusnahmeWeg(${jsArg(ev.id)}, ${jsArg(k)})">↺</button></div>`).join('') : '';
+    const einzelPanel = istSerie ? `
+      <div id="hiEinzelPanel">
+        <div class="time-row">
+          <div class="time-field"><label>Datum</label><input type="date" id="hiEinzelDatum" value="${ev.datum}"></div>
+        </div>
+        <div class="time-row">
+          <div class="time-field"><label>Von</label><input type="time" id="hiEinzelVon" value="${ev.von||''}"></div>
+          <div class="time-field"><label>Bis</label><input type="time" id="hiEinzelBis" value="${ev.bis||''}"></div>
+        </div>
+        <input type="text" id="hiEinzelTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(ev.titel||'')}" placeholder="Titel">
+        <div class="modal-actions">
+          <button class="btn" style="background:var(--holiday-text);" onclick="hiSerieEinzelAbsagen(${jsArg(ev.id)}, ${jsArg(ev._vorkommen)})">Nur diesen absagen</button>
+          <button class="btn" onclick="hiSerieEinzelSpeichern(${jsArg(ev.id)}, ${jsArg(ev._vorkommen)})">Speichern</button>
+        </div>
+      </div>` : '';
     editPanel = `
       <div id="hiEditPanel" class="hi-box zu">
-        ${renderZeitBlockHtml('hiEdit', ev, 'hiCustomVon', 'hiCustomBis', ev.von||'', ev.bis||'')}
-        <input type="text" id="hiEditTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(ev.titel||'')}" placeholder="Titel">
+        ${istSerie ? `<div class="hi-toggle" id="hiSerieWahl" style="margin-top:0;">
+          <button type="button" class="active" onclick="hiSerieWahl('einzel', this)">Nur am ${escapeHtml(hiDatumText(ev.datum))}</button>
+          <button type="button" onclick="hiSerieWahl('serie', this)">Ganze Serie</button>
+        </div>${einzelPanel}<div id="hiGanzeSeriePanel" style="display:none;">` : ''}
+        ${renderZeitBlockHtml('hiEdit', serieZeitEv, 'hiCustomVon', 'hiCustomBis', rohEv.von||'', rohEv.bis||'')}
+        <input type="text" id="hiEditTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(rohEv.titel||'')}" placeholder="Titel">
         ${mussIchBestaetigen ? '' : hiModusHtml(defaultMode)}
         ${renderPrivatBlockHtml('hiEdit', !!ev.privat, !mussIchBestaetigen && modus==='info')}
         ${mussIchBestaetigen ? '' : hiEmpfaengerHtml(defaultMode==='anfrage')}
         ${renderBetreuungBlockHtml('hiEdit', ev, modus==='anfrage')}
+        ${ausnahmenHtml}
         <div class="modal-actions">
-          ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom(${jsArg(ev.id)})">Löschen</button>` : ''}
-          <button class="btn" onclick="hiSaveCustomEdit(${jsArg(ev.id)})">Speichern</button>
+          ${darfLoeschen ? `<button class="btn" style="background:var(--holiday-text);" onclick="hiDeleteCustom(${jsArg(ev.id)})">${istSerie ? 'Ganze Serie löschen' : 'Löschen'}</button>` : ''}
+          <button class="btn" onclick="hiSaveCustomEdit(${jsArg(ev.id)})">${istSerie ? 'Serie speichern' : 'Speichern'}</button>
         </div>
+      ${istSerie ? '</div>' : ''}
       </div>`;
   }
 
   const aktionen = mussIchBestaetigen
     ? `<button class="btn secondary" onclick="hiRejectCustom(${jsArg(ev.id)})">Ablehnen</button><button class="btn" onclick="hiAcceptCustom(${jsArg(ev.id)})">✓ Bestätigen</button>`
-    : `${darfLoeschen ? `<button class="btn secondary" title="Termin löschen" onclick="hiDeleteCustom(${jsArg(ev.id)})">🗑️ Löschen</button>` : `<button class="btn secondary" title="Löschanfrage stellen" onclick="hiRequestDelete(${jsArg(ev.id)})">🗑️</button>`}${hiAbbrechenBtn()}`;
+    : `${istSerie && darfZeitAendern ? `<button class="btn secondary" title="Nur diesen einen Termin der Serie absagen" onclick="hiSerieEinzelAbsagen(${jsArg(ev.id)}, ${jsArg(ev._vorkommen)})">🗑️ Nur diesen</button>`
+        : darfLoeschen ? `<button class="btn secondary" title="Termin löschen" onclick="hiDeleteCustom(${jsArg(ev.id)})">🗑️ Löschen</button>` : `<button class="btn secondary" title="Löschanfrage stellen" onclick="hiRequestDelete(${jsArg(ev.id)})">🗑️</button>`}${hiAbbrechenBtn()}`;
 
   return `
     <div class="hi-datumzeile">
-      <span class="hi-datum">📅 ${escapeHtml(wann)}</span>${chip}${betreuungZeile}
+      <span class="hi-datum">📅 ${escapeHtml(wann)}</span>${chip}${serieChip}${betreuungZeile}
       ${darfZeitAendern ? hiAendernBtn() : hilfe('Ändern kann nur '+escapeHtml(ev.erstelltVonName||'die erstellende Person')+'. Wunsch einfach in den Chat schreiben; mit 🗑️ eine Löschanfrage stellen.')}
     </div>
     ${editPanel}
@@ -4337,9 +4689,54 @@ window.hiCancelEvent = async function(key){
     document.getElementById('hourInspectorOverlay').classList.remove('show');
   } catch(e){ alert('Fehler: '+e.message); }
 };
+window.hiSerieWahl = function(art, btn){
+  document.querySelectorAll('#hiSerieWahl button').forEach(b=>b.classList.toggle('active', b===btn));
+  document.getElementById('hiEinzelPanel').style.display = art==='einzel' ? '' : 'none';
+  document.getElementById('hiGanzeSeriePanel').style.display = art==='serie' ? '' : 'none';
+};
+window.hiSerieEinzelSpeichern = async function(id, orig){
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(!ev || !orig) return;
+  const datum = document.getElementById('hiEinzelDatum').value || orig;
+  const von = document.getElementById('hiEinzelVon').value || '';
+  const bis = document.getElementById('hiEinzelBis').value || '';
+  const titel = (document.getElementById('hiEinzelTitel').value||'').trim().slice(0,120);
+  if(von && bis && bis <= von){ alert('Die Bis-Uhrzeit muss nach der Von-Uhrzeit liegen.'); return; }
+  const a = {};
+  if(von && von !== ev.von) a.von = von;
+  if(bis && bis !== ev.bis) a.bis = bis;
+  if(titel && titel !== ev.titel) a.titel = titel;
+  if(datum !== orig) a.verschobenAuf = datum;
+  try{
+    await updateDoc(doc(db,'custom_events',id), Object.keys(a).length
+      ? {['serieAusnahmen.'+orig]: a, geaendertAm: new Date().toISOString()}
+      : {['serieAusnahmen.'+orig]: deleteField(), geaendertAm: new Date().toISOString()});
+    if(window.logEvent) window.logEvent('serie_einzeln_geaendert', {id, datum: orig});
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
+window.hiSerieEinzelAbsagen = async function(id, orig){
+  if(!orig) return;
+  if(!confirm('Nur den Termin am ' + hiDatumText(orig) + ' absagen? Die übrige Serie bleibt.')) return;
+  try{
+    await updateDoc(doc(db,'custom_events',id), {['serieAusnahmen.'+orig]: {geloescht:true}, geaendertAm: new Date().toISOString()});
+    if(window.logEvent) window.logEvent('serie_einzeln_abgesagt', {id, datum: orig});
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
+window.hiSerieAusnahmeWeg = async function(id, k){
+  try{
+    await updateDoc(doc(db,'custom_events',id), {['serieAusnahmen.'+k]: deleteField()});
+    const ev = (window.customEvents||[]).find(e=>e.id===id);
+    if(ev && ev.serieAusnahmen){ delete ev.serieAusnahmen[k]; }
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
 window.hiSaveCustomEdit = async function(id){
+  const altRoh = (window.customEvents||[]).find(e=>e.id===id) || {};
+  const serieE = window.__serieEntwurf.hiEdit || null;
   const mehrtaegigEl = document.getElementById('hiEditMehrtaegig');
-  const mehrtaegig = mehrtaegigEl ? mehrtaegigEl.checked : false;
+  const mehrtaegig = !serieE && (mehrtaegigEl ? mehrtaegigEl.checked : false);
   const von = document.getElementById('hiCustomVon').value || null;
   const bis = document.getElementById('hiCustomBis').value || null;
   const startDatum = mehrtaegig ? document.getElementById('hiEditStartDatum').value : hiState.iso;
@@ -4351,6 +4748,12 @@ window.hiSaveCustomEdit = async function(id){
   const beeinflusstBetreuung = beeinflusstEl ? beeinflusstEl.checked : false;
   const betreuungWer = beeinflusstBetreuung ? (document.querySelector('input[name="hiEditBetreuungWer"]:checked')||{}).value : null;
   const zusatzFelder = { datum: startDatum, mehrtaegig, startDatum, endDatum, beeinflusstBetreuung, betreuungWer };
+  if(serieE){
+    Object.assign(zusatzFelder, {datum: serieE.beginn, startDatum: serieE.beginn, endDatum: serieE.beginn, serie: serieFertig(serieE)});
+  } else if(altRoh.serie){
+    zusatzFelder.serie = null; // Serie aufgehoben -> einzelner Termin am gewählten Tag
+    zusatzFelder.serieAusnahmen = {};
+  }
   const neuerTitel = ((document.getElementById('hiEditTitel')||{}).value||'').trim().slice(0,120);
   if(neuerTitel) zusatzFelder.titel = neuerTitel;
   const modeBtn = document.querySelector('#hiModeToggle button.active');
@@ -4431,6 +4834,17 @@ window.ablehnungGesehen = async function(id){
   catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
 async function loescheTerminSicher(id){
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(ev && ev.herkunft && ev.serie){
+    // Umgewandelter fester Termin: nicht löschen, sondern die Serie gestern
+    // enden lassen – sonst käme der alte, fest eingebaute Termin zurück.
+    const gestern = serieIsoPlus(isoDate(new Date()), -1);
+    await updateDoc(doc(db,'custom_events',id), {serie: Object.assign({}, ev.serie, {ende:{art:'datum', datum: gestern}}), geaendertAm: new Date().toISOString()});
+    if(window.logEvent) window.logEvent('serie_beendet', {id, herkunft: ev.herkunft});
+    if(typeof render === 'function') render();
+    if(typeof renderAllEventsList === 'function') renderAllEventsList();
+    return;
+  }
   await deleteDoc(doc(db,'custom_events',id));
   window.customEvents = (window.customEvents||[]).filter(e=>e.id!==id);
   if(window.logEvent) window.logEvent('termin_geloescht', {id});
@@ -4439,7 +4853,8 @@ async function loescheTerminSicher(id){
   if(typeof renderRequestsUI === 'function') renderRequestsUI();
 }
 window.hiDeleteCustom = async function(id){
-  if(!confirm('Termin wirklich löschen?')) return;
+  const evS = (window.customEvents||[]).find(e=>e.id===id);
+  if(!confirm(evS && evS.serie ? 'Die GANZE Serie „'+(evS.titel||'Termin')+'“ wirklich löschen? (alle Termine dieser Serie)' : 'Termin wirklich löschen?')) return;
   try{ await loescheTerminSicher(id); document.getElementById('hourInspectorOverlay').classList.remove('show'); }
   catch(e){ alert('Löschen fehlgeschlagen: '+e.message + regelHinweis(e)); if(window.logEvent) window.logEvent('termin_loeschen_fehler', {id, fehler:String(e.message||e).slice(0,200)}); }
 };
@@ -4523,7 +4938,7 @@ function renderAllEventsList(){
     html += `<tr>
       <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(ev.datum||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.titel||'(ohne Titel)')}</td>
-      <td style="padding:6px; border-bottom:1px solid var(--line); white-space:nowrap;">${escapeHtml(terminZeitText(ev)||'?')}</td>
+      <td style="padding:6px; border-bottom:1px solid var(--line); ${ev.serie?'':'white-space:nowrap;'}">${escapeHtml(terminZeitText(ev)||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); max-width:220px;">${statusDisplay}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line);">${escapeHtml(ev.erstelltVonName||'?')}</td>
       <td style="padding:6px; border-bottom:1px solid var(--line); text-align:right;"><button class="cr-del" onclick="deleteAnyCustomEvent(${jsArg(ev.id)})">✕ Löschen</button></td>
@@ -4532,6 +4947,76 @@ function renderAllEventsList(){
   html += '</table>';
   el.innerHTML = html;
 }
+/* Einmalige Umwandlung der fest im Code hinterlegten wiederkehrenden
+   Termine in echte Serien (custom_events mit "herkunft"). Ab dem Beginn
+   der Serie blendet der Kalender den alten festen Eintrag aus. */
+window.adminFesteInSerien = async function(){
+  if(window.__chaosRole !== 'admin'){ alert('Nur der Admin kann das.'); return; }
+  const heute = isoDate(new Date());
+  const abWt = wt => { let iso = heute; for(let i=0;i<8;i++){ if(serieWt(new Date(iso+'T00:00:00'))===wt) return iso; iso = serieIsoPlus(iso,1); } return heute; };
+  const ersteAb = liste => liste.slice().sort().find(x=>x>=heute);
+  const person = rolle => {
+    const k = (window.allActiveUsers||[]).filter(u=>u.role===rolle);
+    const u = k.find(x=>String(x.username||'').trim().toLowerCase()===rolle) || k[0];
+    return u ? {uid:u.uid, name:u.username} : null;
+  };
+  const kidsAlle = [...KIDSTREFF_BESTAETIGT, ...KIDSTREFF_VORAUSS];
+  const plan = [
+    {herkunft:'volleyball_andi', titel:'Volleyball Andi', von:'19:00', bis:'21:00', datum: abWt(3), person: person('andi'),
+     serie:{typ:'woechentlich', intervall:1, wochentage:[3], ende:{art:'nie'}, nichtInFerien:true}, alt: ()=>true},
+    {herkunft:'bandprobe_janine', titel:'Bandprobe Janine', von:'20:00', bis:'23:59', datum: abWt(4), person: person('janine'),
+     serie:{typ:'woechentlich', intervall:1, wochentage:[4], ende:{art:'nie'}, nichtInFerien:false}, alt: ()=>true},
+    {herkunft:'bandprobe_mischa', titel:'Bandprobe Mischa', von:'16:30', bis:'17:30', datum: ersteAb(BAND_DATES_MISCHA), kind:'mischa',
+     serie:{typ:'woechentlich', intervall:2, wochentage:[4], ende:{art:'datum', datum: BAND_DATES_MISCHA.slice().sort().pop()}, nichtInFerien:true},
+     alt: iso=> BAND_DATES_MISCHA.includes(iso)},
+    {herkunft:'club_kidsclub', titel:'Fridays Club', von:'19:00', bis:'22:00', datum: abWt(5), kind:'mischa',
+     serie:{typ:'woechentlich', intervall:1, wochentage:[5], ende:{art:'nie'}, nichtInFerien:true},
+     alt: iso=> isSchoolDayForKid(new Date(iso+'T00:00:00'),'mischa'), titelAm: iso=> FRIDAYS_CLUB_TITEL[iso]},
+    {herkunft:'club_kidstreff', titel:'Kidstreff', von:'15:30', bis:'17:30', datum: ersteAb(kidsAlle), kind:'janosch',
+     serie:{typ:'woechentlich', intervall:2, wochentage:[4], ende:{art:'datum', datum: kidsAlle.slice().sort().pop()}, nichtInFerien:true},
+     alt: iso=> kidsAlle.includes(iso)}
+  ];
+  const offen = plan.filter(p=> p.datum && !(window.customEvents||[]).some(e=>e.herkunft===p.herkunft));
+  if(!offen.length){ alert('Alles schon umgewandelt (oder keine künftigen Termine mehr vorhanden).'); return; }
+  if(!confirm('Diese festen Termine werden in Serien umgewandelt:\n\n' + offen.map(p=>'• '+p.titel+' – '+serieKurzText(p.serie)+', ab '+hiDatumText(p.datum)).join('\n') +
+    '\n\nVerschiebungen, Absagen und Chats der einzelnen Tage werden übernommen. Weiter?')) return;
+  let ok = 0; const fehler = [];
+  for(const p of offen){
+    try{
+      const ausnahmen = {};
+      const probe = {datum: p.datum, serie: p.serie};
+      const bis = (p.serie.ende && p.serie.ende.datum) || serieIsoPlus(p.datum, 365);
+      for(let iso = p.datum; iso <= bis; iso = serieIsoPlus(iso,1)){
+        if(!serieGiltAm(probe, iso)) continue;
+        if(!p.alt(iso)){ ausnahmen[iso] = {geloescht:true}; continue; }
+        if(p.titelAm && p.titelAm(iso)) ausnahmen[iso] = {titel: p.titelAm(iso)};
+      }
+      const chat = [];
+      Object.entries(window.eventOverrides||{}).forEach(([k,ov])=>{
+        if(!k.startsWith(p.herkunft+'_')) return;
+        const iso = k.slice(p.herkunft.length+1);
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(iso) || iso < p.datum) return;
+        if(ov.geloescht) ausnahmen[iso] = {geloescht:true};
+        else if(ov.von && ov.bis) ausnahmen[iso] = Object.assign({}, ausnahmen[iso]||{}, {von: ov.von, bis: ov.bis});
+        (ov.chat||[]).forEach(m=> chat.push(Object.assign({}, m, {text: '('+iso.slice(8,10)+'.'+iso.slice(5,7)+'.) ' + (m.text||'')})));
+      });
+      const daten = {
+        datum: p.datum, startDatum: p.datum, endDatum: p.datum, von: p.von, bis: p.bis, titel: p.titel,
+        mehrtaegig:false, beeinflusstBetreuung:false, betreuungWer:null, privat:false, status:'info',
+        serie: p.serie, serieAusnahmen: ausnahmen, herkunft: p.herkunft,
+        erstelltVonUid: p.person ? p.person.uid : (window.myUid||'?'),
+        erstelltVonName: p.person ? p.person.name : 'Familie',
+        erstelltAm: new Date().toISOString()
+      };
+      if(p.kind){ daten.kind = p.kind; daten.gemeinsam = true; }
+      if(chat.length) daten.chat = chat;
+      await addDoc(collection(db,'custom_events'), daten);
+      ok++;
+    } catch(e){ fehler.push(p.titel + ': ' + e.message); }
+  }
+  if(window.logEvent) window.logEvent('feste_termine_umgewandelt', {anzahl: ok, fehler: fehler.length});
+  alert(`${ok} Serie(n) angelegt.` + (fehler.length ? '\n\nFehler:\n' + fehler.join('\n') + regelHinweis({code:'permission-denied', message: fehler[0]}) : ''));
+};
 window.deleteAnyCustomEvent = async function(id){
   if(!confirm('Diesen Termin wirklich löschen?')) return;
   try{ await loescheTerminSicher(id); }
@@ -5105,9 +5590,13 @@ window.zeigeTagImKalender = zeigeTagImKalender;
 
 /* Termin im Kalender zeigen: zum Tag springen und den Termin mit
    Bestätigen/Ablehnen und Chat gleich aufklappen. */
-window.oeffneTerminMitChat = function(evId){
-  const ev = (window.customEvents||[]).find(e=>e.id===evId);
+window.oeffneTerminMitChat = function(evId, amIso){
+  let ev = (window.customEvents||[]).find(e=>e.id===evId);
   if(!ev){ alert('Termin nicht gefunden.'); return; }
+  if(ev.serie){
+    const tagS = (amIso && vorkommenAm(ev, amIso)) ? amIso : (naechstesVorkommen(ev, isoDate(new Date())) || naechstesVorkommen(ev, ev.datum));
+    if(tagS) ev = vorkommenAm(ev, tagS);
+  }
   let tag = ev.datum, start = zeitZuStunden(ev.von), mitte = 12;
   if(start !== null){
     const ende = zeitZuStunden(ev.bis);
@@ -5143,7 +5632,8 @@ async function raeumeAufIntern(auchErledigte){
     }
   }
   for(const ev of (window.customEvents||[])){
-    const endDatum = ev.endDatum || ev.datum;
+    if(ev.herkunft) continue;
+    const endDatum = ev.serie ? ((ev.serie.ende && ev.serie.ende.art !== 'nie') ? ev.serie.ende.datum : null) : (ev.endDatum || ev.datum);
     if(endDatum && endDatum < heute && (istAdmin || ev.erstelltVonUid === window.myUid)){
       try{ await deleteDoc(doc(db,'custom_events', ev.id)); anzahl++; } catch(e){ fehler++; }
     }
@@ -5236,7 +5726,7 @@ window.runSearch = function(qRoh){
   if(!treffer.length){ box.innerHTML = '<div class="empty-note">Keine Termine gefunden.</div>'; return; }
   const statusLabel = {info:'Info', schwebend:'⏳ wartet auf Bestätigung', bestaetigt:'✓ bestätigt', abgelehnt:'✕ abgelehnt'};
   box.innerHTML = treffer.map(ev=>{
-    const wann = ev.mehrtaegig ? terminZeitText(ev)
+    const wann = (ev.mehrtaegig || ev.serie) ? terminZeitText(ev)
       : (ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?')
         + ((ev.von && ev.bis) ? ' · '+ev.von+'–'+ev.bis+' Uhr' : '');
     return `<div class="req-card" style="cursor:pointer;" onclick="springeZuSuchtreffer(${jsArg(ev.id)})">
@@ -5767,6 +6257,7 @@ function terminMailText(ev, einleitung){
   zeilen.push('„' + (ev.titel||'Termin') + '“');
   if(ev.mehrtaegig) zeilen.push(mailDatum(ev.startDatum) + (ev.von?' '+ev.von:'') + ' bis ' + mailDatum(ev.endDatum) + (ev.bis?' '+ev.bis:''));
   else zeilen.push(mailDatum(ev.datum) + ((ev.von && ev.bis) ? ' · ' + ev.von + '–' + ev.bis + ' Uhr' : ''));
+  if(ev.serie) zeilen.push('Serie: ' + serieKurzText(ev.serie));
   if(ev.beeinflusstBetreuung && ev.betreuungWer) zeilen.push('Betreuung in diesem Zeitraum: ' + (whoLabel(ev.betreuungWer)||ev.betreuungWer));
   const notiz = (ev.chat||[]).find(m=>m.vonUid===ev.erstelltVonUid && m.text);
   if(notiz) zeilen.push('', 'Notiz: ' + notiz.text);

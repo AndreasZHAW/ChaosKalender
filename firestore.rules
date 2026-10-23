@@ -1,7 +1,16 @@
 rules_version = '2';
 
 // ChaosKalender – Firestore-Sicherheitsregeln
-// REGEL-VERSION: rules-v11-2026-10-06
+// REGEL-VERSION: rules-v12-2026-10-23
+//
+// Neu in v12 (gegenüber v11): Serientermine
+//  * custom_events: der Admin darf Termine im Namen einer anderen Person
+//           anlegen (Umwandlung der festen Termine in Serien).
+//  * custom_events mit gemeinsam == true (Kinder-Serien wie Fridays Club,
+//           Kidstreff, Bandprobe Mischa): Janine und Andi dürfen sie
+//           bearbeiten und löschen.
+//  * Ein bestätigter Termin behält auch seinen Serien-Rhythmus ("serie"),
+//           solange er bestätigt bleibt.
 //
 // Neu in v11 (gegenüber v10):
 //  * users_privat/{uid}: E-Mail und Telefonnummer für den Fall eines
@@ -181,7 +190,7 @@ service cloud.firestore {
       // "bestaetigt"); ein reiner Info-Termin ändert NIE die Betreuung;
       // noch keine Bestätigungen.
       allow create: if isActive() && okId(eventId)
-                    && request.resource.data.erstelltVonUid == request.auth.uid
+                    && (request.resource.data.erstelltVonUid == request.auth.uid || isAdmin())
                     && request.resource.data.status in ['info', 'schwebend']
                     && okStr(request.resource.data.titel, 200)
                     && (request.resource.data.status == 'schwebend'
@@ -204,7 +213,16 @@ service cloud.firestore {
           && !(resource.data.status == 'bestaetigt' && request.resource.data.status == 'bestaetigt'
                && request.resource.data.diff(resource.data).affectedKeys().hasAny([
                     'beeinflusstBetreuung', 'betreuungWer', 'datum', 'startDatum', 'endDatum',
-                    'von', 'bis', 'mehrtaegig', 'bestaetigerUids']))) ||
+                    'von', 'bis', 'mehrtaegig', 'bestaetigerUids', 'serie']))) ||
+
+        // Gemeinsame Familien-Serien (Kinder): Janine und Andi dürfen ändern,
+        // aber nicht die Herkunft und nicht das "gemeinsam".
+        (isParentOrAdmin()
+          && resource.data.get('gemeinsam', false) == true
+          && request.resource.data.get('gemeinsam', false) == true
+          && request.resource.data.erstelltVonUid == resource.data.erstelltVonUid
+          && (request.resource.data.status != 'bestaetigt' || resource.data.status == 'bestaetigt')
+          && request.resource.data.get('chat', []).size() >= resource.data.get('chat', []).size()) ||
 
         // Genannte Bestätiger: nur bestätigen/ablehnen (+ Chat), nur für sich
         // selbst, und "bestaetigt" nur, wenn wirklich alle Genannten bestätigt haben.
@@ -227,7 +245,8 @@ service cloud.firestore {
 
       // Löschen: nur Admin oder die Person, die den Termin erstellt hat.
       allow delete: if isActive() &&
-                     (resource.data.erstelltVonUid == request.auth.uid || isAdmin());
+                     (resource.data.erstelltVonUid == request.auth.uid || isAdmin()
+                      || (isParentOrAdmin() && resource.data.get('gemeinsam', false) == true));
     }
 
     // --- custody_rules: Standard-Betreuungsmuster; nur der Admin ändert ---
