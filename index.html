@@ -196,6 +196,7 @@
   .wueb-nav{border:none; background:#F2F1EC; border-radius:8px; padding:4px 10px; font-size:14px; cursor:pointer;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
   .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .feld{width:14px;height:10px;border-radius:3px;border-left:3px solid;flex-shrink:0;}
 
   .cal-panel{background:var(--panel); border-radius:10px; overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid var(--line);}
   .cal-panel.hour-scroll{max-height:82vh; overflow-y:auto;}
@@ -350,6 +351,9 @@
   .admin-header h1{font-size:18px; margin:0;}
   .admin-nav{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
   .admin-nav button{border:1px solid var(--line); background:var(--panel); color:var(--ink-soft); padding:8px 14px; border-radius:8px; font-family:inherit; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .admin-kalender{background:var(--b-bg) !important; color:var(--b) !important; border-color:#BFD2EE !important;}
+  .admin-dev{margin:-10px 0 18px; font-size:12px; color:var(--ink-soft);}
+  .admin-dev>summary{cursor:pointer; display:inline-block;}
   .admin-nav button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   .admin-card{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px;}
   #logList{overflow-x:hidden;}
@@ -513,16 +517,21 @@
     <div class="logout-link" onclick="handleLogout()">Abmelden</div>
   </div>
   <div class="admin-nav">
-    <button class="active" data-admintab="registrations" onclick="switchAdminTab('registrations')">Neue Registrierungen</button>
-    <button data-admintab="qr" onclick="switchAdminTab('qr')">QR-Code</button>
-    <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
+    <button class="active" data-admintab="registrations" onclick="switchAdminTab('registrations')">👤 Registrierungen</button>
+    <button data-admintab="konto" onclick="switchAdminTab('konto')">⚙ Mein Konto</button>
     <button data-admintab="custody" onclick="switchAdminTab('custody')">📅 Standard-Betreuung</button>
+    <button class="admin-kalender" onclick="openCalendarAsAdmin()">Zum Kalender →</button>
     <button data-admintab="events" onclick="switchAdminTab('events')">🗓️ Alle Termine</button>
     <button data-admintab="chats" onclick="switchAdminTab('chats')">💬 Chats</button>
-    <button data-admintab="konto" onclick="switchAdminTab('konto')">⚙ Mein Konto</button>
     <button onclick="openRequestsAsAdmin()">📥 Änderungs&shy;anfragen</button>
-    <button onclick="openCalendarAsAdmin()">Zum Kalender →</button>
+    <button data-admintab="qr" onclick="switchAdminTab('qr')">▦ QR-Code</button>
   </div>
+  <details class="admin-dev">
+    <summary>🛠 Entwickler</summary>
+    <div class="admin-nav" style="margin:8px 0 0;">
+      <button data-admintab="log" onclick="switchAdminTab('log')">📋 Protokoll</button>
+    </div>
+  </details>
 
   <div id="adminRegistrations">
     <div class="admin-card">
@@ -655,6 +664,13 @@
       <div class="legend-item viewas" data-person="omami" onclick="viewAsPerson('omami')"><span class="dot" style="background:#9B7CA8"></span>Omami</div>
       <div class="legend-item"><span class="dot" style="background:#9AA0A6"></span>Schule</div>
       <div class="legend-item"><span class="dot" style="background:#C17356"></span>Feiertag/Ferien</div>
+    </div>
+    <div class="ansicht-head">Flächen im Tag</div>
+    <div class="legend">
+      <div class="legend-item"><span class="feld" style="background:var(--janosch-bg); border-color:var(--janosch);"></span>Janosch</div>
+      <div class="legend-item"><span class="feld" style="background:var(--mischa-bg); border-color:var(--mischa);"></span>Mischa</div>
+      <div class="legend-item"><span class="feld" style="background:var(--b-bg); border-color:#8DB0E0;"></span>von Andi</div>
+      <div class="legend-item"><span class="feld" style="background:var(--a-bg); border-color:#E5A79F;"></span>von Janine</div>
     </div>
     <div class="ansicht-head">Weitere Ansichten</div>
     <div class="ansicht-hint">Tippen = Ansicht an, nochmals tippen oder Menü zuklappen = zurück. Kinder: Fächer statt Schulzeit. Partner: nur „oben“ (Andi) / „unten“ (Janine), ohne Uhrzeiten und Namen. Farbige Fläche im Tag = Termin (Schule, Hort, Club …) – antippen für Details.</div>
@@ -1010,7 +1026,7 @@ function wochenSpaltenStil(start){
 function renderMehrtaegigLinienHtml(iso, startHour, px){
   let html = '', i = 0;
   const stop = 'onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()"';
-  function balken(r, bg, labelKlasse, titel, tip, oeffnen){
+  function balken(r, bg, labelKlasse, titel, tip, oeffnen, labelStil){
     const top = (r[0]-startHour)*px, height = (r[1]-r[0])*px;
     if(height <= 0) return;
     const left = 7 + i*BALKEN_ABSTAND;
@@ -1021,7 +1037,7 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
     let labelTop = (ank-startHour)*px + 3 + i*15;
     const platz = Math.max(30, (24-startHour)*px - 18);
     if(labelTop > platz) labelTop = 3 + ((labelTop - 3) % platz);
-    html += `<div class="multi-label ${labelKlasse}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);" ${stop} onclick="${oeffnen}" title="${tip}">${escapeHtml(titel)}</div>`;
+    html += `<div class="multi-label ${labelKlasse}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);${labelStil||''}" ${stop} onclick="${oeffnen}" title="${tip}">${escapeHtml(titel)}</div>`;
     i++;
   }
 
@@ -1035,11 +1051,13 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
     const r = mehrtaegigTagesbereich(ev, iso);
     if(!r) return;
     const pending = ev.status === 'schwebend';
-    const bg = pending ? 'repeating-linear-gradient(to bottom, #C9A54B 0 6px, transparent 6px 10px)' : '#B58900';
+    const f = terminFarbe(ev);
+    const bg = pending ? `repeating-linear-gradient(to bottom, ${f.linie} 0 6px, transparent 6px 10px)` : f.linie;
+    const labelStil = `background:${f.bg};color:${f.fg};${pending?'border-color:'+f.rand+';':''}`;
     const oeffnen = `event.stopPropagation(); openHourInspector('${iso}', ${(r[0]+r[1])/2}, 'custom_${ev.id}')`;
     const zusatz = (iso===ev.startDatum && ev.von) ? ' ab '+ev.von : ((iso===ev.endDatum && ev.bis) ? ' bis '+ev.bis : '');
     const tip = escapeHtml(terminAnzeigeTitel(ev) + zusatz + (pending?' (wartet auf Bestätigung)':''));
-    balken(r, bg, pending?'pending':'', terminAnzeigeTitel(ev), tip, oeffnen);
+    balken(r, bg, pending?'pending':'', terminAnzeigeTitel(ev), tip, oeffnen, labelStil);
   });
   return html;
 }
@@ -1087,11 +1105,11 @@ function getKidClub(d, kid){
   const iso = isoDate(d);
   if(kid==='mischa' && d.getDay()===5 && isSchoolDayForKid(d,'mischa')){
     const c = FRIDAY_CLUBS.mischa;
-    return {label: FRIDAYS_CLUB_TITEL[iso] || c.label, start:c.start, end:c.end, key:'club_kidsclub_'+iso};
+    return {label: FRIDAYS_CLUB_TITEL[iso] || c.label, start:c.start, end:c.end, key:'club_kidsclub_'+iso, bg:'var(--mischa-bg)', fg:'#6E5539', rand:'var(--mischa)'};
   }
   if(kid==='janosch' && (KIDSTREFF_BESTAETIGT.includes(iso) || KIDSTREFF_VORAUSS.includes(iso)) && !getSchoolHolidayName(d)){
     const vorauss = KIDSTREFF_VORAUSS.includes(iso);
-    return {label: KIDSTREFF.label + (vorauss?' (vorauss.)':''), start:KIDSTREFF.start, end:KIDSTREFF.end, key:'club_kidstreff_'+iso};
+    return {label: KIDSTREFF.label + (vorauss?' (vorauss.)':''), start:KIDSTREFF.start, end:KIDSTREFF.end, key:'club_kidstreff_'+iso, bg:'var(--janosch-bg)', fg:'#46596D', rand:'var(--janosch)'};
   }
   return null;
 }
@@ -1282,9 +1300,25 @@ function terminAnzeigeTitel(ev){
   if(terminIstPrivatFuerMich(ev)) return '🔒 ' + (ev.erstelltVonName || 'Jemand') + ' gebucht';
   return ((ev.privat && ev.status === 'info') ? '🔒 ' : '') + (ev.titel || 'Termin');
 }
+/* Farbe eines frei eingetragenen Termins nach der Person, die ihn
+   eingetragen hat: Andi hellblau, Janine blass rot, alle anderen gold. */
+function terminErstellerRolle(ev){
+  const u = (window.allActiveUsers||[]).find(x=>x.uid===ev.erstelltVonUid);
+  if(u && (u.role==='andi' || u.role==='janine')) return u.role;
+  const n = String(ev.erstelltVonName||'').trim().toLowerCase();
+  return (n==='andi' || n==='janine') ? n : '';
+}
+function terminFarbe(ev){
+  const r = terminErstellerRolle(ev);
+  if(r==='andi')   return {bg:'var(--b-bg)', fg:'var(--b)', rand:'#8DB0E0', linie:'#7FA6DC'};
+  if(r==='janine') return {bg:'var(--a-bg)', fg:'var(--a)', rand:'#E5A79F', linie:'#E08E83'};
+  return {bg:'var(--pending-bg)', fg:'#7A5A00', rand:'var(--pending)', linie:'#B58900'};
+}
 function terminFarbStil(ev, borderStyle){
   if(terminIstPrivatFuerMich(ev)) return 'background:#ECECE6;color:#6B6B63;border:1px solid #D2D2C8;';
-  return 'background:var(--pending-bg);color:#7A5A00;' + borderStyle;
+  const f = terminFarbe(ev);
+  const gestrichelt = /dashed/.test(borderStyle||'');
+  return `background:${f.bg};color:${f.fg};border:${gestrichelt?'2px dashed':'1px solid'} ${f.rand};`;
 }
 function getEventBetreuungsOverlays(iso){
   const out = [];
@@ -1976,7 +2010,7 @@ function renderWeek(){
           const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
           const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
+          body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:${c.bg};color:${c.fg};border-left:3px solid ${c.rand};left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', ${c.start}, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       });
     }
@@ -1987,7 +2021,7 @@ function renderWeek(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
         const top=(s-startHour)*PXH, height=(Math.min(24,endHour)-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event omami" style="top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        body += `<div class="event" style="background:var(--a-bg);color:var(--a);top:${top}px;height:${height}px;z-index:2;left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     if(dow===3 && !hol && showFullDetailFor('b')){
@@ -1997,7 +2031,7 @@ function renderWeek(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--a-bg);color:var(--a);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 19, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--b-bg);color:var(--b);left:2px;right:2px;font-size:9.5px;border:1px dashed var(--b);cursor:pointer;" onclick="openHourInspector('${iso}', 19, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
       }
     }
     if(BAND_DATES_MISCHA.includes(iso)){
@@ -2008,7 +2042,7 @@ function renderWeek(){
         const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const top=(s-startHour)*PXH, height=(e-s)*PXH-3;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--mischa-bg);color:#6E5539;border-left:3px solid var(--mischa);left:2px;right:2px;font-size:9.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 16.5, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     const tagHatFixeBloecke = hatDieserTagFixeBloecke(d, iso);
@@ -2086,11 +2120,11 @@ function renderKidWeek(kid){
     if(getKidClub(d, kid)){
       const c = getKidClub(d, kid);
       const top=(c.start-startHour)*44, height=(c.end-c.start)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--school);color:#6B5B3A;left:2px;right:2px;font-size:9.5px;">${c.label}</div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:${c.bg};color:${c.fg};border-left:3px solid ${c.rand};left:2px;right:2px;font-size:9.5px;">${c.label}</div>`;
     }
     if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
       const top=(16.5-startHour)*44, height=(17.5-16.5)*44-3;
-      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--omami-bg);color:var(--omami);left:2px;right:2px;font-size:9.5px;">Bandprobe</div>`;
+      body += `<div class="event" style="top:${top}px;height:${height}px;z-index:2;background:var(--mischa-bg);color:#6E5539;border-left:3px solid var(--mischa);left:2px;right:2px;font-size:9.5px;">Bandprobe</div>`;
     }
 
     body += `</div>`;
@@ -2205,16 +2239,16 @@ function renderMonth(){
     getMehrtaegigeTermineFuerTag(iso).forEach(ev=>{
       const r = mehrtaegigTagesbereich(ev, iso);
       if(!r) return;
-      const farbe = ev.status==='schwebend' ? '#D8BD73' : '#B58900';
+      const farbe = terminFarbe(ev).linie;
       html += `<div class="m-item">${monatStreifenHtml([{von:r[0], bis:r[1], farbe}])}<span class="m-text gold">${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</span></div>`;
     });
     // Einzelne Termine und Bandprobe als kurzer Text
     (window.customEvents||[]).filter(ev=> !ev.mehrtaegig && ev.datum===iso && ['info','bestaetigt','schwebend'].includes(ev.status))
       .sort((a,b)=> String(a.von||'').localeCompare(String(b.von||'')))
       .forEach(ev=>{
-        html += `<div class="m-text gold">${ev.von?escapeHtml(ev.von)+' ':''}${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</div>`;
+        html += `<div class="m-text" style="color:${terminFarbe(ev).fg};">${ev.von?escapeHtml(ev.von)+' ':''}${escapeHtml(terminAnzeigeTitel(ev))}${ev.status==='schwebend'?' ⏳':''}</div>`;
       });
-    if(BAND_DATES_MISCHA.includes(iso)) html += `<div class="m-text" style="color:#8C4A6E;">Bandprobe M.</div>`;
+    if(BAND_DATES_MISCHA.includes(iso)) html += `<div class="m-text" style="color:#6E5539;">Bandprobe M.</div>`;
     html += `</div>`;
   }
   html += '</div>';
@@ -2280,10 +2314,10 @@ function renderDay(){
     }
     if(getKidClub(d, kid)){
       const c = getKidClub(d, kid);
-      body += block(c.start,c.end,c.label,'var(--school)','#6B5B3A',false,2);
+      body += block(c.start,c.end,c.label,c.bg,c.fg,false,2);
     }
     if(kid==='mischa' && BAND_DATES_MISCHA.includes(iso)){
-      body += block(16.5,17.5,'Bandprobe','var(--omami-bg)','var(--omami)',false,2);
+      body += block(16.5,17.5,'Bandprobe','var(--mischa-bg)','#6E5539',false,2);
     }
   } else {
     ['janosch','mischa'].forEach(k=>{
@@ -2322,13 +2356,13 @@ function renderDay(){
       ['mischa','janosch'].forEach(k=>{
         const c = getKidClub(d, k);
         if(c){
-          body += block(c.start,c.end,`${c.label} (${k==='mischa'?'Mischa':'Janosch'})`,'var(--school)','#6B5B3A',false,3);
+          body += block(c.start,c.end,`${c.label} (${k==='mischa'?'Mischa':'Janosch'})`,c.bg,c.fg,false,3);
         }
       });
     }
-    if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--omami-bg)','var(--omami)',false,3);
-    if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--a-bg)','var(--a)',false,3);
-    if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--omami-bg)','var(--omami)',false,3);
+    if(dow===4 && showFullDetailFor('a')) body += block(20,24,'Bandprobe Janine','var(--a-bg)','var(--a)',false,3);
+    if(dow===3 && !hol && showFullDetailFor('b')) body += block(19,21,'Volleyball Andi?','var(--b-bg)','var(--b)',false,3);
+    if(BAND_DATES_MISCHA.includes(iso)) body += block(16.5,17.5,'Bandprobe Mischa','var(--mischa-bg)','#6E5539',false,3);
     const tagHatFixeBloecke2 = hatDieserTagFixeBloecke(d, iso);
     (window.customEvents||[]).filter(ev=>ev.datum===iso && ev.von && ev.bis && !ev.mehrtaegig).forEach(ev=>{
       const s = parseFloat(ev.von.split(':')[0])+parseFloat(ev.von.split(':')[1])/60;
@@ -2442,7 +2476,7 @@ function renderSwipeView(){
             const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:c.start;
             const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:c.end;
             const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--school);color:#6B5B3A;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
+            daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:${c.bg};color:${c.fg};border-left:3px solid ${c.rand};font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', (${c.start}+${c.end})/2, ${jsArg(key)})"><strong>${c.label}${(ov&&ov.von)?' ✎':''}</strong></div>`;
           }
         });
       }
@@ -2452,7 +2486,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):20, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):24;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event omami" style="top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
+          daysHtml += `<div class="event" style="background:var(--a-bg);color:var(--a);top:${(s-startHour)*px}px;height:${(Math.min(24,endHour)-s)*px-2}px;left:2px;right:2px;z-index:2;font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 22, ${jsArg(key)})"><strong>Bandprobe${(ov&&ov.von)?' ✎':''}</strong></div>`;
         }
       }
       if(dow===3 && !hol && showFullDetailFor('b')){
@@ -2461,7 +2495,7 @@ function renderSwipeView(){
         if(!(ov && ov.geloescht)){
           const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0]):19, e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0]):21;
           const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--a-bg);color:var(--a);font-size:10.5px;border:1px dashed var(--a);cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
+          daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:2;background:var(--b-bg);color:var(--b);font-size:10.5px;border:1px dashed var(--b);cursor:pointer;" onclick="openHourInspector('${iso}', 20, ${jsArg(key)})"><strong>Volleyball${(ov&&ov.von)?' ✎':'?'}</strong></div>`;
         }
       }
     }
@@ -2472,7 +2506,7 @@ function renderSwipeView(){
         const s = (ov&&ov.von)?parseFloat(ov.von.split(':')[0])+parseFloat(ov.von.split(':')[1])/60:16.5;
         const e = (ov&&ov.bis)?parseFloat(ov.bis.split(':')[0])+parseFloat(ov.bis.split(':')[1])/60:17.5;
         const dateLbl = d.toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'});
-        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--omami-bg);color:var(--omami);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
+        daysHtml += `<div class="event" style="top:${(s-startHour)*px}px;height:${(e-s)*px-2}px;left:2px;right:2px;z-index:3;background:var(--mischa-bg);color:#6E5539;border-left:3px solid var(--mischa);font-size:10.5px;cursor:pointer;" onclick="openHourInspector('${iso}', 17, ${jsArg(key)})"><strong>Bandprobe M.${(ov&&ov.von)?' ✎':''}</strong></div>`;
       }
     }
     const tagHatFixeBloecke3 = hatDieserTagFixeBloecke(d, iso);
@@ -3154,7 +3188,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v82 · 21.10.2026';
+const APP_VERSION = 'v83 · 23.10.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3175,7 +3209,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=82').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=83').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
