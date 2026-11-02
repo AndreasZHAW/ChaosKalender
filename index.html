@@ -225,6 +225,29 @@
   .wueb-zeit{font-weight:700;}
   .wueb-sub{font-size:11.5px; color:var(--ink-soft); margin-top:1px;}
   .wueb-pfeil{color:var(--ink-soft); font-size:18px; flex-shrink:0;}
+  .wueb-summe{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px;}
+  .wueb-summe span{font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; background:#F2F1EC; color:var(--ink-soft);}
+  .wueb-summe span.dran{background:var(--pending-bg); color:#7A5A00;}
+  .wueb-summe span.betr{background:#EDE7F6; color:#5B3E8F;}
+  .wueb-tagblock{border-top:1px solid var(--line); padding:8px 0 4px; margin-top:6px;}
+  .wueb-tagblock:first-of-type{border-top:none;}
+  .wueb-tagkopf{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:5px;}
+  .wueb-tagkopf .wueb-tag{margin:0;}
+  .wueb-betr{font-size:12px; display:inline-flex; align-items:center; flex-wrap:wrap; gap:3px; padding:3px 8px; border-radius:999px; background:#F6F5F1; cursor:pointer; color:var(--ink-soft);}
+  .wueb-betr.anders{background:#EDE7F6; box-shadow:0 0 0 1.5px #9A7FD1 inset; color:#5B3E8F; font-weight:600;}
+  .wb{font-weight:700; padding:0 5px; border-radius:6px; background:#ECEAE3; color:var(--ink);}
+  .wb.a{background:var(--a-bg); color:var(--a);} .wb.b{background:var(--b-bg); color:var(--b);}
+  .wueb-normal{font-size:11px; color:var(--ink-soft); margin:-2px 0 5px; text-align:right;}
+  .wueb-kinder{font-size:11.5px; color:var(--ink-soft); margin:0 0 5px 2px;}
+  .wueb-punkt.leise{background:none; padding:3px 10px; margin-bottom:1px;}
+  .wueb-punkt.leise .wueb-titel{font-size:12.5px; color:var(--ink-soft);}
+  .wueb-punkt.leise .wueb-icon{font-size:13px;}
+  .wueb-punkt.betreuung{background:#EDE7F6;}
+  .wueb-punkt.dran{background:var(--pending-bg); box-shadow:0 0 0 1.5px var(--pending) inset;}
+  .wueb-tags{display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;}
+  .wueb-tags i{font-style:normal; font-size:11px; padding:1px 7px; border-radius:999px; background:#fff; color:var(--ink-soft); border:1px solid var(--line);}
+  .wueb-tags i.dran{background:var(--pending); color:#fff; border-color:var(--pending); font-weight:700;}
+  .wueb-tags i.betr{background:#EDE7F6; color:#5B3E8F; border-color:#D9CCF0;}
   .wueb-leer{padding:18px 4px; color:var(--ink-soft); font-size:13.5px; text-align:center;}
   .wueb-nav{border:none; background:#F2F1EC; border-radius:8px; padding:4px 10px; font-size:14px; cursor:pointer;}
   .swipe-body .hour-row{border-top:1px solid var(--line);}
@@ -789,7 +812,7 @@
       <div class="sub" id="wuebTitel" style="margin:0;">—</div>
       <button class="wueb-nav" onclick="wuebWoche(1)" title="Woche danach">›</button>
     </div>
-    <div class="sub erklaer" style="font-size:11.5px; margin:0 0 4px;">Alles, was diese Woche vom Normalfall abweicht. Antippen für Details.</div>
+    <div class="sub erklaer" style="font-size:11.5px; margin:0 0 4px;">Pro Tag: wer die Kinder hat, Schule und alle Termine. Lila = Betreuung anders als normal. Antippen für Details.</div>
     <div id="wuebInhalt"></div>
     <div class="modal-actions" style="margin-top:14px;"><button class="btn" onclick="wuebSchliessen()">Alles klar</button></div>
   </div>
@@ -2984,49 +3007,104 @@ const WUEB_FIX_LABEL = {
   volleyball_andi:'Volleyball Andi'
 };
 
+/* Betreuung eines Tages als farbige Kette: "Janine → 17:00 Andi" */
+function wuebBetreuungKette(segs){
+  if(!segs || !segs.length) return '';
+  return segs.map((sg,k)=>{
+    const name = `<span class="wb ${sg.who==='a'||sg.who==='b'?sg.who:''}">${escapeHtml(whoLabel(sg.who)||sg.who)}</span>`;
+    return k===0 ? name : `→ ${wuebUhr(sg.from)} ${name}`;
+  }).join(' ');
+}
+function wuebUhr(h){ const hh=Math.floor(h+1e-6), mm=Math.round((h-hh)*60); return hh+':'+String(mm).padStart(2,'0'); }
+function wuebFixZeit(key, defS, defE){
+  const ov = window.getEventOverride ? window.getEventOverride(key) : null;
+  if(ov && ov.geloescht) return null;
+  if(ov && ov.von && ov.bis) return [zeitZuStunden(ov.von), zeitZuStunden(ov.bis)];
+  return [defS, defE];
+}
 function sammleWochenPunkte(mo){
   const tage = [];
   const erledigteFerien = new Set();
+  const ich = window.myUid;
   for(let i=0;i<7;i++){
     const d = new Date(mo); d.setDate(mo.getDate()+i);
     const iso = isoDate(d);
+    const dow = d.getDay(), dowIdx = dow===0 ? 7 : dow;
     const punkte = [];
     const add = (p) => punkte.push(p);
+    const tag = {d, iso, punkte, betreuung:null, kinder:''};
 
     // Feiertag / Ferien (Ferien nur einmal pro Woche)
     const fei = getHolidayName(d);
-    if(fei) add({icon:'🎉', zeit:'', titel:fei + (isSchoolDay(d)?'':' · schulfrei'), klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+    if(fei) add({icon:'🎉', zeit:'', titel:fei + (isSchoolDay(d)?'':' · schulfrei'), klick:`wuebZuTag(${jsArg(iso)})`, sort:-3});
     const fer = getSchoolHolidayName(d);
     if(fer && !erledigteFerien.has(fer)){
       erledigteFerien.add(fer);
       const eintrag = SCHOOL_HOLIDAYS.find(h=>h[2]===fer);
       const bisTxt = eintrag ? ' (bis ' + eintrag[1].slice(8,10) + '.' + eintrag[1].slice(5,7) + '.)' : '';
-      add({icon:'🏖', zeit:'', titel:fer + bisTxt, klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+      add({icon:'🏖', zeit:'', titel:fer + bisTxt, klick:`wuebZuTag(${jsArg(iso)})`, sort:-3});
     }
-    // Klassenlager
     if(iso >= CAMP_MISCHA[0] && iso <= CAMP_MISCHA[1] && (i===0 || iso===CAMP_MISCHA[0])){
-      add({icon:'⛺', zeit:'', titel:'Klassenlager Mischa (bis ' + CAMP_MISCHA[1].slice(8,10) + '.' + CAMP_MISCHA[1].slice(5,7) + '.)', klick:`wuebZuTag(${jsArg(iso)})`, sort:-2});
+      add({icon:'⛺', zeit:'', titel:'Klassenlager Mischa (bis ' + CAMP_MISCHA[1].slice(8,10) + '.' + CAMP_MISCHA[1].slice(5,7) + '.)', klick:`wuebZuTag(${jsArg(iso)})`, sort:-3});
     }
 
-    // Betreuung weicht vom Standard ab
+    // Betreuung: immer zeigen, lila wenn anders als normal
     try{
       const ist = bereinigeTagesSegmente(getCustodySegments(d));
       const std = standardBetreuungSegmente(d);
-      if(ist.length && !segmenteGleich(ist, std)){
-        const erstes = ist.find((s,k)=>!std[k] || s.who!==std[k].who || Math.abs(s.from-std[k].from)>0.1) || ist[0];
-        const stunde = (erstes.from + Math.min(erstes.to, erstes.from+1)) / 2;
-        add({icon:'👪', zeit:'', titel:'Betreuung anders: ' + betreuungText(ist),
-             sub:'normal: ' + betreuungText(std), wichtig:true,
-             klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${stunde}, 'custody')`, sort:-1});
+      const anders = ist.length && !segmenteGleich(ist, std);
+      let stunde = 12;
+      if(anders){
+        const erstes = ist.find((sg,k)=>!std[k] || sg.who!==std[k].who || Math.abs(sg.from-std[k].from)>0.1) || ist[0];
+        stunde = (erstes.from + Math.min(erstes.to, erstes.from+1)) / 2;
       }
+      tag.betreuung = {html: wuebBetreuungKette(ist), anders: !!anders, normal: anders ? wuebBetreuungKette(std) : '',
+        klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${stunde}, 'custody')`};
     } catch(e){ console.error('Wochenüberblick Betreuung:', e); }
 
-    // Spezielle Tage (Stufensporttag, Elternabend, schulfreie Tage …)
+    // Offene Betreuungs-Anfragen an diesem Tag
+    try{
+      (typeof offeneBetreuungsVorschlaege==='function' ? offeneBetreuungsVorschlaege(iso) : []).forEach(r=>{
+        const l = r.verlauf[r.verlauf.length-1];
+        const dran = r.aktuellAmZugUid === ich;
+        const von = r.angefragtVonUid===ich ? 'dir' : (r.angefragtVonName||'?');
+        const an = r.angefragtAnUid===ich ? 'dich' : (r.angefragtAnName||'?');
+        add({icon:'👪', zeit:'', titel:'Betreuungs-Anfrage: ' + betreuungText(bereinigeTagesSegmente(l.neueSegmente)),
+             sub:'von ' + von + ' an ' + an, tags:[dran ? {t:'du bist dran', k:'dran'} : {t:'⏳ wartet auf Antwort'}],
+             art: dran ? 'dran' : 'betreuung', klick:`wuebSchliessen(); zeigeBetreuungsAnfrage(${jsArg(iso)}, ${jsArg((l.neueSegmente[0]&&l.neueSegmente[0].from!==undefined)?fmtH(l.neueSegmente[0].from):'08:00')})`, sort:-1});
+      });
+    } catch(e){ console.error('Wochenüberblick Anfragen:', e); }
+
+    // Schule der Kinder (kurz)
+    try{
+      if(!getSchoolHolidayName(d) && dowIdx<=5){
+        const teile = [];
+        ['janosch','mischa'].forEach(kid=>{
+          const name = kid==='janosch' ? 'Janosch' : 'Mischa';
+          if(!isSchoolDayForKid(d, kid)){ if(isSchoolDay(d) || getHolidayName(d)) teile.push(name + ' frei'); return; }
+          const st = SCHOOL_TIMES[kid][dowIdx]; if(!st) return;
+          const r = wuebFixZeit('schule_'+kid+'_'+iso, st[0], st[1]);
+          if(!r){ teile.push(name + ' Schule fällt aus'); return; }
+          let t = `${name} ${wuebUhr(r[0])}–${wuebUhr(r[1])}`;
+          if(dow===4 && HORT_THU[kid]) t += ' (Mittag Hort)';
+          teile.push(t);
+        });
+        if(teile.length) tag.kinder = '🎒 ' + teile.join(' · ');
+      }
+    } catch(e){}
+
+    // Spezielle Tage
     getSondertageFuerTag(iso).forEach(sd=>{
-      add({icon:'⭐', zeit: sd.zeitText || '', titel: sd.titel, klick:`wuebZuTag(${jsArg(iso)})`, sort: sd.von!==null ? sd.von : 0});
+      add({icon:'⭐', zeit: sd.zeitText || '', titel: sd.titel, klick:`wuebZuTag(${jsArg(iso)})`, sort: sd.von!==null ? sd.von : -0.5});
     });
 
-    // Feste Termine verschoben/abgesagt
+    // Feste Termine (Kinderclubs usw., noch nicht als Serie) + Abweichungen
+    ['mischa','janosch'].forEach(kid=>{
+      const c = getKidClub(d, kid); if(!c) return;
+      const r = wuebFixZeit(c.key, c.start, c.end);
+      if(!r) return;
+      add({icon:'🔁', zeit: wuebUhr(r[0])+'–'+wuebUhr(r[1]), titel: c.label + ' (' + (kid==='mischa'?'Mischa':'Janosch') + ')', art:'leise', klick:`wuebZuTag(${jsArg(iso)})`, sort:r[0]});
+    });
     Object.keys(window.eventOverrides||{}).forEach(key=>{
       if(!key.endsWith('_'+iso) || key.startsWith('betreuung_')) return;
       const ov = window.eventOverrides[key];
@@ -3035,42 +3113,64 @@ function sammleWochenPunkte(mo){
       const name = WUEB_FIX_LABEL[basis];
       if(!name) return;
       if(ov.geloescht){
-        add({icon:'✕', zeit:'', titel: name + ' fällt aus', wichtig:true, klick:`wuebZuTag(${jsArg(iso)})`, sort:0});
-      } else if(ov.von && ov.bis){
+        add({icon:'✕', zeit:'', titel: name + ' fällt aus', art:'wichtig', klick:`wuebZuTag(${jsArg(iso)})`, sort:0});
+      } else if(ov.von && ov.bis && !basis.startsWith('schule_')){
         const h = zeitZuStunden(ov.von);
-        add({icon:'↔', zeit: ov.von + '–' + ov.bis, titel: name + ' verschoben', klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${h!==null?h:12}, ${jsArg(key)})`, sort: h!==null?h:0});
+        add({icon:'↔', zeit: ov.von + '–' + ov.bis, titel: name + ' verschoben', sub: ov.geaendertVon ? 'geändert von ' + ov.geaendertVon : '', klick:`wuebSchliessen(); openHourInspector(${jsArg(iso)}, ${h!==null?h:12}, ${jsArg(key)})`, sort: h!==null?h:0});
       }
     });
 
-    // Frei eingetragene Termine (ohne abgelehnte)
+    // Frei eingetragene Termine und Serien
     (window.customEvents||[]).forEach(ev0=>{
       let ev = ev0;
       if(!['info','bestaetigt','schwebend'].includes(ev.status)) return;
       let zeit = '', h = null;
       if(ev.mehrtaegig && !ev.serie){
         if(!ev.startDatum || !ev.endDatum || iso < ev.startDatum || iso > ev.endDatum) return;
-        // Mehrtägig: nur am ersten Tag der Woche bzw. am Starttag nennen
         if(iso !== ev.startDatum && i !== 0) return;
         zeit = terminZeitText(ev);
         const r = mehrtaegigTagesbereich(ev, iso); h = r ? r[0] : 0;
       } else {
+        // abgesagter Serientermin
+        if(ev0.serie && serieGiltAm(ev0, iso) && ((ev0.serieAusnahmen||{})[iso]||{}).geloescht){
+          add({icon:'✕', zeit: ev0.von && ev0.bis ? ev0.von+'–'+ev0.bis : '', titel: terminAnzeigeTitel(ev0) + ' fällt diesmal aus', art:'wichtig', klick:`wuebZuTag(${jsArg(iso)})`, sort: zeitZuStunden(ev0.von)||0});
+          return;
+        }
         ev = vorkommenAm(ev0, iso);
         if(!ev) return;
         zeit = (ev.von && ev.bis) ? ev.von + '–' + ev.bis : (ev.von || '');
         h = zeitZuStunden(ev.von);
       }
+      const privatFremd = terminIstPrivatFuerMich(ev);
+      const klick = `oeffneTerminMitChat(${jsArg(ev.id)}, ${jsArg(iso)})`;
+      if(privatFremd){
+        add({icon:'🔒', zeit, titel:(ev.erstelltVonName||'Jemand') + ' hat etwas vor', art:'leise', klick, sort: h!==null?h:0});
+        return;
+      }
+      const tags = [];
       const warten = ev.status === 'schwebend';
+      const bestaetiger = ev.bestaetigerUids || [], bestaetigt = ev.bestaetigtVon || [];
+      const ichDran = warten && bestaetiger.includes(ich) && !bestaetigt.includes(ich);
+      if(ichDran) tags.push({t:'bitte bestätigen', k:'dran'});
+      else if(warten){
+        const offen = bestaetiger.map((u,k)=> bestaetigt.includes(u) ? null : (u===ich?'dich':(ev.bestaetigerNamen||[])[k]||'?')).filter(Boolean);
+        tags.push({t:'⏳ wartet auf ' + (offen.join(', ')||'?')});
+      } else if(ev.status==='bestaetigt') tags.push({t:'✓ bestätigt'});
       const betreuung = ev.beeinflusstBetreuung && ev.betreuungWer;
-      let titel = terminAnzeigeTitel(ev);
-      if(warten) titel += ' ⏳';
-      add({icon: betreuung ? '👪' : '📌', zeit, titel,
-           sub: warten ? 'wartet auf Bestätigung' + (betreuung ? ' · ändert Betreuung' : '') : (betreuung && ev.status==='bestaetigt' ? 'ändert Betreuung' : ''),
-           wichtig: warten,
-           klick:`oeffneTerminMitChat(${jsArg(ev.id)}, ${jsArg(iso)})`, sort: h!==null?h:0});
+      if(betreuung) tags.push({t:'👪 Betreuung: ' + (whoLabel(ev.betreuungWer)||ev.betreuungWer) + (ev.status==='bestaetigt' ? '' : ' (falls bestätigt)'), k:'betr'});
+      if(ev._ausnahme) tags.push({t:'✎ diesmal geändert'});
+      const n = (ev.chat||[]).length;
+      if(n) tags.push({t:'💬 ' + n});
+      const regulaer = ev._serie && !ev._ausnahme && !warten && !betreuung;
+      add({icon: ev.serie ? '🔁' : (betreuung ? '👪' : '📌'), zeit, titel: terminAnzeigeTitel(ev),
+           sub: 'von ' + (ev.erstelltVonUid===ich ? 'dir' : (ev.erstelltVonName||'?')),
+           tags: regulaer ? [] : tags,
+           art: ichDran ? 'dran' : (regulaer ? 'leise' : (betreuung ? 'betreuung' : '')),
+           klick, sort: h!==null?h:0});
     });
 
     punkte.sort((x,y)=>x.sort-y.sort);
-    tage.push({d, iso, punkte});
+    tage.push(tag);
   }
   return tage;
 }
@@ -3082,22 +3182,37 @@ function renderWochenueberblick(){
   document.getElementById('wuebTitel').textContent = 'Woche ' + fmt(mo) + ' – ' + fmt(so);
   const tage = sammleWochenPunkte(mo);
   const heuteIso = isoDate(new Date());
-  let html = '';
-  let anzahl = 0;
+  // Zusammenfassung oben
+  let dran = 0, betrAnders = 0, termine = 0;
   tage.forEach(t=>{
-    if(!t.punkte.length) return;
-    anzahl += t.punkte.length;
+    if(t.betreuung && t.betreuung.anders) betrAnders++;
+    t.punkte.forEach(p=>{ if(p.art==='dran') dran++; if(p.icon==='📌' || p.icon==='👪') termine++; });
+  });
+  let html = '<div class="wueb-summe">'
+    + (dran ? `<span class="dran">⚠️ ${dran}× bist du dran</span>` : '')
+    + (betrAnders ? `<span class="betr">👪 ${betrAnders} Tag${betrAnders===1?'':'e'} Betreuung anders</span>` : `<span>👪 Betreuung wie immer</span>`)
+    + `<span>📌 ${termine} Termin${termine===1?'':'e'}</span>`
+    + '</div>';
+  tage.forEach(t=>{
     const tagName = t.d.toLocaleDateString('de-CH',{weekday:'short', day:'numeric', month:'numeric'});
-    html += `<div class="wueb-tag${t.iso===heuteIso?' heute':''}">${escapeHtml(tagName)}${t.iso===heuteIso?' · heute':''}</div>`;
+    const b = t.betreuung;
+    html += `<div class="wueb-tagblock">
+      <div class="wueb-tagkopf">
+        <div class="wueb-tag${t.iso===heuteIso?' heute':''}">${escapeHtml(tagName)}${t.iso===heuteIso?' · heute':''}</div>
+        ${b ? `<span class="wueb-betr${b.anders?' anders':''}" onclick="${b.klick}" title="Wer hat die Kinder">${b.anders?'geändert: ':''}${b.html}</span>` : ''}
+      </div>
+      ${b && b.anders ? `<div class="wueb-normal">normal: ${b.normal}</div>` : ''}
+      ${t.kinder ? `<div class="wueb-kinder">${escapeHtml(t.kinder)}</div>` : ''}`;
     t.punkte.forEach(p=>{
-      html += `<div class="wueb-punkt${p.wichtig?' wichtig':''}" onclick="${p.klick}">
+      const tags = (p.tags||[]).map(x=>`<i class="${x.k||''}">${escapeHtml(x.t)}</i>`).join('');
+      html += `<div class="wueb-punkt ${p.art||''}" onclick="${p.klick}">
         <span class="wueb-icon">${p.icon}</span>
-        <span class="wueb-text"><span class="wueb-titel">${p.zeit?'<span class="wueb-zeit">'+escapeHtml(p.zeit)+'</span> ':''}${escapeHtml(p.titel)}</span>${p.sub?'<span class="wueb-sub">'+escapeHtml(p.sub)+'</span>':''}</span>
+        <span class="wueb-text"><span class="wueb-titel">${p.zeit?'<span class="wueb-zeit">'+escapeHtml(p.zeit)+'</span> ':''}${escapeHtml(p.titel)}</span>${p.sub?'<span class="wueb-sub">'+escapeHtml(p.sub)+'</span>':''}${tags?'<span class="wueb-tags">'+tags+'</span>':''}</span>
         <span class="wueb-pfeil">›</span>
       </div>`;
     });
+    html += `</div>`;
   });
-  if(!anzahl) html = '<div class="wueb-leer">Nichts Besonderes – alles läuft nach dem normalen Plan. 🙂</div>';
   document.getElementById('wuebInhalt').innerHTML = html;
 }
 function oeffneWochenueberblick(mo){
@@ -3385,7 +3500,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v87 · 02.11.2026';
+const APP_VERSION = 'v88 · 02.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3406,7 +3521,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=87').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=88').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
