@@ -107,7 +107,7 @@
   .swipe-daynum{font-size:16px; line-height:20px; font-weight:700;}
   .swipe-holtag{font-size:10px; line-height:13px; margin-top:3px; color:var(--holiday-text); font-weight:700;}
   .swipe-body{position:relative;}
-  .multi-line{position:absolute; width:4px; z-index:4; border-radius:2px; cursor:pointer;}
+  .multi-line{position:absolute; width:6px; z-index:4; border-radius:2px; cursor:pointer;}
   .multi-line::before{content:''; position:absolute; left:-5px; right:-5px; top:0; bottom:0;}
   .multi-label{position:absolute; z-index:5; height:14px; line-height:14px; box-sizing:border-box; padding:0 5px 0 4px; font-size:9.5px; font-weight:700; color:#7A5A00; background:#F8F0DC; border-radius:0 5px 5px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer;}
   .multi-label.pending{background:#FBF6E8; border:1px dashed #C9A54B; border-left:none; line-height:12px;}
@@ -160,14 +160,26 @@
   .hi-vonan{margin:-4px 0 8px; font-size:13px;}
   .hi-unter{display:flex; align-items:center; gap:12px; margin:-2px 0 10px 26px;}
   .hi-radio{font-size:14px; display:inline-flex; gap:4px; align-items:center;}
-  .hi-chat{margin-top:6px;}
-  .hi-chat-verlauf{max-height:240px; overflow-y:auto; margin-bottom:6px;}
+  .hi-chat{margin-top:10px;}
+  .hi-chat-kopf{font-size:12px; font-weight:700; color:var(--ink-soft); margin:0 0 5px 2px;}
+  .hi-chat-verlauf{max-height:320px; overflow-y:auto; margin-bottom:8px; background:#EFEAE2; border-radius:12px; padding:6px 8px 10px; display:flex; flex-direction:column;}
   .hi-chat-verlauf:empty{display:none;}
+  .cm{max-width:82%; padding:6px 9px 4px; border-radius:10px; box-shadow:0 1px 1px rgba(0,0,0,0.13); margin-top:8px; font-size:14px; box-sizing:border-box;}
+  .cm.ich{align-self:flex-end; background:#D9FDD3; border-top-right-radius:3px;}
+  .cm.andere{align-self:flex-start; background:#fff; border-top-left-radius:3px;}
+  .cm.folge{margin-top:2px; border-radius:10px;}
+  .cm.wichtig{box-shadow:0 0 0 2px var(--pending);}
+  .cm-name{font-size:12.5px; font-weight:700; margin-bottom:1px;}
+  .cm-text{white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.35; color:#111B21;}
+  .cm-zeit{font-size:10.5px; color:#667781; text-align:right; margin-top:1px; white-space:nowrap;}
+  .cm-tag{align-self:center; background:#fff; color:#54656F; font-size:11px; font-weight:600; padding:3px 10px; border-radius:8px; margin-top:10px; box-shadow:0 1px 1px rgba(0,0,0,0.08);}
+  .cm img{max-width:100%;}
+  #hiChatInput{border-radius:18px; min-height:44px; padding:10px 14px;}
   .hi-chat-leiste{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
   .hi-icon-btn{width:auto !important; padding:8px 11px; margin:0 !important; cursor:pointer;}
   .hi-lesebest > div{display:flex; flex-wrap:wrap; gap:4px 10px; padding:4px 0;}
   .hi-titel{font-size:21px;}
-  .vorschlag-linie{position:absolute; left:4px; width:3px; z-index:4; pointer-events:none;}
+  .vorschlag-linie{position:absolute; left:9px; width:5px; z-index:4; pointer-events:none;}
   .auth-check{display:flex; gap:8px; align-items:flex-start; font-size:12.5px; color:var(--ink-soft); margin:4px 0 14px; line-height:1.35; cursor:pointer;}
   .auth-check input{margin-top:2px; flex-shrink:0;}
   .konto-abschnitt{border-top:1px solid var(--line); padding-top:12px; margin-top:12px;}
@@ -1188,7 +1200,7 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
   function balken(r, bg, labelKlasse, titel, tip, oeffnen, labelStil){
     const top = (r[0]-startHour)*px, height = (r[1]-r[0])*px;
     if(height <= 0) return;
-    const left = 7 + i*BALKEN_ABSTAND;
+    const left = 17 + i*BALKEN_ABSTAND;
     html += `<div class="multi-line" style="top:${top}px;height:${height}px;left:${left}px;background:${bg};" ${stop} onclick="${oeffnen}" title="${tip}"></div>`;
     // Beschriftung: einmal pro Tag direkt neben der Linie. Ab 9 Uhr (im
     // Detail-Modus sichtbar), bei kurzen Abschnitten am Linienanfang.
@@ -1196,7 +1208,7 @@ function renderMehrtaegigLinienHtml(iso, startHour, px){
     let labelTop = (ank-startHour)*px + 3 + i*15;
     const platz = Math.max(30, (24-startHour)*px - 18);
     if(labelTop > platz) labelTop = 3 + ((labelTop - 3) % platz);
-    html += `<div class="multi-label ${labelKlasse}" style="top:${labelTop}px;left:${left+5}px;max-width:calc(100% - ${left+9}px);${labelStil||''}" ${stop} onclick="${oeffnen}" title="${tip}">${escapeHtml(titel)}</div>`;
+    html += `<div class="multi-label ${labelKlasse}" style="top:${labelTop}px;left:${left+7}px;max-width:calc(100% - ${left+11}px);${labelStil||''}" ${stop} onclick="${oeffnen}" title="${tip}">${escapeHtml(titel)}</div>`;
     i++;
   }
 
@@ -1619,7 +1631,7 @@ function renderColorBarHtml(segments, startHour, px){
   segments.forEach(seg=>{
     const top = (seg.start-startHour)*px, height = (seg.end-seg.start)*px;
     if(height<=0) return;
-    html += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;width:4px;background:${seg.color};z-index:4;border-radius:0 2px 2px 0;"></div>`;
+    html += `<div style="position:absolute;top:${top}px;height:${height}px;left:0;width:6px;background:${seg.color};z-index:4;border-radius:0 3px 3px 0;"></div>`;
   });
   return html;
 }
@@ -3364,7 +3376,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v84 · 23.10.2026';
+const APP_VERSION = 'v85 · 02.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3385,7 +3397,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=84').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=85').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3820,6 +3832,8 @@ window.hiSwitchTab = function(tabId){
     const entry = hiState.entries.find(e=>e.id===tabId);
     content.innerHTML = entry ? renderExistingEntryForm(entry) : '<div class="empty-note">Nicht gefunden.</div>';
   }
+  const cv = document.getElementById('hiChatMessages');
+  if(cv) requestAnimationFrame(()=>{ cv.scrollTop = cv.scrollHeight; });
 };
 
 /* Wiederverwendbarer Baustein: "Mehrtägig" + "Beeinflusst Betreuung"
@@ -4266,7 +4280,19 @@ const CHAT_SIZE_BLOCK_BYTES = 900*1024;  // ab hier: weitere Fotos blockieren (F
    optionale "Bestätigung nötig von"-Markierung pro Nachricht.
    coll: 'custom_events' oder 'event_overrides'. key: die jeweilige
    Dokument-ID. */
-function renderSingleChatMsgHtml(m, coll, key, idx){
+/* Chatfarbe einer Person: Janine rot, Andi blau, Kinder in ihren Farben. */
+function chatNameFarbe(uid, name){
+  const u = (window.allActiveUsers||[]).find(x=>x.uid===uid);
+  const r = (u && u.role) || String(name||'').trim().toLowerCase();
+  return {janine:'var(--a)', andi:'var(--b)', mischa:'#8A6A48', janosch:'#4F6A85', admin:'#555'}[r] || '#9A6B00';
+}
+function chatTagText(iso){
+  const heute = isoDate(new Date());
+  if(iso === heute) return 'Heute';
+  if(iso === serieIsoPlus(heute,-1)) return 'Gestern';
+  return new Date(iso+'T00:00:00').toLocaleDateString('de-CH',{weekday:'short', day:'numeric', month:'short', year: iso.slice(0,4)===heute.slice(0,4)?undefined:'numeric'});
+}
+function renderSingleChatMsgHtml(m, coll, key, idx, vorher){
   const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
   const noetigVon = m.bestaetigungNoetigVon || [];
   const gelesenVon = noetigVon.filter(p=>(m.bestaetigtVon||[]).includes(p.uid)).map(p=>escapeHtml(p.name));
@@ -4287,19 +4313,27 @@ function renderSingleChatMsgHtml(m, coll, key, idx){
     ? `<div style="margin-top:4px; font-size:11.5px; color:var(--ink-soft); background:#F2F1EC; border-radius:8px; padding:6px 10px; display:inline-block;">🔒 Privates Foto – nur für ${escapeHtml(fotoBesitzer)} sichtbar</div>`
     : safePhotoSrc(m.photo) ? `<img src="${safePhotoSrc(m.photo)}" style="max-width:180px; max-height:180px; border-radius:8px; margin-top:4px; display:block; object-fit:cover;">` : '';
   const adminDelBtn = window.isAdminUser ? `<button class="cr-del" style="margin-top:4px; font-size:10px; padding:3px 8px;" onclick="adminDeleteChatMsg(${jsArg(coll)},${jsArg(key)},${jsArg(m.msgId||('__idx'+idx))})" title="Nur für Admin sichtbar">✕ löschen</button>` : '';
-  return `
-    <div style="margin-bottom:10px; ${brauchtMeineBestaetigung ? 'background:var(--pending-bg,var(--a-bg)); border-radius:8px; padding:6px 8px;' : ''}">
-      <div style="font-size:11px; font-weight:700; color:${m.vonUid===window.myUid?'var(--a)':'var(--ink)'};">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft); font-size:10px;">${m.zeitstempel ? new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span></div>
-      ${m.text ? `<div style="font-size:13px; white-space:pre-wrap;">${escapeHtml(m.text)}</div>` : ''}
+  const ich = m.vonUid === window.myUid;
+  const zs = m.zeitstempel ? new Date(m.zeitstempel) : null;
+  const tag = zs && !isNaN(zs) ? isoDate(zs) : '';
+  const tagVorher = vorher && vorher.zeitstempel && !isNaN(new Date(vorher.zeitstempel)) ? isoDate(new Date(vorher.zeitstempel)) : '';
+  const neuerTag = tag && tag !== tagVorher;
+  const folge = !neuerTag && vorher && vorher.vonUid === m.vonUid;
+  const zeit = zs && !isNaN(zs) ? zs.toLocaleTimeString('de-CH',{hour:'2-digit', minute:'2-digit'}) : '';
+  return `${neuerTag ? `<div class="cm-tag">${escapeHtml(chatTagText(tag))}</div>` : ''}
+    <div class="cm ${ich?'ich':'andere'}${folge?' folge':''}${brauchtMeineBestaetigung?' wichtig':''}">
+      ${!ich && !folge ? `<div class="cm-name" style="color:${chatNameFarbe(m.vonUid, m.vonName)};">${escapeHtml(m.vonName||'?')}</div>` : ''}
+      ${m.text ? `<div class="cm-text">${escapeHtml(m.text)}</div>` : ''}
       ${photoHtml}
       ${bestaetigungsStatusHtml}
       ${confirmBtnHtml}
       ${adminDelBtn}
+      <div class="cm-zeit">${escapeHtml(zeit)}</div>
     </div>`;
 }
 function renderChatSection(chatArray, coll, key, einfachMode){
   const msgs = chatArray || [];
-  const chatHtml = msgs.length ? msgs.map((m, idx) => renderSingleChatMsgHtml(m, coll, key, idx)).join('') : '';
+  const chatHtml = msgs.length ? msgs.map((m, idx) => renderSingleChatMsgHtml(m, coll, key, idx, idx ? msgs[idx-1] : null)).join('') : '';
 
   const others = (window.allActiveUsers||[]).filter(u=>u.uid!==window.myUid);
   const confirmCbHtml = others.map(u=>
@@ -4314,13 +4348,14 @@ function renderChatSection(chatArray, coll, key, einfachMode){
 
   return `
     <div class="hi-chat">
+      <div class="hi-chat-kopf">💬 Chat${msgs.length ? ' · ' + msgs.length + (msgs.length===1 ? ' Nachricht' : ' Nachrichten') : ''}</div>
       <div id="hiChatMessages" class="hi-chat-verlauf">${chatHtml}</div>
       ${groessenWarnungHtml}
       <div id="hiChatPhotoPreview" style="display:none; margin-bottom:6px; align-items:center; gap:8px;">
         <img id="hiChatPhotoImg" style="max-width:70px; max-height:70px; border-radius:6px; object-fit:cover;">
         <button type="button" class="btn secondary" style="width:auto; padding:3px 10px; font-size:11px;" onclick="hiClearChatPhoto()">✕ entfernen</button>
       </div>
-      <textarea id="hiChatInput" class="hi-nachricht" rows="3" maxlength="2000" placeholder="💬 Nachricht schreiben …" onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){hiSendChatMsg(${jsArg(coll)},${jsArg(key)});}"></textarea>
+      <textarea id="hiChatInput" class="hi-nachricht" rows="3" maxlength="2000" placeholder="Nachricht schreiben …" onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){hiSendChatMsg(${jsArg(coll)},${jsArg(key)});}"></textarea>
       <div class="hi-chat-leiste">
         ${einfachMode || !confirmCbHtml ? '<span></span>' : `<details class="hi-weitere hi-lesebest"><summary title="Bestätigung „gelesen“ anfordern">✔ Lesebestätigung</summary><div>${confirmCbHtml}</div></details>`}
         <span style="display:flex; gap:6px;">
@@ -4410,7 +4445,7 @@ window.hiSendChatMsg = async function(coll, key){
     if(msgsBox){
       const emptyNote = msgsBox.querySelector('.empty-note');
       if(emptyNote) emptyNote.remove();
-      msgsBox.insertAdjacentHTML('beforeend', renderSingleChatMsgHtml(msg, coll, key, 999999));
+      msgsBox.insertAdjacentHTML('beforeend', renderSingleChatMsgHtml(msg, coll, key, 999999, (currentData.chat||[]).slice(-1)[0]));
       msgsBox.scrollTop = msgsBox.scrollHeight;
     }
     if(coll==='custom_events'){
