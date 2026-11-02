@@ -162,8 +162,18 @@
   .hi-radio{font-size:14px; display:inline-flex; gap:4px; align-items:center;}
   .hi-chat{margin-top:10px;}
   .hi-chat-kopf{font-size:12px; font-weight:700; color:var(--ink-soft); margin:0 0 5px 2px;}
-  .hi-chat-verlauf{max-height:320px; overflow-y:auto; margin-bottom:8px; background:#EFEAE2; border-radius:12px; padding:6px 8px 10px; display:flex; flex-direction:column;}
-  .hi-chat-verlauf:empty{display:none;}
+  .hi-chat-fenster{background:#EFEAE2; border-radius:14px; padding:4px 8px 8px; border:1px solid #E2DACE;}
+  .hi-chat-verlauf{max-height:320px; overflow-y:auto; padding:2px 0 8px; display:flex; flex-direction:column;}
+  .cm-leer{align-self:center; font-size:12px; color:#667781; background:rgba(255,255,255,0.7); border-radius:8px; padding:4px 10px; margin-top:8px;}
+  .cm-eingabe{display:flex; align-items:flex-end; gap:6px;}
+  .modal .cm-eingabe textarea, .cm-eingabe textarea{flex:1; width:auto; margin:0; min-width:0; border:none; border-radius:20px; padding:10px 14px; font-family:inherit; font-size:15px; line-height:1.3; resize:none; background:#fff; min-height:42px; max-height:140px; box-sizing:border-box; box-shadow:0 1px 1px rgba(0,0,0,0.08); outline:none;}
+  .empty-note.cm-leer{padding:4px 10px; text-align:center;}
+  .cm-rund{flex-shrink:0; width:42px; height:42px; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; margin:0;}
+  .cm-foto{background:#fff; box-shadow:0 1px 1px rgba(0,0,0,0.08);}
+  .cm-senden{background:#1F8A5B; color:#fff; font-size:19px;}
+  .cm-unter{display:flex; justify-content:flex-start; margin-top:4px;}
+  .cm-erste{background:#EFEAE2; border:1px solid #E2DACE; border-radius:14px; padding:8px; margin:0 0 6px;}
+  .cm-erste .hi-chat-kopf{margin-bottom:6px;}
   .cm{max-width:82%; padding:6px 9px 4px; border-radius:10px; box-shadow:0 1px 1px rgba(0,0,0,0.13); margin-top:8px; font-size:14px; box-sizing:border-box;}
   .cm.ich{align-self:flex-end; background:#D9FDD3; border-top-right-radius:3px;}
   .cm.andere{align-self:flex-start; background:#fff; border-top-left-radius:3px;}
@@ -174,7 +184,6 @@
   .cm-zeit{font-size:10.5px; color:#667781; text-align:right; margin-top:1px; white-space:nowrap;}
   .cm-tag{align-self:center; background:#fff; color:#54656F; font-size:11px; font-weight:600; padding:3px 10px; border-radius:8px; margin-top:10px; box-shadow:0 1px 1px rgba(0,0,0,0.08);}
   .cm img{max-width:100%;}
-  #hiChatInput{border-radius:18px; min-height:44px; padding:10px 14px;}
   .hi-chat-leiste{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
   .hi-icon-btn{width:auto !important; padding:8px 11px; margin:0 !important; cursor:pointer;}
   .hi-lesebest > div{display:flex; flex-wrap:wrap; gap:4px 10px; padding:4px 0;}
@@ -3376,7 +3385,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v85 · 02.11.2026';
+const APP_VERSION = 'v86 · 02.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3397,7 +3406,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=85').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=86').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4127,7 +4136,10 @@ function renderNewEntryForm(){
   return `
     ${renderZeitBlockHtml('hiNew', null, 'hiNewVon', 'hiNewBis', vonStr, bisStr, hiBetreuungChip())}
     <input type="text" id="hiNewTitel" class="hi-titel-input" maxlength="120" placeholder="Titel, z.B. Zahnarzt Janosch">
-    <textarea id="hiNewNote" class="hi-nachricht" rows="3" maxlength="2000" placeholder="💬 Nachricht dazu (optional)"></textarea>
+    <div class="cm-erste">
+      <div class="hi-chat-kopf">💬 Chat – erste Nachricht (optional)</div>
+      <div class="cm-eingabe"><textarea id="hiNewNote" rows="1" maxlength="2000" placeholder="Nachricht" oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,140)+'px';"></textarea></div>
+    </div>
     ${hiModusHtml(defaultMode)}
     ${renderPrivatBlockHtml('hiNew', true, defaultMode==='info')}
     ${hiEmpfaengerHtml(defaultMode==='anfrage')}
@@ -4349,20 +4361,20 @@ function renderChatSection(chatArray, coll, key, einfachMode){
   return `
     <div class="hi-chat">
       <div class="hi-chat-kopf">💬 Chat${msgs.length ? ' · ' + msgs.length + (msgs.length===1 ? ' Nachricht' : ' Nachrichten') : ''}</div>
-      <div id="hiChatMessages" class="hi-chat-verlauf">${chatHtml}</div>
-      ${groessenWarnungHtml}
-      <div id="hiChatPhotoPreview" style="display:none; margin-bottom:6px; align-items:center; gap:8px;">
-        <img id="hiChatPhotoImg" style="max-width:70px; max-height:70px; border-radius:6px; object-fit:cover;">
-        <button type="button" class="btn secondary" style="width:auto; padding:3px 10px; font-size:11px;" onclick="hiClearChatPhoto()">✕ entfernen</button>
+      <div class="hi-chat-fenster">
+        <div id="hiChatMessages" class="hi-chat-verlauf">${chatHtml || '<div class="empty-note cm-leer">Noch keine Nachrichten – schreib die erste.</div>'}</div>
+        ${groessenWarnungHtml}
+        <div id="hiChatPhotoPreview" style="display:none; margin-bottom:6px; align-items:center; gap:8px;">
+          <img id="hiChatPhotoImg" style="max-width:70px; max-height:70px; border-radius:6px; object-fit:cover;">
+          <button type="button" class="btn secondary" style="width:auto; padding:3px 10px; font-size:11px;" onclick="hiClearChatPhoto()">✕ entfernen</button>
+        </div>
+        <div class="cm-eingabe">
+          <label class="cm-rund cm-foto" title="Foto anhängen">📷<input type="file" accept="image/*" style="display:none;" onchange="hiPickChatPhoto(event)"></label>
+          <textarea id="hiChatInput" rows="1" maxlength="2000" placeholder="Nachricht" oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,140)+'px';" onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){hiSendChatMsg(${jsArg(coll)},${jsArg(key)});}"></textarea>
+          <button class="cm-rund cm-senden" title="Senden" onclick="hiSendChatMsg(${jsArg(coll)},${jsArg(key)})">➤</button>
+        </div>
       </div>
-      <textarea id="hiChatInput" class="hi-nachricht" rows="3" maxlength="2000" placeholder="Nachricht schreiben …" onkeydown="if(event.key==='Enter' && (event.ctrlKey||event.metaKey)){hiSendChatMsg(${jsArg(coll)},${jsArg(key)});}"></textarea>
-      <div class="hi-chat-leiste">
-        ${einfachMode || !confirmCbHtml ? '<span></span>' : `<details class="hi-weitere hi-lesebest"><summary title="Bestätigung „gelesen“ anfordern">✔ Lesebestätigung</summary><div>${confirmCbHtml}</div></details>`}
-        <span style="display:flex; gap:6px;">
-          <label class="btn secondary hi-icon-btn" title="Foto anhängen">📷<input type="file" accept="image/*" style="display:none;" onchange="hiPickChatPhoto(event)"></label>
-          <button class="btn hi-icon-btn" style="padding:8px 16px;" onclick="hiSendChatMsg(${jsArg(coll)},${jsArg(key)})">Senden</button>
-        </span>
-      </div>
+      ${einfachMode || !confirmCbHtml ? '' : `<div class="cm-unter"><details class="hi-weitere hi-lesebest"><summary title="Bestätigung „gelesen“ anfordern">✔ Lesebestätigung anfordern</summary><div>${confirmCbHtml}</div></details></div>`}
     </div>`;
 }
 
@@ -4456,6 +4468,7 @@ window.hiSendChatMsg = async function(coll, key){
       window.eventOverrides[key].chat = [...(window.eventOverrides[key].chat||[]), msg];
     }
     input.value = '';
+    input.style.height = '';
     hiClearChatPhoto();
     if(coll==='custom_events'){
       const evM = (window.customEvents||[]).find(e=>e.id===key);
@@ -6519,7 +6532,8 @@ window.renderChatsOverview = function(){
     const groesse = estimateDocSizeBytes({chat: it.chat});
     const warnstufe = groesse > CHAT_SIZE_BLOCK_BYTES ? 'kritisch' : groesse > CHAT_SIZE_WARN_BYTES ? 'warnung' : 'ok';
     const farbe = warnstufe==='kritisch' ? 'var(--holiday-text)' : warnstufe==='warnung' ? 'var(--pending)' : 'var(--ink-soft)';
-    const nachrichtenHtml = it.chat.map((m,idx)=>`
+    const nachrichtenHtml = `<div class="hi-chat-fenster"><div class="hi-chat-verlauf" style="max-height:420px;">${it.chat.map((m,idx)=> renderSingleChatMsgHtml(m, it.coll, it.key, idx, idx ? it.chat[idx-1] : null)).join('')}</div></div>`;
+    const altNachrichtenHtml = it.chat.map((m,idx)=>`
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid var(--line);">
         <div style="flex:1; min-width:0;">
           <div style="font-size:11px; font-weight:700;">${escapeHtml(m.vonName||'?')} <span style="font-weight:400; color:var(--ink-soft);">${m.zeitstempel?new Date(m.zeitstempel).toLocaleString('de-CH',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''}</span></div>
