@@ -3385,7 +3385,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v86 · 02.11.2026';
+const APP_VERSION = 'v87 · 02.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3406,7 +3406,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=86').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=87').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4334,7 +4334,7 @@ function renderSingleChatMsgHtml(m, coll, key, idx, vorher){
   const zeit = zs && !isNaN(zs) ? zs.toLocaleTimeString('de-CH',{hour:'2-digit', minute:'2-digit'}) : '';
   return `${neuerTag ? `<div class="cm-tag">${escapeHtml(chatTagText(tag))}</div>` : ''}
     <div class="cm ${ich?'ich':'andere'}${folge?' folge':''}${brauchtMeineBestaetigung?' wichtig':''}">
-      ${!ich && !folge ? `<div class="cm-name" style="color:${chatNameFarbe(m.vonUid, m.vonName)};">${escapeHtml(m.vonName||'?')}</div>` : ''}
+      ${!folge ? `<div class="cm-name" style="color:${chatNameFarbe(m.vonUid, m.vonName)};">${escapeHtml(m.vonName||'?')}</div>` : ''}
       ${m.text ? `<div class="cm-text">${escapeHtml(m.text)}</div>` : ''}
       ${photoHtml}
       ${bestaetigungsStatusHtml}
