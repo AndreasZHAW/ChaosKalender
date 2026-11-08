@@ -172,6 +172,18 @@
   .cm-foto{background:#fff; box-shadow:0 1px 1px rgba(0,0,0,0.08);}
   .cm-senden{background:#1F8A5B; color:#fff; font-size:19px;}
   .cm-unter{display:flex; justify-content:flex-start; margin-top:4px;}
+  .cm-sys{align-self:center; max-width:90%; text-align:center; background:#FFF6D6; color:#5C4A12; font-size:11.5px; padding:4px 10px; border-radius:8px; margin-top:8px; box-shadow:0 1px 1px rgba(0,0,0,0.06);}
+  .anfr-box{border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin:10px 0 12px; background:#FBFAF7;}
+  .anfr-box.dran{border-color:var(--pending); background:var(--pending-bg);}
+  .anfr-kopf{display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:700; font-size:14px; margin-bottom:6px;}
+  .anfr-plan{font-size:12.5px; margin:3px 0; display:flex; flex-wrap:wrap; align-items:center; gap:4px;}
+  .anfr-plan.leise{color:var(--ink-soft); font-size:11.5px;}
+  .anfr-knoepfe{display:flex; gap:6px; margin:8px 0 2px; flex-wrap:wrap;}
+  .anfr-knoepfe button{flex:1; min-width:110px; border-radius:10px; padding:9px 10px; font-weight:700; font-size:13px; font-family:inherit; cursor:pointer; border:1px solid var(--line);}
+  .anfr-knoepfe .req-btn-accept{background:var(--ink); color:#fff; border-color:var(--ink);}
+  .anfr-knoepfe .req-btn-reject{background:#fff; color:var(--holiday-text);}
+  .req-neu{font-size:12.5px; font-weight:700; color:#1F7A4D; margin:4px 0;}
+  .req-neu.nein{color:var(--holiday-text);}
   .cm-erste{background:#EFEAE2; border:1px solid #E2DACE; border-radius:14px; padding:8px; margin:0 0 6px;}
   .cm-erste .hi-chat-kopf{margin-bottom:6px;}
   .cm{max-width:82%; padding:6px 9px 4px; border-radius:10px; box-shadow:0 1px 1px rgba(0,0,0,0.13); margin-top:8px; font-size:14px; box-sizing:border-box;}
@@ -3500,7 +3512,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v88 · 02.11.2026';
+const APP_VERSION = 'v90 · 08.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3521,7 +3533,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=88').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=90').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4334,28 +4346,140 @@ window.hiSaveNewEntry = async function(){
   finally{ btn.disabled=false; btn.textContent='Speichern'; }
 };
 
+/* ---- Betreuungs-Anfragen: Hilfen ---- */
+function anfrageNachId(id){
+  return [...(window.__reqSent||[]), ...(window.__reqReceived||[])].find(x=>x.id===id) || null;
+}
+/* Letzter Vorschlag mit Zeiten (nicht "akzeptiert"/"abgelehnt"-Einträge). */
+function anfrageLetzterPlan(r){
+  const v = (r.verlauf||[]).slice().reverse().find(e=> (e.neueSegmente && e.neueSegmente.length) || (e.neuVon && e.neuBis) || e.nurStreichen);
+  if(v) return v;
+  if(r.neueSegmente && r.neueSegmente.length) return {neueSegmente: r.neueSegmente};
+  return null;
+}
+function anfrageOffen(r){ return r.status!=='akzeptiert' && r.status!=='abgelehnt'; }
+/* So war die Betreuung eingestellt, bevor angefragt wurde. Ältere Anfragen
+   haben das nicht gespeichert: solange sie offen sind, gilt noch der alte
+   Plan im Kalender – sonst unbekannt (null). */
+function anfrageVorher(r){
+  const v = r.vorherSegmente || ((r.verlauf||[]).find(e=>e.vorherSegmente)||{}).vorherSegmente;
+  if(v && v.length) return bereinigeTagesSegmente(v);
+  if(anfrageOffen(r) && r.datum){ try{ return bereinigeTagesSegmente(getCustodySegments(new Date(r.datum+'T00:00:00'))); }catch(e){} }
+  return null;
+}
+function anfrageFuerTag(iso){
+  return [...new Map([...(window.__reqSent||[]), ...(window.__reqReceived||[])].map(r=>[r.id,r])).values()]
+    .filter(r=>r.datum===iso)
+    .sort((a,b)=> (anfrageOffen(b)-anfrageOffen(a)) || (b.aktualisiertAm||'').localeCompare(a.aktualisiertAm||''))[0] || null;
+}
+function anfrageLsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function anfrageLsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+/* Hat die andere Person meine Anfrage beantwortet (und ich habe es noch nicht gesehen)? */
+function anfrageAntwortNeu(r){
+  if(anfrageOffen(r) || r.angefragtVonUid !== window.myUid) return false;
+  const l = (r.verlauf||[]).slice(-1)[0];
+  if(!l || l.vonUid === window.myUid) return false;
+  return anfrageLsGet('chaos_anfr_antwort_'+r.id+'_'+r.status) !== '1';
+}
+window.anfrageAntwortGesehen = function(id){
+  const r = anfrageNachId(id); if(!r) return;
+  anfrageLsSet('chaos_anfr_antwort_'+r.id+'_'+r.status, '1');
+  renderRequestsUI();
+};
+function anfrageChatNeu(r){
+  const fremd = (r.chat||[]).filter(m=>m.vonUid!==window.myUid).length;
+  return fremd > (parseInt(anfrageLsGet('chaos_anfr_chat_'+r.id)||'0',10) || 0) ? fremd - (parseInt(anfrageLsGet('chaos_anfr_chat_'+r.id)||'0',10)||0) : 0;
+}
+function anfrageChatGelesen(r){
+  anfrageLsSet('chaos_anfr_chat_'+r.id, String((r.chat||[]).filter(m=>m.vonUid!==window.myUid).length));
+}
+/* Verlauf (Anfrage, Gegenvorschlag, Annahme …) + Chat als ein WhatsApp-Verlauf. */
+function anfrageVerlaufAlsChat(r){
+  const planText = e => e.neueSegmente && e.neueSegmente.length
+    ? betreuungText(bereinigeTagesSegmente(e.neueSegmente))
+    : (e.nurStreichen ? 'nur streichen' : ((e.neuVon||'?')+'–'+(e.neuBis||'?')+' Uhr'));
+  const wer = e => e.vonUid===window.myUid ? 'Du' : (e.vonName||'?');
+  const liste = [];
+  (r.verlauf||[]).forEach(e=>{
+    let t = '';
+    if(e.aktion==='angefragt'){
+      const vor = e.vorherSegmente && e.vorherSegmente.length ? bereinigeTagesSegmente(e.vorherSegmente) : anfrageVorher(r);
+      t = `${wer(e)} ${e.vonUid===window.myUid?'hast':'hat'} angefragt: ${planText(e)}` + (vor ? `\n(bisher: ${betreuungText(vor)})` : '');
+    }
+    else if(e.aktion==='gegenvorschlag' || e.aktion==='geaendert') t = `${wer(e)} ${e.vonUid===window.myUid?'schlägst':'schlägt'} vor: ${planText(e)}`;
+    else if(e.aktion==='akzeptiert') t = `✓ ${wer(e)} ${e.vonUid===window.myUid?'hast':'hat'} akzeptiert`;
+    else if(e.aktion==='abgelehnt') t = `✕ ${wer(e)} ${e.vonUid===window.myUid?'hast':'hat'} abgelehnt`;
+    if(t) liste.push({system:true, text:t, zeitstempel:e.zeitstempel||''});
+    if(e.grund) liste.push({msgId:'g'+(e.zeitstempel||''), vonUid:e.vonUid, vonName:e.vonName, text:e.grund, zeitstempel:e.zeitstempel||''});
+  });
+  (r.chat||[]).forEach(m=> liste.push(m));
+  return liste.sort((a,b)=> String(a.zeitstempel||'').localeCompare(String(b.zeitstempel||'')));
+}
+function renderAnfrageBox(r){
+  const ich = window.myUid;
+  const dran = anfrageOffen(r) && r.aktuellAmZugUid === ich;
+  const plan = anfrageLetzterPlan(r);
+  const planHtml = plan && plan.neueSegmente ? wuebBetreuungKette(bereinigeTagesSegmente(plan.neueSegmente))
+    : plan ? escapeHtml(plan.nurStreichen ? 'nur streichen' : (plan.neuVon+'–'+plan.neuBis+' Uhr')) : '–';
+  const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
+  const von = r.angefragtVonUid===ich ? 'dir' : escapeHtml(r.angefragtVonName||'?');
+  const an = r.angefragtAnUid===ich ? 'dich' : escapeHtml(r.angefragtAnName||'?');
+  const anderer = r.angefragtVonUid===ich ? (r.angefragtAnName||'?') : (r.angefragtVonName||'?');
+  const std = standardBetreuungSegmente(new Date(r.datum+'T00:00:00'));
+  anfrageChatGelesen(r);
+  if(anfrageAntwortNeu(r)) anfrageLsSet('chaos_anfr_antwort_'+r.id+'_'+r.status, '1');
+  return `<div class="anfr-box ${dran?'dran':''}">
+    <div class="anfr-kopf"><span>👪 Betreuungs-Anfrage</span><span class="req-status ${r.status}">${statusLabel}</span></div>
+    <div class="anfr-plan">${anfrageOffen(r)?'Vorschlag':'Plan'}: ${planHtml}</div>
+    ${(()=>{ const vor = anfrageVorher(r);
+      const zeilen = [];
+      if(vor) zeilen.push(`<div class="anfr-plan leise">vorher: ${wuebBetreuungKette(vor)}</div>`);
+      if(!vor || !segmenteGleich(vor, std)) zeilen.push(`<div class="anfr-plan leise">normal: ${wuebBetreuungKette(std)}</div>`);
+      return zeilen.join(''); })()}
+    <div class="req-meta">von ${von} an ${an}${dran ? ' · <b>du bist dran</b>' : anfrageOffen(r) ? ' · ⏳ wartet auf ' + escapeHtml(anderer) : ''}</div>
+    ${dran ? `<div class="anfr-knoepfe">
+      <button class="req-btn-accept" onclick="acceptRequest(${jsArg(r.id)})">✓ Akzeptieren</button>
+      <button class="req-btn-reject" onclick="rejectRequest(${jsArg(r.id)})">✗ Ablehnen</button></div>` : ''}
+    ${anfrageOffen(r) && r.angefragtVonUid===ich ? `<div class="anfr-knoepfe"><button class="req-btn-reject" onclick="zurueckziehenBetreuungsAnfrage(${jsArg(r.id)})">✕ Anfrage zurückziehen</button></div>` : ''}
+    ${renderChatSection(anfrageVerlaufAlsChat(r), 'slot_changes', r.id, true)}
+  </div>`;
+}
+
 function renderCustodyForm(){
   const seg = hiState.custodySeg;
   // Für den ganzen Tag (nicht nur den angeklickten Abschnitt) alle
   // aktuellen Segmente laden, damit man den kompletten Tag im Regler
   // sieht und anpassen kann.
   const d = new Date(hiState.iso+'T00:00:00');
+  const anfr = anfrageFuerTag(hiState.iso);
+  const anfrOffen = anfr && anfrageOffen(anfr);
+  hiState.anfrageId = anfrOffen ? anfr.id : null;
   let tagSegs = getCustodySegments(d).map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}));
-  if(!hiState.custodyDaySegs || hiState.custodyDaySegsFuerIso !== hiState.iso){
+  const planA = anfrOffen ? anfrageLetzterPlan(anfr) : null;
+  if(planA && planA.neueSegmente) tagSegs = bereinigeTagesSegmente(planA.neueSegmente).map(s=>({from:s.from||0, to:(s.to!==undefined?s.to:24), who:s.who}));
+  const zustandKey = hiState.iso + '|' + (hiState.anfrageId||'');
+  if(!hiState.custodyDaySegs || hiState.custodyDaySegsFuerIso !== zustandKey){
     hiState.custodyDaySegs = tagSegs;
-    hiState.custodyDaySegsFuerIso = hiState.iso;
+    hiState.custodyDaySegsFuerIso = zustandKey;
   }
+  const anfrBox = anfr ? renderAnfrageBox(anfr) : '';
+  const sendText = anfrOffen ? (anfr.aktuellAmZugUid===window.myUid ? 'Gegenvorschlag senden' : 'Anfrage ändern') : 'Anfragen';
   const trackId = 'hiCustodyDay';
   window.__daySliderRegistry[trackId] = { getSegs: () => hiState.custodyDaySegs };
   return `
     <div class="hi-datumzeile"><span class="hi-datum">📅 ${escapeHtml(hiDatumText(hiState.iso))}</span>${hiBetreuungChip()}
       ${hilfe('Regler ziehen = neue Übergabezeit. Am Rand (0/24 Uhr) ziehen = zusätzliche Übergabe. Auf ein Stück tippen = Farbe wechseln. Gilt erst nach Bestätigung.')}</div>
+    ${anfrBox}
+    ${anfrOffen ? `<div class="hi-sec" style="margin-top:6px;">${anfr.aktuellAmZugUid===window.myUid ? 'Anders vorschlagen' : 'Anfrage anpassen'}</div>` : ''}
     <div style="margin:14px 0 6px;">${renderDaySliderTrack(trackId, hiState.custodyDaySegs)}</div>
-    <textarea id="hiCustodyGrund" class="hi-nachricht" rows="3" placeholder="💬 Grund (optional)"></textarea>
+    <div class="cm-erste">
+      <div class="hi-chat-kopf">💬 ${anfrOffen ? 'Nachricht dazu' : 'Chat – erste Nachricht'} (optional)</div>
+      <div class="cm-eingabe"><textarea id="hiCustodyGrund" rows="1" maxlength="2000" placeholder="z.B. Grund" oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,140)+'px';"></textarea></div>
+    </div>
     <div class="hi-leise" style="margin:6px 0 2px;">von dir an <b>${escapeHtml(window.partnerName || whoLabel(seg.who==='a'?'b':'a'))}</b></div>
     <div class="modal-actions">
       ${hiAbbrechenBtn('Abbrechen')}
-      <button class="btn" id="hiCustodySaveBtn" onclick="hiSaveCustodyRequest()">Anfragen</button>
+      <button class="btn" id="hiCustodySaveBtn" onclick="hiSaveCustodyRequest()">${sendText}</button>
     </div>`;
 }
 window.hiSaveCustodyRequest = async function(){
@@ -4363,21 +4487,46 @@ window.hiSaveCustodyRequest = async function(){
   const grund = document.getElementById('hiCustodyGrund').value.trim();
   const neueSegmente = hiState.custodyDaySegs;
   const btn = document.getElementById('hiCustodySaveBtn');
+  const altText = btn.textContent;
+  // Offene Anfrage für diesen Tag: Gegenvorschlag bzw. eigene Anfrage ändern
+  const offen = hiState.anfrageId ? anfrageNachId(hiState.anfrageId) : null;
+  if(offen){
+    btn.disabled = true; btn.textContent = 'Sende…';
+    try{
+      const ichDran = offen.aktuellAmZugUid === window.myUid;
+      const anderer = window.myUid === offen.angefragtVonUid ? offen.angefragtAnUid : offen.angefragtVonUid;
+      const upd = {
+        aktuellAmZugUid: anderer, aktualisiertAm: new Date().toISOString(),
+        verlauf: arrayUnion({ aktion: ichDran ? 'gegenvorschlag' : 'geaendert', vonUid:window.myUid, vonName:window.myName, neueSegmente, grund, zeitstempel:new Date().toISOString() })
+      };
+      if(ichDran) upd.status = 'gegenvorschlag';
+      await updateDoc(doc(db,'slot_changes',offen.id), upd);
+      if(window.logEvent) window.logEvent('anfrage_gegenvorschlag', {id: offen.id});
+      benachrichtige([anderer], `${ichDran?'Gegenvorschlag':'Geänderte Anfrage'} von ${window.myName||'?'} zur Betreuung`,
+        betreuungMailText(offen, {neueSegmente, grund}, `${window.myName||'?'} ${ichDran?'macht einen Gegenvorschlag':'hat die Anfrage geändert'}:`), 'anfragen');
+      document.getElementById('hourInspectorOverlay').classList.remove('show');
+    } catch(e){ alert('Fehler beim Senden: ' + e.message + regelHinweis(e)); }
+    finally { btn.disabled = false; btn.textContent = altText; }
+    return;
+  }
   btn.disabled = true; btn.textContent = 'Sende…';
+  let vorherSegmente = [];
+  try{ vorherSegmente = bereinigeTagesSegmente(getCustodySegments(new Date(hiState.iso+'T00:00:00'))).map(x=>({from:x.from||0, to:(x.to!==undefined?x.to:24), who:x.who})); }catch(e){}
   try{
     await addDoc(collection(db,'slot_changes'), {
       datum: hiState.iso,
+      vorherSegmente, // so war es vor der Anfrage eingestellt
       neueSegmente: neueSegmente, // ganzer Tag statt nur ein einzelner Block
       angefragtVonUid: window.myUid, angefragtVonName: window.myName,
       angefragtAnUid: window.partnerUid, angefragtAnName: window.partnerName,
       aktuellAmZugUid: window.partnerUid,
       status: 'offen',
-      verlauf: [{ aktion:'angefragt', vonUid:window.myUid, vonName:window.myName, neueSegmente, grund, zeitstempel:new Date().toISOString() }],
+      verlauf: [{ aktion:'angefragt', vonUid:window.myUid, vonName:window.myName, vorherSegmente, neueSegmente, grund, zeitstempel:new Date().toISOString() }],
       erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString()
     });
     if(window.logEvent) window.logEvent('anfrage_erstellt', {datum:hiState.iso});
     benachrichtige([window.partnerUid], `Betreuungs-Änderung angefragt von ${window.myName||'?'}`,
-      betreuungMailText({datum: hiState.iso}, {neueSegmente, grund}, `${window.myName||'?'} fragt eine Änderung der Betreuung an:`), 'anfragen');
+      betreuungMailText({datum: hiState.iso, vorherSegmente}, {neueSegmente, grund}, `${window.myName||'?'} fragt eine Änderung der Betreuung an:`), 'anfragen');
     document.getElementById('hourInspectorOverlay').classList.remove('show');
     alert('Anfrage an ' + window.partnerName + ' gesendet.');
   } catch(e){ alert('Fehler beim Senden: ' + e.message); }
@@ -4420,6 +4569,7 @@ function chatTagText(iso){
   return new Date(iso+'T00:00:00').toLocaleDateString('de-CH',{weekday:'short', day:'numeric', month:'short', year: iso.slice(0,4)===heute.slice(0,4)?undefined:'numeric'});
 }
 function renderSingleChatMsgHtml(m, coll, key, idx, vorher){
+  if(m.system) return `<div class="cm-sys">${escapeHtml(m.text).replace(/\n/g,'<br>')}</div>`;
   const brauchtMeineBestaetigung = (m.bestaetigungNoetigVon||[]).some(p=>p.uid===window.myUid) && !(m.bestaetigtVon||[]).includes(window.myUid);
   const noetigVon = m.bestaetigungNoetigVon || [];
   const gelesenVon = noetigVon.filter(p=>(m.bestaetigtVon||[]).includes(p.uid)).map(p=>escapeHtml(p.name));
@@ -4475,7 +4625,7 @@ function renderChatSection(chatArray, coll, key, einfachMode){
 
   return `
     <div class="hi-chat">
-      <div class="hi-chat-kopf">💬 Chat${msgs.length ? ' · ' + msgs.length + (msgs.length===1 ? ' Nachricht' : ' Nachrichten') : ''}</div>
+      <div class="hi-chat-kopf">💬 Chat${msgs.filter(m=>!m.system).length ? ' · ' + msgs.filter(m=>!m.system).length + (msgs.filter(m=>!m.system).length===1 ? ' Nachricht' : ' Nachrichten') : ''}</div>
       <div class="hi-chat-fenster">
         <div id="hiChatMessages" class="hi-chat-verlauf">${chatHtml || '<div class="empty-note cm-leer">Noch keine Nachrichten – schreib die erste.</div>'}</div>
         ${groessenWarnungHtml}
@@ -4549,6 +4699,7 @@ window.hiSendChatMsg = async function(coll, key){
   // kryptischen Fehler fehlschlägt.
   const currentData = coll==='custom_events'
     ? (window.customEvents||[]).find(e=>e.id===key) || {}
+    : coll==='slot_changes' ? (anfrageNachId(key) || {})
     : (window.getEventOverride(key) || {});
   if(photo){
     if(estimateDocSizeBytes({...currentData, chat:[...(currentData.chat||[]), {...msg, photo}]}) > CHAT_SIZE_BLOCK_BYTES){
@@ -4561,6 +4712,8 @@ window.hiSendChatMsg = async function(coll, key){
   try{
     if(coll==='custom_events'){
       await updateDoc(doc(db,'custom_events',key), { chat: arrayUnion(msg) });
+    } else if(coll==='slot_changes'){
+      await updateDoc(doc(db,'slot_changes',key), { chat: arrayUnion(msg), aktualisiertAm: new Date().toISOString() });
     } else {
       await setDoc(doc(db,'event_overrides',key), { chat: arrayUnion(msg) }, {merge:true});
     }
@@ -4578,6 +4731,15 @@ window.hiSendChatMsg = async function(coll, key){
     if(coll==='custom_events'){
       const ev = (window.customEvents||[]).find(e=>e.id===key);
       if(ev) ev.chat = [...(ev.chat||[]), msg];
+    } else if(coll==='slot_changes'){
+      const r = anfrageNachId(key);
+      if(r){
+        r.chat = [...(r.chat||[]), msg];
+        anfrageChatGelesen(r);
+        const anderer = r.angefragtVonUid===window.myUid ? r.angefragtAnUid : r.angefragtVonUid;
+        benachrichtige([anderer], `Nachricht von ${window.myName||'?'} zur Betreuung am ${mailDatum(r.datum)}`,
+          `${window.myName||'?'} schreibt zur Betreuungs-Änderung am ${mailDatum(r.datum)}:\n\n„${text || '(Foto)'}“\n\nIn der App unter 📥 antworten.`, 'anfragen');
+      }
     } else {
       if(!window.eventOverrides[key]) window.eventOverrides[key] = {};
       window.eventOverrides[key].chat = [...(window.eventOverrides[key].chat||[]), msg];
@@ -4601,12 +4763,12 @@ window.hiSendChatMsg = async function(coll, key){
 window.hiConfirmChatMsg = async function(coll, key, msgId){
   try{
     await runTransaction(db, async (tx)=>{
-      const ref = doc(db, coll==='custom_events' ? 'custom_events' : 'event_overrides', key);
+      const ref = doc(db, coll, key);
       const snap = await tx.get(ref);
       if(!snap.exists()) return;
       const chat = snap.data().chat || [];
       const neueChat = chat.map(m=> m.msgId===msgId ? {...m, bestaetigtVon: Array.from(new Set([...(m.bestaetigtVon||[]), window.myUid]))} : m);
-      if(coll==='custom_events') tx.update(ref, {chat: neueChat}); else tx.set(ref, {chat: neueChat}, {merge:true});
+      if(coll==='event_overrides') tx.set(ref, {chat: neueChat}, {merge:true}); else tx.update(ref, {chat: neueChat});
     });
     if(window.logEvent) window.logEvent('chat_nachricht_bestaetigt', {coll, key, msgId});
     return true;
@@ -5578,7 +5740,8 @@ function renderRequestsUI(){
   const wf = window.__wiederherstellungFehlt || {};
   const hinweisKontakt = !!wf.email; // Telefonnummer ist freiwillig (Hinweis nur unter ⚙)
   const abgelehntFuerMich = (window.customEvents||[]).filter(ev=> ev.erstelltVonUid===window.myUid && ev.status==='abgelehnt' && ev.ablehnungGesehen===false);
-  const myTurnCount = abgelehntFuerMich.length + all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
+  const anfrNeu = all.filter(r=> anfrageAntwortNeu(r) || anfrageChatNeu(r)).length;
+  const myTurnCount = anfrNeu + abgelehntFuerMich.length + all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -5683,41 +5846,39 @@ function renderRequestsUI(){
   if(all.length) html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Betreuungs-Änderungen</div>';
   all.forEach(r=>{
     const isMyTurn = r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid;
-    const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
-    const nameOf = w => w==='a' ? 'Janine' : 'Andi';
+    const lastEntry = anfrageLetzterPlan(r);
+    const letzteAktion = (r.verlauf||[]).slice(-1)[0] || {};
+    const antwortNeu = anfrageAntwortNeu(r);
+    const chatNeu = anfrageChatNeu(r);
+    const chatAnzahl = (r.chat||[]).length + (r.verlauf||[]).filter(e=>e.grund).length;
     let zeitZeile;
     if(lastEntry && lastEntry.neueSegmente && lastEntry.neueSegmente.length){
       // Neues Format: kompletter Tages-Regler statt einzelner Block
-      zeitZeile = 'Neuer Tagesplan: ' + bereinigeTagesSegmente(lastEntry.neueSegmente).map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(' · ');
+      zeitZeile = (anfrageOffen(r) ? 'Vorschlag: ' : 'Plan: ') + wuebBetreuungKette(bereinigeTagesSegmente(lastEntry.neueSegmente));
     } else {
       const vorschlagText = (lastEntry && lastEntry.nurStreichen) ? 'nur streichen' : (lastEntry && lastEntry.neuVon && lastEntry.neuBis) ? `${lastEntry.neuVon}–${lastEntry.neuBis}` : '(keine Zeit angegeben)';
       zeitZeile = `Ursprünglich: ${r.altVon||'?'}–${r.altBis||'?'} Uhr &nbsp;→&nbsp; Vorschlag: ${vorschlagText}${(vorschlagText!=='nur streichen' && vorschlagText!=='(keine Zeit angegeben)')?' Uhr':''}`;
     }
     const dateStr = r.datum ? new Date(r.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
     const statusLabel = {offen:'Offen', akzeptiert:'Akzeptiert', abgelehnt:'Abgelehnt', gegenvorschlag:'Gegenvorschlag'}[r.status] || r.status;
-    const zeigeVon = (lastEntry && lastEntry.neuVon) || r.altVon || '';
-    html += `<div class="req-card req-klickbar ${isMyTurn?'mine-turn':''}" onclick="zeigeBetreuungsAnfrage(${jsArg(r.datum||'')}, ${jsArg(zeigeVon)})">
+    const zeigeVon = (lastEntry && lastEntry.neuVon) || (lastEntry && lastEntry.neueSegmente && lastEntry.neueSegmente[1] ? fmtH(lastEntry.neueSegmente[1].from) : '') || r.altVon || '';
+    html += `<div class="req-card req-klickbar ${isMyTurn||antwortNeu||chatNeu?'mine-turn':''}" onclick="zeigeBetreuungsAnfrage(${jsArg(r.datum||'')}, ${jsArg(zeigeVon)})">
       <div class="req-top">
         <div class="req-date">${dateStr}</div>
         <div class="req-status ${r.status}">${statusLabel}</div>
       </div>
       <div class="req-times">${zeitZeile}</div>
-      ${lastEntry && lastEntry.grund ? `<div class="req-reason">"${escapeHtml(lastEntry.grund)}"</div>` : ''}
+      ${anfrageVorher(r) ? `<div class="req-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:2px;">vorher: ${wuebBetreuungKette(anfrageVorher(r))}</div>` : ''}
+      ${antwortNeu ? `<div class="req-neu ${r.status==='abgelehnt'?'nein':''}">${r.status==='akzeptiert' ? '✓' : '✕'} ${escapeHtml(letzteAktion.vonName||'?')} hat ${r.status==='akzeptiert' ? 'akzeptiert – gilt jetzt im Kalender' : 'abgelehnt'}</div>` : ''}
+      ${letzteAktion.grund ? `<div class="req-reason">„${escapeHtml(letzteAktion.grund)}“</div>` : ''}
       <div class="req-meta">von ${r.angefragtVonUid===window.myUid?'dir':escapeHtml(r.angefragtVonName)} an ${r.angefragtAnUid===window.myUid?'dich':escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?' ⏳':''}</div>
-      ${r.datum ? '<div class="req-zeigen">📅 öffnen ›</div>' : ''}
+      ${r.datum ? `<div class="req-zeigen">📅 öffnen${chatAnzahl ? ' · 💬 Chat (' + chatAnzahl + ')' : ' · 💬 Chat'}${chatNeu ? ' · <b>' + chatNeu + ' neu</b>' : ''} ›</div>` : ''}
+      ${antwortNeu ? `<div class="req-actions" onclick="event.stopPropagation()"><button class="req-btn-accept" onclick="anfrageAntwortGesehen(${jsArg(r.id)})">👍 Gesehen</button></div>` : ''}
       ${isMyTurn ? `
         <div class="req-actions" onclick="event.stopPropagation()">
           <button class="req-btn-accept" onclick="acceptRequest(${jsArg(r.id)})">✓ Akzeptieren</button>
-          <button class="req-btn-counter" onclick="toggleCounterForm(${jsArg(r.id)})">↩ Anders vorschlagen</button>
+          <button class="req-btn-counter" onclick="zeigeBetreuungsAnfrage(${jsArg(r.datum||'')}, ${jsArg(zeigeVon)})">↩ Anders vorschlagen</button>
           <button class="req-btn-reject" onclick="rejectRequest(${jsArg(r.id)})">✗ Ablehnen</button>
-        </div>
-        <div class="req-counter-form" id="counterForm-${r.id}" onclick="event.stopPropagation()">
-          <div class="time-row">
-            <div class="time-field"><label>Von</label><input type="time" id="counterVon-${r.id}" value="${lastEntry?lastEntry.neuVon||'15:00':'15:00'}"></div>
-            <div class="time-field"><label>Bis</label><input type="time" id="counterBis-${r.id}" value="${lastEntry?lastEntry.neuBis||'19:00':'19:00'}"></div>
-          </div>
-          <textarea id="counterGrund-${r.id}" placeholder="Grund (optional) …"></textarea>
-          <button class="req-btn-accept" style="width:100%;" onclick="submitCounter(${jsArg(r.id)})">Gegenvorschlag senden</button>
         </div>
       ` : ''}
       ${(r.angefragtVonUid===window.myUid && r.status!=='akzeptiert' && r.status!=='abgelehnt') ? `<div class="req-actions" style="margin-top:8px;" onclick="event.stopPropagation()"><button class="req-btn-reject" onclick="zurueckziehenBetreuungsAnfrage(${jsArg(r.id)})">✕ Zurückziehen</button></div>` : ''}
@@ -5937,22 +6098,38 @@ window.acceptRequest = async function(id){
     // wirksam. Vorher wurde nur der Status gesetzt, ohne dass sich am
     // Betreuungsplan für diesen Tag tatsächlich etwas änderte.
     if(r && r.datum){
-      const lastEntry = (r.verlauf && r.verlauf.length) ? r.verlauf[r.verlauf.length-1] : null;
+      const lastEntry = anfrageLetzterPlan(r);
       const neueSegmente = lastEntry && lastEntry.neueSegmente ? bereinigeTagesSegmente(lastEntry.neueSegmente) : null;
       if(neueSegmente && neueSegmente.length){
         await schreibeBetreuungsAusnahme(r.datum, neueSegmente, 'anfrage', {ausAnfrageId: id});
       }
+      const anderer = window.myUid === r.angefragtVonUid ? r.angefragtAnUid : r.angefragtVonUid;
+      benachrichtige([anderer], `✓ ${window.myName||'?'} hat die Betreuungs-Änderung akzeptiert`,
+        betreuungMailText(r, lastEntry, `${window.myName||'?'} hat die Betreuungs-Änderung akzeptiert. Sie gilt jetzt im Kalender:`), 'anfragen');
     }
     if(window.logEvent) window.logEvent('anfrage_akzeptiert', {id});
+    const ovA = document.getElementById('hourInspectorOverlay');
+    if(ovA && ovA.classList.contains('show') && ovA.querySelector('.anfr-box')){ ovA.classList.remove('show'); }
 
   } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
 window.rejectRequest = async function(id){
-  await updateDoc(doc(db,'slot_changes',id), {
-    status: 'abgelehnt', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
-    verlauf: arrayUnion({ aktion:'abgelehnt', vonUid:window.myUid, vonName:window.myName, zeitstempel:new Date().toISOString() })
-  });
+  const r = anfrageNachId(id);
+  const grund = (prompt('Ablehnen – möchtest du kurz sagen, warum? (optional)') || '').trim().slice(0,500);
+  try{
+    await updateDoc(doc(db,'slot_changes',id), {
+      status: 'abgelehnt', aktuellAmZugUid: null, aktualisiertAm: new Date().toISOString(),
+      verlauf: arrayUnion({ aktion:'abgelehnt', vonUid:window.myUid, vonName:window.myName, grund, zeitstempel:new Date().toISOString() })
+    });
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); return; }
   if(window.logEvent) window.logEvent('anfrage_abgelehnt', {id});
+  if(r){
+    const anderer = window.myUid === r.angefragtVonUid ? r.angefragtAnUid : r.angefragtVonUid;
+    benachrichtige([anderer], `✕ ${window.myName||'?'} hat die Betreuungs-Änderung abgelehnt`,
+      betreuungMailText(r, Object.assign({}, anfrageLetzterPlan(r)||{}, {grund}), `${window.myName||'?'} hat die Betreuungs-Änderung abgelehnt. Es bleibt beim bisherigen Plan.`), 'anfragen');
+  }
+  const ovR = document.getElementById('hourInspectorOverlay');
+  if(ovR && ovR.classList.contains('show') && ovR.querySelector('.anfr-box')){ ovR.classList.remove('show'); }
 
 };
 window.submitCounter = async function(id){
@@ -6431,6 +6608,8 @@ window.terminMailText = terminMailText;
 function betreuungMailText(r, eintrag, einleitung){
   const nameOf = w => w==='a' ? 'Janine' : (w==='b' ? 'Andi' : (whoLabel(w)||w));
   const zeilen = [einleitung, '', 'Tag: ' + mailDatum(r.datum)];
+  const vorM = r && r.vorherSegmente && r.vorherSegmente.length ? r.vorherSegmente : (r && r.verlauf ? ((r.verlauf.find(e=>e.vorherSegmente)||{}).vorherSegmente) : null);
+  if(vorM && vorM.length) zeilen.push('Bisher: ' + bereinigeTagesSegmente(vorM).map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(', '));
   if(eintrag && eintrag.neueSegmente && eintrag.neueSegmente.length){
     zeilen.push('Neuer Tagesplan: ' + bereinigeTagesSegmente(eintrag.neueSegmente).map(s=>`${nameOf(s.who)} ${fmtHM(s.from||0)}–${fmtHM(s.to!==undefined?s.to:24)}`).join(', '));
   } else if(eintrag){
@@ -6672,7 +6851,7 @@ window.adminDeleteChatMsg = async function(coll, key, msgId){
   if(!confirm('Diese Nachricht wirklich löschen?')) return;
   try{
     await runTransaction(db, async (tx)=>{
-      const ref = doc(db, coll==='custom_events' ? 'custom_events' : 'event_overrides', key);
+      const ref = doc(db, coll, key);
       const snap = await tx.get(ref);
       if(!snap.exists()) return;
       const chat = snap.data().chat || [];
@@ -6683,11 +6862,11 @@ window.adminDeleteChatMsg = async function(coll, key, msgId){
       } else {
         neueChat = chat.filter(m=>m.msgId!==msgId);
       }
-      if(coll==='custom_events') tx.update(ref, {chat: neueChat}); else tx.set(ref, {chat: neueChat}, {merge:true});
+      if(coll==='event_overrides') tx.set(ref, {chat: neueChat}, {merge:true}); else tx.update(ref, {chat: neueChat});
     });
     if(window.logEvent) window.logEvent('admin_chat_nachricht_geloescht', {coll,key,msgId});
     // Sofort sichtbar machen (nicht erst beim nächsten Öffnen)
-    const quelle = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : (window.eventOverrides||{})[key];
+    const quelle = coll==='custom_events' ? (window.customEvents||[]).find(e=>e.id===key) : coll==='slot_changes' ? anfrageNachId(key) : (window.eventOverrides||{})[key];
     if(quelle && quelle.chat) quelle.chat = String(msgId).startsWith('__idx') ? quelle.chat.filter((_,i)=>i!==parseInt(String(msgId).slice(5),10)) : quelle.chat.filter(m=>m.msgId!==msgId);
     const offenTab = document.querySelector('#hiTabs .hi-tab.active');
     if(offenTab && document.getElementById('hourInspectorOverlay').classList.contains('show')) hiSwitchTab(offenTab.dataset.tab);
