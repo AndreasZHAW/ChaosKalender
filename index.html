@@ -149,7 +149,10 @@
   .se-ausnahme button{border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:2px 9px; font-size:12px; cursor:pointer;}
   .hi-aendern-btn{margin-left:auto; border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:3px 10px; font-size:13px; cursor:pointer;}
   .hi-aendern-btn.on{background:var(--ink); border-color:var(--ink);}
-  .hi-titel-input{width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-family:inherit; font-size:17px; font-weight:700; margin:4px 0 8px;}
+  .hi-titel-input{width:100%; box-sizing:border-box; border:1px solid #D9D6CE; border-radius:10px; padding:10px 12px; font-family:inherit; font-size:16px; font-weight:600; margin:0 0 8px; background:#F4F3EF; color:var(--ink);}
+  .hi-titel-input::placeholder{font-size:13px; font-weight:400; color:#B3AFA6;}
+  .hi-titel-label{display:block; font-size:11.5px; color:var(--ink-soft); margin:6px 0 4px;}
+  .modal .time-field input[type=time], .modal .time-field input[type=date]{background:#F4F3EF; border:1px solid #D9D6CE; border-radius:10px; padding:10px 12px; font-size:16px; min-height:44px; box-sizing:border-box;}
   .hi-nachricht{width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-family:inherit; font-size:14px; line-height:1.4; min-height:76px; resize:vertical; margin:0 0 6px;}
   .hi-box{border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin:8px 0 10px; background:#FCFBF8;}
   .hi-box.zu{display:none;}
@@ -162,7 +165,7 @@
   .hi-radio{font-size:14px; display:inline-flex; gap:4px; align-items:center;}
   .hi-chat{margin-top:10px;}
   .hi-chat-kopf{font-size:12px; font-weight:700; color:var(--ink-soft); margin:0 0 5px 2px;}
-  .hi-chat-fenster{background:#EFEAE2; border-radius:14px; padding:4px 8px 8px; border:1px solid #E2DACE;}
+  .hi-chat-fenster{background:#E3F2E6; border-radius:14px; padding:4px 8px 8px; border:1px solid #C3E2CB;}
   .hi-chat-verlauf{max-height:320px; overflow-y:auto; padding:2px 0 8px; display:flex; flex-direction:column;}
   .cm-leer{align-self:center; font-size:12px; color:#667781; background:rgba(255,255,255,0.7); border-radius:8px; padding:4px 10px; margin-top:8px;}
   .cm-eingabe{display:flex; align-items:flex-end; gap:6px;}
@@ -184,10 +187,10 @@
   .anfr-knoepfe .req-btn-reject{background:#fff; color:var(--holiday-text);}
   .req-neu{font-size:12.5px; font-weight:700; color:#1F7A4D; margin:4px 0;}
   .req-neu.nein{color:var(--holiday-text);}
-  .cm-erste{background:#EFEAE2; border:1px solid #E2DACE; border-radius:14px; padding:8px; margin:0 0 6px;}
+  .cm-erste{background:#E3F2E6; border:1px solid #C3E2CB; border-radius:14px; padding:8px; margin:0 0 6px;}
   .cm-erste .hi-chat-kopf{margin-bottom:6px;}
   .cm{max-width:82%; padding:6px 9px 4px; border-radius:10px; box-shadow:0 1px 1px rgba(0,0,0,0.13); margin-top:8px; font-size:14px; box-sizing:border-box;}
-  .cm.ich{align-self:flex-end; background:#D9FDD3; border-top-right-radius:3px;}
+  .cm.ich{align-self:flex-end; background:#C9F0C1; border-top-right-radius:3px;}
   .cm.andere{align-self:flex-start; background:#fff; border-top-left-radius:3px;}
   .cm.folge{margin-top:2px; border-radius:10px;}
   .cm.wichtig{box-shadow:0 0 0 2px var(--pending);}
@@ -3512,7 +3515,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v90 · 08.11.2026';
+const APP_VERSION = 'v91 · 11.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3533,7 +3536,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=90').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=91').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -3927,6 +3930,19 @@ window.handleDayColPointerUp = function(event){
   }
 };
 
+/* Nach dem Schliessen des Fensters noch 12 s beim Tag bleiben (die
+   Live-Aktualisierung aus der Datenbank kommt meist kurz danach). */
+let inspectorBeobachter = null;
+function inspectorZuBeobachten(){
+  if(inspectorBeobachter) return;
+  const ov = document.getElementById('hourInspectorOverlay');
+  if(!ov || typeof MutationObserver === 'undefined') return;
+  inspectorBeobachter = new MutationObserver(()=>{
+    const sz = window.__swipeZiel;
+    if(!ov.classList.contains('show') && sz && sz.inspector) sz.bis = Math.min(sz.bis, Date.now()+12000);
+  });
+  inspectorBeobachter.observe(ov, {attributes:true, attributeFilter:['class']});
+}
 window.openHourInspector = function(iso, hourDec, forcedTab, endHourDec){
   try{
   const d = new Date(iso+'T00:00:00');
@@ -3937,6 +3953,11 @@ window.openHourInspector = function(iso, hourDec, forcedTab, endHourDec){
   }) || segs[0] || {who:'a'};
   const entries = buildHourEntries(iso, hourDec);
   hiState = { iso, hourDec, custodySeg, entries, endHourDec };
+  // Beim Neuzeichnen (z.B. nach dem Speichern) beim bearbeiteten Tag bleiben
+  // statt auf "heute" zurückzuspringen.
+  currentDate = new Date(iso+'T00:00:00');
+  window.__swipeZiel = {iso, zielStunde: hourDec, zentriert:true, bis: Date.now()+15*60*1000, inspector:true};
+  inspectorZuBeobachten();
 
   const tabs = [{id:'new', label:'+ Neu'}, {id:'custody', label:'Betreuung'}];
   entries.forEach(e=> tabs.push({id:e.id, label:e.label}));
@@ -4262,7 +4283,8 @@ function renderNewEntryForm(){
   const bisStr = fmtH(safeEnd);
   return `
     ${renderZeitBlockHtml('hiNew', null, 'hiNewVon', 'hiNewBis', vonStr, bisStr, hiBetreuungChip())}
-    <input type="text" id="hiNewTitel" class="hi-titel-input" maxlength="120" placeholder="Titel, z.B. Zahnarzt Janosch">
+    <label class="hi-titel-label" for="hiNewTitel">Titel</label>
+    <input type="text" id="hiNewTitel" class="hi-titel-input" maxlength="120" placeholder="z.B. Zahnarzt Janosch">
     <div class="cm-erste">
       <div class="hi-chat-kopf">💬 Chat – erste Nachricht (optional)</div>
       <div class="cm-eingabe"><textarea id="hiNewNote" rows="1" maxlength="2000" placeholder="Nachricht" oninput="this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,140)+'px';"></textarea></div>
@@ -4287,8 +4309,12 @@ window.hiSetMode = function(m){
   });
 };
 window.hiSaveNewEntry = async function(){
-  const titel = document.getElementById('hiNewTitel').value.trim().slice(0,120);
-  if(!titel){ alert('Bitte einen Titel eingeben.'); return; }
+  let titel = document.getElementById('hiNewTitel').value.trim().slice(0,120);
+  if(!titel){
+    const ersteZeile = ((document.getElementById('hiNewNote')||{}).value||'').trim().split('\n')[0].trim();
+    if(ersteZeile) titel = ersteZeile.length > 60 ? ersteZeile.slice(0,57).trim() + '…' : ersteZeile;
+  }
+  if(!titel){ alert('Bitte einen Titel eingeben.'); document.getElementById('hiNewTitel').focus(); return; }
   const serieE = window.__serieEntwurf.hiNew || null;
   const mehrtaegig = !serieE && document.getElementById('hiNewMehrtaegig').checked;
   const von = document.getElementById('hiNewVon').value || null;
@@ -4918,7 +4944,8 @@ function renderExistingEntryForm(entry){
           <div class="time-field"><label>Von</label><input type="time" id="hiEinzelVon" value="${ev.von||''}"></div>
           <div class="time-field"><label>Bis</label><input type="time" id="hiEinzelBis" value="${ev.bis||''}"></div>
         </div>
-        <input type="text" id="hiEinzelTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(ev.titel||'')}" placeholder="Titel">
+        <label class="hi-titel-label">Titel</label>
+        <input type="text" id="hiEinzelTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(ev.titel||'')}" placeholder="z.B. Zahnarzt Janosch">
         <div class="modal-actions">
           <button class="btn" style="background:var(--holiday-text);" onclick="hiSerieEinzelAbsagen(${jsArg(ev.id)}, ${jsArg(ev._vorkommen)})">Nur diesen absagen</button>
           <button class="btn" onclick="hiSerieEinzelSpeichern(${jsArg(ev.id)}, ${jsArg(ev._vorkommen)})">Speichern</button>
@@ -4931,7 +4958,8 @@ function renderExistingEntryForm(entry){
           <button type="button" onclick="hiSerieWahl('serie', this)">Ganze Serie</button>
         </div>${einzelPanel}<div id="hiGanzeSeriePanel" style="display:none;">` : ''}
         ${renderZeitBlockHtml('hiEdit', serieZeitEv, 'hiCustomVon', 'hiCustomBis', rohEv.von||'', rohEv.bis||'')}
-        <input type="text" id="hiEditTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(rohEv.titel||'')}" placeholder="Titel">
+        <label class="hi-titel-label">Titel</label>
+        <input type="text" id="hiEditTitel" class="hi-titel-input" maxlength="120" value="${escapeHtml(rohEv.titel||'')}" placeholder="z.B. Zahnarzt Janosch">
         ${mussIchBestaetigen ? '' : hiModusHtml(defaultMode)}
         ${renderPrivatBlockHtml('hiEdit', !!ev.privat, !mussIchBestaetigen && modus==='info')}
         ${mussIchBestaetigen ? '' : hiEmpfaengerHtml(defaultMode==='anfrage')}
