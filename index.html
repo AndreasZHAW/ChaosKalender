@@ -176,6 +176,26 @@
   .cm-senden{background:#1F8A5B; color:#fff; font-size:19px;}
   .cm-unter{display:flex; justify-content:flex-start; margin-top:4px;}
   .cm-sys{align-self:center; max-width:90%; text-align:center; background:#FFF6D6; color:#5C4A12; font-size:11.5px; padding:4px 10px; border-radius:8px; margin-top:8px; box-shadow:0 1px 1px rgba(0,0,0,0.06);}
+  /* ---- Vergleich vorher / nachher (Kalenderauszug) ---- */
+  .vg{margin:8px 0 6px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:6px 6px 8px; cursor:default;}
+  .vg-kopf{display:grid; grid-template-columns:30px 1fr 1fr; gap:4px; font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:2px;}
+  .vg-kopf .neu{color:#7A5A00;}
+  .vg-tag{font-size:11.5px; font-weight:700; color:var(--ink); background:#F2F1EC; border-radius:6px; padding:3px 8px; margin:6px 0 4px;}
+  .vg-tag.weitere{background:#ECE6F7; color:#5B3E8F;}
+  .vg-zeile{display:grid; grid-template-columns:30px 1fr 1fr; gap:4px;}
+  .vg-achse{position:relative;}
+  .vg-achse span{position:absolute; right:3px; font-size:9.5px; color:var(--ink-soft); transform:translateY(-50%);}
+  .vg-spalte{position:relative; border:1px solid #E6E3DB; border-radius:6px; background:#FCFBF8; overflow:hidden;
+    background-image:repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--pph) - 1px), #EFEDE7 calc(var(--pph) - 1px), #EFEDE7 var(--pph));}
+  .vg-spalte.rechts{background-color:#FFFDF6;}
+  .vg-mark{position:absolute; left:0; right:0; background:rgba(154,127,209,0.14); border-top:1px dashed #9A7FD1; border-bottom:1px dashed #9A7FD1;}
+  .vg-betr{position:absolute; left:0; width:7px;}
+  .vg-betr-name{position:absolute; left:9px; font-size:9.5px; font-weight:700; line-height:1.1; white-space:nowrap; pointer-events:none;}
+  .vg-ev{position:absolute; border-radius:4px; font-size:10.5px; line-height:1.15; padding:2px 4px; overflow:hidden; box-sizing:border-box; opacity:.6;}
+  .vg-ev.neu{opacity:1; box-shadow:0 0 0 2px var(--pending); font-weight:700; z-index:2;}
+  .vg-ev.weg{opacity:.9; text-decoration:line-through; box-shadow:0 0 0 1.5px var(--holiday-text) inset;}
+  .vg-ev small{display:block; font-weight:400; font-size:9.5px; opacity:.85;}
+  .vg-hinweis{font-size:11px; color:var(--ink-soft); margin-top:5px;}
   .anfr-box{border:1px solid var(--line); border-radius:14px; padding:10px 12px; margin:10px 0 12px; background:#FBFAF7;}
   .anfr-box.dran{border-color:var(--pending); background:var(--pending-bg);}
   .anfr-kopf{display:flex; justify-content:space-between; align-items:center; gap:8px; font-weight:700; font-size:14px; margin-bottom:6px;}
@@ -3515,7 +3535,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v91 · 11.11.2026';
+const APP_VERSION = 'v92 · 18.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3536,7 +3556,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=91').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=92').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -4441,6 +4461,151 @@ function anfrageVerlaufAlsChat(r){
   (r.chat||[]).forEach(m=> liste.push(m));
   return liste.sort((a,b)=> String(a.zeitstempel||'').localeCompare(String(b.zeitstempel||'')));
 }
+/* ====================== VERGLEICH VORHER / NACHHER ======================
+   Ein kleiner Kalenderauszug mit zwei Spalten: links wie es jetzt ist,
+   rechts wie es mit der Anfrage wäre. Der Ausschnitt (Zoom) wird so
+   gewählt, dass alles Geänderte sichtbar ist. Mehrere Tage stehen
+   untereinander in derselben Spalte, jeweils mit eigener Tageszeile. */
+function vgSegAnwenden(segs, a, b, who){
+  const out = [];
+  bereinigeTagesSegmente(segs).forEach(sg=>{
+    if(sg.to <= a || sg.from >= b){ out.push(Object.assign({}, sg)); return; }
+    if(sg.from < a) out.push(Object.assign({}, sg, {to:a}));
+    if(sg.to > b) out.push(Object.assign({}, sg, {from:b}));
+  });
+  out.push({from:a, to:b, who});
+  return bereinigeTagesSegmente(out);
+}
+function vgWerUm(segs, h){ const sg = segs.find(x=>h>=x.from && h<x.to); return sg ? sg.who : null; }
+function vgDiff(segA, segB){
+  let lo = null, hi = null;
+  for(let h=0; h<24; h+=0.25){
+    if(vgWerUm(segA, h+0.01) !== vgWerUm(segB, h+0.01)){ if(lo===null) lo = h; hi = h+0.25; }
+  }
+  return lo===null ? null : [lo, hi];
+}
+function vgTermineAmTag(iso, ohneId){
+  const out = [];
+  (window.customEvents||[]).forEach(ev=>{
+    if(ev.id === ohneId) return;
+    if(!['info','bestaetigt','schwebend'].includes(ev.status)) return;
+    let a, b, v = ev;
+    if(ev.mehrtaegig && !ev.serie){
+      const r = mehrtaegigTagesbereich(ev, iso); if(!r) return; a = r[0]; b = r[1];
+    } else {
+      v = vorkommenAm(ev, iso); if(!v) return;
+      a = zeitZuStunden(v.von); b = zeitZuStunden(v.bis);
+      if(a===null || b===null || b<=a) return;
+    }
+    out.push({a, b, titel: terminIstPrivatFuerMich(v) ? '🔒 ' + (v.erstelltVonName||'') : terminAnzeigeTitel(v), f: terminFarbe(v)});
+  });
+  return out;
+}
+function vgBetrFarbe(who){
+  if(who==='a') return {bg:'var(--a)', fg:'var(--a)'};
+  if(who==='b') return {bg:'var(--b)', fg:'var(--b)'};
+  return {bg:'#B9A27A', fg:'#7A6A4A'};
+}
+function vgSpalteHtml(seite, tag, lo, hi, pph){
+  const col = tag[seite];
+  const y = h => (Math.max(lo, Math.min(hi, h)) - lo) * pph;
+  let html = '';
+  if(tag.mark) html += `<div class="vg-mark" style="top:${y(tag.mark[0])}px; height:${Math.max(2, y(tag.mark[1])-y(tag.mark[0]))}px;"></div>`;
+  (col.segs||[]).forEach(sg=>{
+    if(sg.to <= lo || sg.from >= hi) return;
+    const f = vgBetrFarbe(sg.who), t = y(sg.from), h = y(sg.to) - t;
+    html += `<div class="vg-betr" style="top:${t}px; height:${h}px; background:${f.bg};"></div>`;
+    if(h >= 11) html += `<div class="vg-betr-name" style="top:${t+1}px; color:${f.fg};">${escapeHtml(whoLabel(sg.who)||sg.who)}</div>`;
+  });
+  // Termine nebeneinander, wenn sie sich überschneiden
+  const evs = (col.termine||[]).filter(e=> e.b > lo && e.a < hi).sort((x,z)=>x.a-z.a);
+  const spuren = [];
+  evs.forEach(e=>{ let k = spuren.findIndex(endH=> endH <= e.a); if(k<0){ k = spuren.length; spuren.push(0); } spuren[k] = e.b; e._spur = k; });
+  const n = Math.max(1, spuren.length);
+  evs.forEach(e=>{
+    const t = y(e.a), h = Math.max(12, y(e.b) - t);
+    const links = `calc(40px + (100% - 42px) * ${e._spur/n})`, breite = `calc((100% - 42px) / ${n} - 2px)`;
+    html += `<div class="vg-ev ${e.neu?'neu':''} ${e.weg?'weg':''}" style="top:${t}px; height:${h}px; left:${links}; width:${breite}; background:${e.f.bg}; color:${e.f.fg}; border-left:3px solid ${e.f.rand};">${escapeHtml(e.titel)}${h>=24 ? `<small>${wuebUhr(e.a)}–${wuebUhr(e.b)}</small>` : ''}</div>`;
+  });
+  return `<div class="vg-spalte ${seite}" style="height:${(hi-lo)*pph}px; --pph:${pph}px;">${html}</div>`;
+}
+/* tage: [{iso, bereich:[lo,hi], mark:[a,b]|null, links:{segs,termine}, rechts:{segs,termine}}] */
+function renderVergleichHtml(tage, titelL, titelR, hinweis){
+  if(!tage.length) return '';
+  const stunden = tage.reduce((sum,t)=> sum + (t.bereich[1]-t.bereich[0]), 0);
+  const pph = Math.max(6, Math.min(26, (tage.length>1 ? 300 : 230) / stunden));
+  let html = `<div class="vg" onclick="event.stopPropagation()"><div class="vg-kopf"><span></span><span>${escapeHtml(titelL)}</span><span class="neu">${escapeHtml(titelR)}</span></div>`;
+  tage.forEach((t,i)=>{
+    const [lo, hi] = t.bereich;
+    const d = new Date(t.iso+'T00:00:00');
+    html += `<div class="vg-tag ${tage.length>1?'weitere':''}">${tage.length>1 ? 'Tag '+(i+1)+' von '+tage.length+' · ' : ''}${escapeHtml(d.toLocaleDateString('de-CH',{weekday:'long', day:'numeric', month:'long'}))}</div>`;
+    const schritt = (hi-lo) > 10 ? 3 : (hi-lo) > 5 ? 2 : 1;
+    let achse = '';
+    for(let h = Math.ceil(lo); h <= hi; h += 1){
+      if((h - Math.ceil(lo)) % schritt) continue;
+      achse += `<span style="top:${(h-lo)*pph}px;">${h}:00</span>`;
+    }
+    html += `<div class="vg-zeile"><div class="vg-achse" style="height:${(hi-lo)*pph}px;">${achse}</div>${vgSpalteHtml('links', t, lo, hi, pph)}${vgSpalteHtml('rechts', t, lo, hi, pph)}</div>`;
+  });
+  if(hinweis) html += `<div class="vg-hinweis">${hinweis}</div>`;
+  return html + '</div>';
+}
+function vgBereich(a, b, rand, minSpanne){
+  let lo = Math.max(0, Math.floor(a - rand)), hi = Math.min(24, Math.ceil(b + rand));
+  while(hi - lo < (minSpanne||4)){ if(lo > 0) lo--; if(hi - lo < (minSpanne||4) && hi < 24) hi++; if(lo===0 && hi===24) break; }
+  return [lo, hi];
+}
+/* Vergleich für eine Termin-Anfrage (oder einen Termin, der Betreuung ändert). */
+function terminVergleichHtml(ev){
+  if(!ev) return '';
+  const roh = (window.customEvents||[]).find(e=>e.id===ev.id) || ev;
+  const tageIso = [];
+  if(roh.mehrtaegig && !roh.serie && roh.startDatum && roh.endDatum){
+    for(let iso = roh.startDatum; iso <= roh.endDatum && tageIso.length < 7; iso = serieIsoPlus(iso,1)) tageIso.push(iso);
+  } else tageIso.push(ev.datum);
+  const betr = roh.beeinflusstBetreuung && roh.betreuungWer;
+  const tage = tageIso.map(iso=>{
+    const d = new Date(iso+'T00:00:00');
+    let a, b;
+    if(roh.mehrtaegig && !roh.serie){ const r = mehrtaegigTagesbereich(roh, iso) || [0,24]; a = r[0]; b = r[1]; }
+    else { a = zeitZuStunden(ev.von); b = zeitZuStunden(ev.bis); if(a===null) a = 8; if(b===null || b<=a) b = Math.min(24, a+1); }
+    let segsJetzt = bereinigeTagesSegmente(getCustodySegments(d));
+    // Ist der Termin schon bestätigt, steckt seine Betreuung schon drin:
+    // links dann ohne ihn rechnen.
+    if(roh.status === 'bestaetigt' && betr){
+      const basis = window.customEvents; window.customEvents = (basis||[]).filter(e=>e.id!==roh.id);
+      try{ segsJetzt = bereinigeTagesSegmente(getCustodySegments(d)); } finally { window.customEvents = basis; }
+    }
+    const segsNeu = betr ? vgSegAnwenden(segsJetzt, a, b, roh.betreuungWer) : segsJetzt;
+    const kontext = vgTermineAmTag(iso, roh.id);
+    const diff = vgDiff(segsJetzt, segsNeu);
+    const lo = Math.min(a, diff ? diff[0] : a), hi = Math.max(b, diff ? diff[1] : b);
+    const bereich = tageIso.length > 1 ? (iso===tageIso[0] ? vgBereich(a, 24, 1, 3) : iso===tageIso[tageIso.length-1] ? vgBereich(0, b, 1, 3) : [0,24]) : vgBereich(lo, hi, 1.5, 5);
+    return {iso, bereich, mark: diff,
+      links: {segs: segsJetzt, termine: kontext},
+      rechts: {segs: segsNeu, termine: kontext.concat([{a, b, titel: terminAnzeigeTitel(ev), f: terminFarbe(roh), neu:true}])}};
+  });
+  const wer = betr ? escapeHtml(whoLabel(roh.betreuungWer)||roh.betreuungWer) : '';
+  const hinweis = !betr ? 'Gelb umrandet = der neue Termin'
+    : tage.some(t=>t.mark) ? `👪 Lila = hier ändert sich die Betreuung (→ ${wer})`
+    : `👪 Betreuung bleibt gleich (ist dann schon bei ${wer})`;
+  return renderVergleichHtml(tage, 'Jetzt', 'Mit Anfrage', hinweis);
+}
+/* Vergleich für eine Betreuungs-Anfrage. */
+function betreuungVergleichHtml(r){
+  if(!r || !r.datum) return '';
+  const plan = anfrageLetzterPlan(r);
+  if(!plan || !plan.neueSegmente) return '';
+  const d = new Date(r.datum+'T00:00:00');
+  const vorher = anfrageVorher(r) || standardBetreuungSegmente(d);
+  const neu = bereinigeTagesSegmente(plan.neueSegmente);
+  const diff = vgDiff(vorher, neu);
+  const bereich = diff ? vgBereich(diff[0], diff[1], 2, 6) : [7, 21];
+  const kontext = vgTermineAmTag(r.datum, null);
+  const tage = [{iso:r.datum, bereich, mark: diff, links:{segs:vorher, termine:kontext}, rechts:{segs:neu, termine:kontext}}];
+  return renderVergleichHtml(tage, anfrageOffen(r) ? 'Jetzt' : 'Vorher', anfrageOffen(r) ? 'Vorschlag' : 'Neu', diff ? '👪 Lila = hier ändert sich die Betreuung' : 'Keine Änderung der Betreuung');
+}
+
 function renderAnfrageBox(r){
   const ich = window.myUid;
   const dran = anfrageOffen(r) && r.aktuellAmZugUid === ich;
@@ -4457,6 +4622,7 @@ function renderAnfrageBox(r){
   return `<div class="anfr-box ${dran?'dran':''}">
     <div class="anfr-kopf"><span>👪 Betreuungs-Anfrage</span><span class="req-status ${r.status}">${statusLabel}</span></div>
     <div class="anfr-plan">${anfrageOffen(r)?'Vorschlag':'Plan'}: ${planHtml}</div>
+    ${betreuungVergleichHtml(r)}
     ${(()=>{ const vor = anfrageVorher(r);
       const zeilen = [];
       if(vor) zeilen.push(`<div class="anfr-plan leise">vorher: ${wuebBetreuungKette(vor)}</div>`);
@@ -4987,6 +5153,7 @@ function renderExistingEntryForm(entry){
     <div class="hi-titel">${escapeHtml(terminAnzeigeTitel(ev))}</div>
     <div class="hi-leise hi-vonan">von ${vonText}${anText}</div>
     ${grundZeile}
+    ${ev.status==='schwebend' ? terminVergleichHtml(ev) : ''}
     ${renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen)}
     <div class="modal-actions" style="margin-top:12px;">${aktionen}</div>`;
 }
@@ -5819,7 +5986,8 @@ function renderRequestsUI(){
   if(myPendingEvents.length){
     html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Eigene Termine – du musst bestätigen</div>';
     myPendingEvents.forEach(ev=>{
-      const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
+      const dIso = ev.datum || ev.startDatum;
+      const dateStr = dIso ? new Date(dIso+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) + (ev.mehrtaegig && ev.endDatum && ev.endDatum!==dIso ? ' – ' + new Date(ev.endDatum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '') : '?';
       html += `<div class="req-card mine-turn req-klickbar" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
         <div class="req-top">
           <div class="req-date">${dateStr}</div>
@@ -5827,6 +5995,7 @@ function renderRequestsUI(){
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">von ${escapeHtml(ev.erstelltVonName||'?')} an dich ⏳</div>
+        ${terminVergleichHtml(ev.serie ? (vorkommenAm(ev, naechstesVorkommen(ev, isoDate(new Date())) || ev.datum) || ev) : ev)}
         ${rueckfrageHtml(ev)}
         <div class="req-zeigen">📅 öffnen ›</div>
         ${ev.chat && ev.chat.length && !ichBinBeiRueckfrageAmZug(ev) ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
@@ -5846,7 +6015,8 @@ function renderRequestsUI(){
   if(mySentPending.length){
     html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:14px 0 8px;">Von mir gesendet – wartet noch</div>';
     mySentPending.forEach(ev=>{
-      const dateStr = ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '?';
+      const dIso = ev.datum || ev.startDatum;
+      const dateStr = dIso ? new Date(dIso+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) + (ev.mehrtaegig && ev.endDatum && ev.endDatum!==dIso ? ' – ' + new Date(ev.endDatum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '') : '?';
       const bestaetiger = ev.bestaetigerUids || [];
       const bestaetigt = ev.bestaetigtVon || [];
       const namen = 'von dir an ' + (ev.bestaetigerNamen || bestaetiger).map((n,idx)=>{
@@ -5861,6 +6031,7 @@ function renderRequestsUI(){
         </div>
         <div class="req-times">${escapeHtml(ev.titel||'Termin')} · ${escapeHtml(terminZeitText(ev))}</div>
         <div class="req-meta">${namen}</div>
+        ${terminVergleichHtml(ev.serie ? (vorkommenAm(ev, naechstesVorkommen(ev, isoDate(new Date())) || ev.datum) || ev) : ev)}
         ${rueckfrageHtml(ev)}
         <div class="req-zeigen">📅 öffnen ›</div>
         ${ev.chat && ev.chat.length && !ichBinBeiRueckfrageAmZug(ev) ? `<button class="req-btn-counter" style="margin-bottom:8px;" onclick="event.stopPropagation(); oeffneTerminMitChat(${jsArg(ev.id)})">💬 Chat ansehen (${ev.chat.length})</button>` : ''}
@@ -5897,6 +6068,7 @@ function renderRequestsUI(){
       </div>
       <div class="req-times">${zeitZeile}</div>
       ${anfrageVorher(r) ? `<div class="req-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-top:2px;">vorher: ${wuebBetreuungKette(anfrageVorher(r))}</div>` : ''}
+      ${betreuungVergleichHtml(r)}
       ${antwortNeu ? `<div class="req-neu ${r.status==='abgelehnt'?'nein':''}">${r.status==='akzeptiert' ? '✓' : '✕'} ${escapeHtml(letzteAktion.vonName||'?')} hat ${r.status==='akzeptiert' ? 'akzeptiert – gilt jetzt im Kalender' : 'abgelehnt'}</div>` : ''}
       ${letzteAktion.grund ? `<div class="req-reason">„${escapeHtml(letzteAktion.grund)}“</div>` : ''}
       <div class="req-meta">von ${r.angefragtVonUid===window.myUid?'dir':escapeHtml(r.angefragtVonName)} an ${r.angefragtAnUid===window.myUid?'dich':escapeHtml(r.angefragtAnName)}${isMyTurn?' · du bist am Zug':(r.status!=='akzeptiert'&&r.status!=='abgelehnt')?' ⏳':''}</div>
