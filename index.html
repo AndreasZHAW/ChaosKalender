@@ -3535,7 +3535,7 @@ function renderAllColumns(){
   return html;
 }
 
-const APP_VERSION = 'v92 · 18.11.2026';
+const APP_VERSION = 'v93 · 18.11.2026';
 document.getElementById('versionTag').textContent = APP_VERSION;
 if(document.getElementById('adminVersionTag')) document.getElementById('adminVersionTag').textContent = APP_VERSION;
 
@@ -3556,7 +3556,7 @@ render();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('service-worker.js?v=92').catch(err => {
+    navigator.serviceWorker.register('service-worker.js?v=93').catch(err => {
       console.log('Service Worker Registrierung fehlgeschlagen:', err);
     });
   });
@@ -5153,21 +5153,68 @@ function renderExistingEntryForm(entry){
     <div class="hi-titel">${escapeHtml(terminAnzeigeTitel(ev))}</div>
     <div class="hi-leise hi-vonan">von ${vonText}${anText}</div>
     ${grundZeile}
+    ${(()=>{ const l = offeneLoeschanfrage(ev); if(!l) return '';
+      const anMich = l.vonUid !== window.myUid && (isMine || gemeinsamElternteil);
+      return `<div class="anfr-box ${anMich?'dran':''}" style="margin:8px 0;">
+        <div class="anfr-kopf"><span>🗑️ ${l.vonUid===window.myUid ? 'Deine Löschanfrage' : escapeHtml(l.vonName||'?') + ' bittet, diesen Termin zu löschen'}</span></div>
+        ${anMich ? `<div class="anfr-knoepfe"><button class="req-btn-accept" onclick="loeschAnfrageLoeschen(${jsArg(ev.id)})">🗑️ Löschen</button><button class="req-btn-reject" onclick="loeschAnfrageBehalten(${jsArg(ev.id)})">✋ Behalten</button></div>` : `<div class="req-meta">⏳ wartet auf ${escapeHtml(ev.erstelltVonName||'?')}</div>`}
+      </div>`; })()}
     ${ev.status==='schwebend' ? terminVergleichHtml(ev) : ''}
     ${renderChatSection(ev.chat, 'custom_events', ev.id, mussIchBestaetigen)}
     <div class="modal-actions" style="margin-top:12px;">${aktionen}</div>`;
 }
 
+/* Löschanfrage: steht als besondere Chatnachricht im Termin. Offen ist sie,
+   bis die erstellende Person löscht oder „Behalten“ antwortet. */
+function offeneLoeschanfrage(ev){
+  let letzte = null;
+  (ev && ev.chat || []).forEach(m=>{ if(m.istLoeschanfrage) letzte = m; else if(m.istLoeschAntwort) letzte = null; });
+  return letzte;
+}
 window.hiRequestDelete = async function(id){
-  const grund = prompt('Warum soll dieser Termin gelöscht werden? (wird als Nachricht im Chat angezeigt, Ersteller/Admin müssen es bestätigen)', '');
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(!ev) return;
+  const laeuft = offeneLoeschanfrage(ev);
+  if(laeuft){ alert('Es gibt schon eine offene Löschanfrage (von ' + (laeuft.vonName||'?') + '). ' + (ev.erstelltVonName||'Die erstellende Person') + ' sieht sie unter 📥.'); return; }
+  const grund = prompt('Warum soll „' + (ev.titel||'Termin') + '“ gelöscht werden? (optional)', '');
   if(grund === null) return;
   try{
-    const text = '🗑️ Löschanfrage: ' + (grund.trim() || '(kein Grund angegeben)');
+    const text = '🗑️ Bitte löschen: ' + (grund.trim() || '(kein Grund angegeben)');
     await updateDoc(doc(db,'custom_events',id), {
       chat: arrayUnion({ msgId: 'm'+Date.now()+Math.random().toString(36).slice(2,7), vonUid: window.myUid, vonName: window.myName||'?', text, zeitstempel: new Date().toISOString(), istLoeschanfrage: true })
     });
-    alert('Löschanfrage wurde als Nachricht im Chat des Termins hinterlegt. Nur ' + (window.myUid ? 'die erstellende Person oder Admin' : 'Admin') + ' kann den Termin tatsächlich löschen.');
-  } catch(e){ alert('Fehler: '+e.message); }
+    if(window.logEvent) window.logEvent('loeschanfrage_gestellt', {id});
+    benachrichtige([ev.erstelltVonUid], `🗑️ ${window.myName||'?'} bittet, einen Termin zu löschen`,
+      `${window.myName||'?'} möchte, dass „${ev.titel||'Termin'}“ (${terminZeitText(ev) || mailDatum(ev.datum)}) gelöscht wird.` + (grund.trim() ? `\n\nGrund: ${grund.trim()}` : '') + `\n\nIn der App unter 📥 löschen oder behalten.`, 'anfragen');
+    alert('Löschanfrage gesendet. ' + (ev.erstelltVonName||'Die erstellende Person') + ' bekommt sie unter 📥 und kann löschen oder behalten.');
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
+window.loeschAnfrageBehalten = async function(id){
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(!ev) return;
+  const anfr = offeneLoeschanfrage(ev);
+  const grund = prompt('Termin behalten – möchtest du kurz sagen, warum? (optional)', '');
+  if(grund === null) return;
+  try{
+    await updateDoc(doc(db,'custom_events',id), {
+      chat: arrayUnion({ msgId: 'm'+Date.now()+Math.random().toString(36).slice(2,7), vonUid: window.myUid, vonName: window.myName||'?',
+        text: '✋ Termin bleibt' + (grund.trim() ? ': ' + grund.trim() : ''), zeitstempel: new Date().toISOString(), istLoeschAntwort: true })
+    });
+    if(anfr) benachrichtige([anfr.vonUid], `✋ ${window.myName||'?'} behält den Termin „${ev.titel||'Termin'}“`,
+      `${window.myName||'?'} hat deine Löschanfrage für „${ev.titel||'Termin'}“ abgelehnt.` + (grund.trim() ? `\n\nGrund: ${grund.trim()}` : ''), 'anfragen');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
+};
+window.loeschAnfrageLoeschen = async function(id){
+  const ev = (window.customEvents||[]).find(e=>e.id===id);
+  if(!ev) return;
+  const anfr = offeneLoeschanfrage(ev);
+  if(!confirm('„' + (ev.titel||'Termin') + '“ wirklich löschen?')) return;
+  try{
+    await loescheTerminSicher(id);
+    if(anfr) benachrichtige([anfr.vonUid], `🗑️ ${window.myName||'?'} hat „${ev.titel||'Termin'}“ gelöscht`, `Deine Löschanfrage wurde umgesetzt: „${ev.titel||'Termin'}“ ist gelöscht.`, 'anfragen');
+    document.getElementById('hourInspectorOverlay').classList.remove('show');
+  } catch(e){ alert('Fehler: '+e.message + regelHinweis(e)); }
 };
 window.hiSaveEvent = async function(key){
   const von = document.getElementById('hiEvVon').value;
@@ -5936,7 +5983,9 @@ function renderRequestsUI(){
   const hinweisKontakt = !!wf.email; // Telefonnummer ist freiwillig (Hinweis nur unter ⚙)
   const abgelehntFuerMich = (window.customEvents||[]).filter(ev=> ev.erstelltVonUid===window.myUid && ev.status==='abgelehnt' && ev.ablehnungGesehen===false);
   const anfrNeu = all.filter(r=> anfrageAntwortNeu(r) || anfrageChatNeu(r)).length;
-  const myTurnCount = anfrNeu + abgelehntFuerMich.length + all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
+  const loeschAnMich = (window.customEvents||[]).filter(ev=> { const l = offeneLoeschanfrage(ev); return l && l.vonUid !== window.myUid && (ev.erstelltVonUid===window.myUid || (ev.gemeinsam && ['janine','andi'].includes(window.__chaosRole))); });
+  const loeschVonMir = (window.customEvents||[]).filter(ev=> { const l = offeneLoeschanfrage(ev); return l && l.vonUid === window.myUid; });
+  const myTurnCount = loeschAnMich.length + anfrNeu + abgelehntFuerMich.length + all.filter(r=> r.status!=='akzeptiert' && r.status!=='abgelehnt' && r.aktuellAmZugUid===window.myUid).length + myPendingEvents.length + chatNotizen.length + meineRueckfragen.length + (hinweisKontakt?1:0);
   const badge = document.getElementById('requestsBadge');
   if(badge){
     badge.style.display = myTurnCount>0 ? 'flex' : 'none';
@@ -5947,7 +5996,7 @@ function renderRequestsUI(){
   if(!listEl) return;
   const mySentPendingCheck = (window.customEvents||[]).filter(ev => ev.erstelltVonUid===window.myUid && ev.status==='schwebend');
   const istAdmin = window.__chaosRole === 'admin';
-  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin && !hinweisKontakt && !abgelehntFuerMich.length){
+  if(all.length===0 && myPendingEvents.length===0 && mySentPendingCheck.length===0 && chatNotizen.length===0 && !istAdmin && !hinweisKontakt && !abgelehntFuerMich.length && !loeschAnMich.length && !loeschVonMir.length){
     listEl.innerHTML = '<div class="empty-note">Noch keine Änderungsanfragen.</div>';
     return;
   }
@@ -5980,6 +6029,29 @@ function renderRequestsUI(){
         </div>
       </div>`;
     });
+  }
+  const loeschKarte = (ev, anMich) => {
+    const l = offeneLoeschanfrage(ev);
+    const grund = String(l.text||'').replace(/^🗑️\s*(Bitte löschen|Löschanfrage):\s*/,'');
+    return `<div class="req-card req-klickbar ${anMich?'mine-turn':''}" onclick="oeffneTerminMitChat(${jsArg(ev.id)})">
+      <div class="req-top"><div class="req-date">🗑️ ${escapeHtml(ev.mehrtaegig || ev.serie ? terminZeitText(ev) : (ev.datum ? new Date(ev.datum+'T00:00').toLocaleDateString('de-CH',{weekday:'short',day:'2-digit',month:'short'}) : '') + (ev.von&&ev.bis ? ' · '+ev.von+'–'+ev.bis : ''))}</div><div class="req-status ${anMich?'schwebend':'offen'}">${anMich?'Bitte entscheiden':'Wartet'}</div></div>
+      <div class="req-times">„${escapeHtml(terminAnzeigeTitel(ev))}“ löschen?</div>
+      ${grund && grund!=='(kein Grund angegeben)' ? `<div class="req-reason">„${escapeHtml(grund)}“</div>` : ''}
+      <div class="req-meta">${anMich ? 'von ' + escapeHtml(l.vonName||'?') + ' an dich' : 'von dir an ' + escapeHtml(ev.erstelltVonName||'?') + ' ⏳'}</div>
+      <div class="req-zeigen">📅 öffnen · 💬 Chat ›</div>
+      ${anMich ? `<div class="req-actions" onclick="event.stopPropagation()">
+        <button class="req-btn-accept" onclick="loeschAnfrageLoeschen(${jsArg(ev.id)})">🗑️ Löschen</button>
+        <button class="req-btn-reject" onclick="loeschAnfrageBehalten(${jsArg(ev.id)})">✋ Behalten</button>
+      </div>` : ''}
+    </div>`;
+  };
+  if(loeschAnMich.length){
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Löschanfragen an dich</div>';
+    loeschAnMich.forEach(ev=> html += loeschKarte(ev, true));
+  }
+  if(loeschVonMir.length){
+    html += '<div style="font-size:11.5px; font-weight:700; color:var(--ink-soft); margin:4px 0 8px;">Deine Löschanfragen – wartet</div>';
+    loeschVonMir.forEach(ev=> html += loeschKarte(ev, false));
   }
   html += `<div style="margin-bottom:14px;"><button class="cr-del" onclick="adminAufraeumenAlteAnfragen()">🧹 Aufräumen</button>${hilfe('Löscht akzeptierte/abgelehnte Betreuungs-Anfragen und vergangene Termine'+(istAdmin?'':' (nur deine eigenen)')+'.')}</div>`;
   if(chatNotizen.length) html += renderChatNotizenHtml(chatNotizen);
